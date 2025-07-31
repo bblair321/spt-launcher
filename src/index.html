@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>SPT Launcher</title>
+    <title>SPT Launcher</title>
     <style>
       * {
         margin: 0;
@@ -545,7 +545,7 @@
   </head>
   <body>
     <div class="title-bar">
-                <span class="title-bar-title">SPT Launcher</span>
+      <span class="title-bar-title">SPT Launcher</span>
       <div class="title-bar-controls">
         <button class="title-bar-btn minimize" id="minimize-window">_</button>
         <button class="title-bar-btn close" id="close-window">✕</button>
@@ -566,7 +566,7 @@
               <input
                 type="text"
                 id="server-path"
-                placeholder="D:\SPT\SPT.Server.exe"
+                placeholder="Click Browse to select SPT.Server.exe"
               />
               <button class="btn btn-secondary" id="browse-server-file">
                 Browse
@@ -599,7 +599,7 @@
               <input
                 type="text"
                 id="launcher-path"
-                placeholder="D:\SPT\SPT.Launcher.exe"
+                placeholder="Click Browse to select SPT.Launcher.exe"
               />
               <button class="btn btn-secondary" id="browse-launcher-file">
                 Browse
@@ -642,6 +642,13 @@
           <button class="btn btn-danger" id="stop-all">Stop All</button>
           <button class="btn btn-secondary" id="refresh-info">
             Refresh Info
+          </button>
+          <button
+            class="btn btn-secondary"
+            id="clear-paths"
+            style="background: #ff6b6b"
+          >
+            Clear Paths (Debug)
           </button>
         </div>
       </div>

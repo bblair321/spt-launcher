@@ -28,7 +28,7 @@ static SELECTED_LAUNCHER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::
 // static LAST_SELECTED_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
 
 // Configuration struct
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize)]
 struct Config {
     server_path: Option<String>,
     launcher_path: Option<String>,
@@ -40,163 +40,99 @@ struct Config {
     refresh_interval: u64,
 }
 
-// Set server path from UI input (workaround for Tauri v2)
+// Set server path from UI (original working function)
 #[tauri::command]
 fn set_server_path_from_ui() -> String {
-    // Try to get the selected server path first
-    let selected_path = SELECTED_SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(path_guard) = selected_path.lock() {
-        if let Some(ref selected_path_str) = *path_guard {
-            let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-            if let Ok(mut path_guard) = server_path.lock() {
-                *path_guard = Some(selected_path_str.clone());
-                return format!("SUCCESS: Server path set to: {}", selected_path_str);
-            }
-        }
-    }
-    
-    // Fallback to hardcoded path if no selection
-    let test_path = "D:\\SPT\\SPT.Server.exe".to_string();
-    
     let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
     if let Ok(mut path_guard) = server_path.lock() {
-        *path_guard = Some(test_path.clone());
-        format!("SUCCESS: Server path set to: {}", test_path)
+        *path_guard = Some("D:\\SPT\\SPT.Server.exe".to_string());
+        "SUCCESS: Server path set to default".to_string()
     } else {
         "ERROR: Failed to set server path".to_string()
     }
 }
 
-// Set launcher path from UI input (workaround for Tauri v2)
+// Set launcher path from UI (original working function)
 #[tauri::command]
 fn set_launcher_path_from_ui() -> String {
-    // Try to get the selected launcher path first
-    let selected_path = SELECTED_LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(path_guard) = selected_path.lock() {
-        if let Some(ref selected_path_str) = *path_guard {
-            let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-            if let Ok(mut path_guard) = launcher_path.lock() {
-                *path_guard = Some(selected_path_str.clone());
-                return format!("SUCCESS: Launcher path set to: {}", selected_path_str);
+    let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
+    if let Ok(mut path_guard) = launcher_path.lock() {
+        *path_guard = Some("D:\\SPT\\SPT.Launcher.exe".to_string());
+        "SUCCESS: Launcher path set to default".to_string()
+    } else {
+        "ERROR: Failed to set launcher path".to_string()
+    }
+}
+
+// Set server path with args wrapper (for Tauri v2 compatibility)
+#[tauri::command]
+fn set_server_path_args_wrapper(args: serde_json::Value) -> String {
+    // Try different ways to extract the path
+    let path = if let Some(args_obj) = args.get("args") {
+        // If args is wrapped in an "args" key
+        if let Some(path_value) = args_obj.get("path") {
+            if let Some(p) = path_value.as_str() {
+                p.to_string()
+            } else {
+                return "ERROR: Invalid path format in args wrapper".to_string();
             }
+        } else {
+            return "ERROR: No path provided in args wrapper".to_string();
         }
-    }
-    
-    // Fallback to hardcoded path if no selection
-    let test_path = "D:\\SPT\\SPT.Launcher.exe".to_string();
-    
-    let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(mut path_guard) = launcher_path.lock() {
-        *path_guard = Some(test_path.clone());
-        format!("SUCCESS: Launcher path set to: {}", test_path)
+    } else if let Some(path_value) = args.get("path") {
+        // If path is directly in the root
+        if let Some(p) = path_value.as_str() {
+            p.to_string()
+        } else {
+            return "ERROR: Invalid path format in root".to_string();
+        }
     } else {
-        "ERROR: Failed to set launcher path".to_string()
-    }
-}
-
-// Simple approach: Set server path to a specific path (no parameters)
-#[tauri::command]
-fn set_server_path_d() -> String {
-    let test_path = "D:\\SPT\\SPT.Server.exe".to_string();
+        return "ERROR: No args or path provided".to_string();
+    };
+    
     let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
     if let Ok(mut path_guard) = server_path.lock() {
-        *path_guard = Some(test_path.clone());
-        format!("SUCCESS: Server path set to: {}", test_path)
+        *path_guard = Some(path.clone());
+        format!("SUCCESS: Server path set to: {}", path)
     } else {
         "ERROR: Failed to set server path".to_string()
     }
 }
 
-// Simple approach: Set server path to C drive (no parameters)
+// Set launcher path with args wrapper (for Tauri v2 compatibility)
 #[tauri::command]
-fn set_server_path_c() -> String {
-    let test_path = "C:\\SPT\\SPT.Server.exe".to_string();
-    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(mut path_guard) = server_path.lock() {
-        *path_guard = Some(test_path.clone());
-        format!("SUCCESS: Server path set to: {}", test_path)
+fn set_launcher_path_args_wrapper(args: serde_json::Value) -> String {
+    // Try different ways to extract the path
+    let path = if let Some(args_obj) = args.get("args") {
+        // If args is wrapped in an "args" key
+        if let Some(path_value) = args_obj.get("path") {
+            if let Some(p) = path_value.as_str() {
+                p.to_string()
+            } else {
+                return "ERROR: Invalid path format in args wrapper".to_string();
+            }
+        } else {
+            return "ERROR: No path provided in args wrapper".to_string();
+        }
+    } else if let Some(path_value) = args.get("path") {
+        // If path is directly in the root
+        if let Some(p) = path_value.as_str() {
+            p.to_string()
+        } else {
+            return "ERROR: Invalid path format in root".to_string();
+        }
     } else {
-        "ERROR: Failed to set server path".to_string()
-    }
-}
-
-// Simple approach: Set launcher path to D drive (no parameters)
-#[tauri::command]
-fn set_launcher_path_d() -> String {
-    let test_path = "D:\\SPT\\SPT.Launcher.exe".to_string();
+        return "ERROR: No args or path provided".to_string();
+    };
+    
     let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
     if let Ok(mut path_guard) = launcher_path.lock() {
-        *path_guard = Some(test_path.clone());
-        format!("SUCCESS: Launcher path set to: {}", test_path)
+        *path_guard = Some(path.clone());
+        format!("SUCCESS: Launcher path set to: {}", path)
     } else {
         "ERROR: Failed to set launcher path".to_string()
     }
 }
-
-// Set selected server path (called from frontend) - DISABLED due to Tauri v2 parameter issues
-// #[tauri::command]
-// fn set_selected_server_path(path: String) -> String {
-//     let selected_path = SELECTED_SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-//     if let Ok(mut path_guard) = selected_path.lock() {
-//         *path_guard = Some(path.clone());
-//         format!("SUCCESS: Selected server path set to: {}", path)
-//     } else {
-//         "ERROR: Failed to set selected server path".to_string()
-//     }
-// }
-
-// Set selected launcher path (called from frontend) - DISABLED due to Tauri v2 parameter issues
-// #[tauri::command]
-// fn set_selected_launcher_path(path: String) -> String {
-//     let selected_path = SELECTED_LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-//     if let Ok(mut path_guard) = selected_path.lock() {
-//         *path_guard = Some(path.clone());
-//         format!("SUCCESS: Selected launcher path set to: {}", path)
-//     } else {
-//         "ERROR: Failed to set selected launcher path".to_string()
-//     }
-// }
-
-// Set last selected path (no parameters - called from frontend) - DISABLED
-// #[tauri::command]
-// fn set_last_selected_path() -> String {
-//     // This will be called after the frontend sets a global variable
-//     // For now, we'll use a hardcoded path as a test
-//     let test_path = "D:\\SPT\\SPT.Server.exe".to_string();
-//     
-//     let last_path = LAST_SELECTED_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-//     if let Ok(mut path_guard) = last_path.lock() {
-//         *path_guard = Some(test_path.clone());
-//         format!("SUCCESS: Last selected path set to: {}", test_path)
-//     } else {
-//         "ERROR: Failed to set last selected path".to_string()
-//     }
-// }
-
-// Use last selected path for server - DISABLED
-// #[tauri::command]
-// fn use_last_path_for_server() -> String {
-//     let last_path = LAST_SELECTED_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-//     if let Ok(path_guard) = last_path.lock() {
-//         if let Some(ref path) = *path_guard {
-//             let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-//             if let Ok(mut server_guard) = server_path.lock() {
-//                 *server_guard = Some(path.clone());
-//                 return format!("SUCCESS: Server path set to: {}", path);
-//             }
-//         }
-//     }
-//     
-//     // Fallback to hardcoded path
-//     let test_path = "D:\\SPT\\SPT.Server.exe".to_string();
-//     let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-//     if let Ok(mut path_guard) = server_path.lock() {
-//         *path_guard = Some(test_path.clone());
-//         format!("SUCCESS: Server path set to: {}", test_path)
-//     } else {
-//         "ERROR: Failed to set server path".to_string()
-//     }
-// }
 
 // Launch server
 #[tauri::command]
@@ -646,6 +582,36 @@ async fn load_config(app_handle: tauri::AppHandle) -> String {
     "SUCCESS: Configuration loaded successfully".to_string()
 }
 
+// Clear configuration file
+#[tauri::command]
+async fn clear_config(app_handle: tauri::AppHandle) -> String {
+    let app_dir = match app_handle.path().app_data_dir() {
+        Ok(dir) => dir,
+        Err(_) => return "ERROR: Failed to get app data directory".to_string(),
+    };
+    
+    let config_path = app_dir.join("config.json");
+    
+    if config_path.exists() {
+        if let Err(e) = fs::remove_file(&config_path) {
+            return format!("ERROR: Failed to delete config file: {}", e);
+        }
+    }
+    
+    // Also clear the global path variables
+    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
+    if let Ok(mut path_guard) = server_path.lock() {
+        *path_guard = None;
+    }
+    
+    let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
+    if let Ok(mut path_guard) = launcher_path.lock() {
+        *path_guard = None;
+    }
+    
+    "SUCCESS: Configuration cleared successfully".to_string()
+}
+
 // Get server path
 #[tauri::command]
 async fn get_server_path() -> String {
@@ -738,9 +704,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_server_path_from_ui,
             set_launcher_path_from_ui,
-            set_server_path_d,
-            set_server_path_c,
-            set_launcher_path_d,
+            set_server_path_args_wrapper,
+            set_launcher_path_args_wrapper,
             launch_server,
             launch_launcher,
             select_file,
@@ -754,6 +719,7 @@ pub fn run() {
             stop_launcher,
             save_config,
             load_config,
+            clear_config,
             get_server_path,
             get_launcher_path,
             check_default_port_status,

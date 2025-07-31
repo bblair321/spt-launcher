@@ -44,32 +44,24 @@ let maxLogLines = 1000;
 
 // Helper function to safely invoke Tauri commands
 function safeInvoke(command, ...args) {
-  console.log(`[DEBUG] Invoking command: ${command} with args:`, args);
-
   // Try different ways to access invoke in Tauri v2
   if (
     window.__TAURI__ &&
     window.__TAURI__.core &&
     window.__TAURI__.core.invoke
   ) {
-    console.log(`[DEBUG] Using window.__TAURI__.core.invoke`);
     return window.__TAURI__.core.invoke(command, ...args);
   } else if (window.__TAURI__ && window.__TAURI__.invoke) {
-    console.log(`[DEBUG] Using window.__TAURI__.invoke`);
     return window.__TAURI__.invoke(command, ...args);
   } else if (
     window.__TAURI__ &&
     window.__TAURI__.api &&
     window.__TAURI__.api.invoke
   ) {
-    console.log(`[DEBUG] Using window.__TAURI__.api.invoke`);
     return window.__TAURI__.api.invoke(command, ...args);
   } else if (typeof invoke !== "undefined") {
-    console.log(`[DEBUG] Using global invoke`);
     return invoke(command, ...args);
   } else {
-    console.error("[DEBUG] Tauri invoke not available");
-    console.error("[DEBUG] window.__TAURI__:", window.__TAURI__);
     throw new Error("Tauri invoke not available");
   }
 }
@@ -93,15 +85,26 @@ function setupEventListeners() {
       const path = await safeInvoke("select_server_file");
       if (path && !path.startsWith("ERROR:")) {
         serverPathInput.value = path;
-        console.log("Selected server file:", path);
+        addLogLine(`Selected server file: ${path}`, "info");
 
-        // Don't call the parameter-based function - just store the path in the UI
-        showNotification("Server file selected successfully", "success");
+        // Set the server path using the args wrapper function
+        const setResult = await safeInvoke("set_server_path_args_wrapper", {
+          args: { path: path },
+        });
+        addLogLine(`Server path set result: ${setResult}`, "info");
+
+        if (setResult.startsWith("SUCCESS:")) {
+          showNotification("Server file selected successfully", "success");
+        } else {
+          showNotification("Failed to set server path", "error");
+          addLogLine(`Server path set failed: ${setResult}`, "error");
+        }
       } else {
         showNotification("No file selected or selection failed", "warning");
       }
     } catch (error) {
-      console.error("Failed to select server file:", error);
+      addLogLine(`Failed to select server file: ${error.message}`, "error");
+      addLogLine(`Server file selection error details: ${error}`, "error");
       showNotification("Failed to select server file", "error");
     }
   });
@@ -111,15 +114,26 @@ function setupEventListeners() {
       const path = await safeInvoke("select_launcher_file");
       if (path && !path.startsWith("ERROR:")) {
         launcherPathInput.value = path;
-        console.log("Selected launcher file:", path);
+        addLogLine(`Selected launcher file: ${path}`, "info");
 
-        // Don't call the parameter-based function - just store the path in the UI
-        showNotification("Launcher file selected successfully", "success");
+        // Set the launcher path using the args wrapper function
+        const setResult = await safeInvoke("set_launcher_path_args_wrapper", {
+          args: { path: path },
+        });
+        addLogLine(`Launcher path set result: ${setResult}`, "info");
+
+        if (setResult.startsWith("SUCCESS:")) {
+          showNotification("Launcher file selected successfully", "success");
+        } else {
+          showNotification("Failed to set launcher path", "error");
+          addLogLine(`Launcher path set failed: ${setResult}`, "error");
+        }
       } else {
         showNotification("No file selected or selection failed", "warning");
       }
     } catch (error) {
-      console.error("Failed to select launcher file:", error);
+      addLogLine(`Failed to select launcher file: ${error.message}`, "error");
+      addLogLine(`Launcher file selection error details: ${error}`, "error");
       showNotification("Failed to select launcher file", "error");
     }
   });
@@ -140,6 +154,12 @@ function setupEventListeners() {
   refreshInfoBtn.addEventListener("click", refreshInfo);
   clearLogBtn.addEventListener("click", clearLog);
   refreshProcessesBtn.addEventListener("click", updateProcessList);
+
+  // Debug button
+  const clearPathsBtn = document.getElementById("clear-paths");
+  if (clearPathsBtn) {
+    clearPathsBtn.addEventListener("click", clearPaths);
+  }
 
   // Settings
   const logLevelSelect = document.getElementById("log-level");
@@ -195,12 +215,9 @@ function setupWindowControls() {
   const closeBtn = document.getElementById("close-window");
 
   minimizeBtn.addEventListener("click", async () => {
-    console.log("Minimize button clicked");
-    
     try {
       const result = await safeInvoke("minimize_window");
-      console.log("Minimize result:", result);
-      
+
       if (result.startsWith("ERROR:")) {
         console.error("Failed to minimize window:", result);
       }
@@ -210,12 +227,9 @@ function setupWindowControls() {
   });
 
   closeBtn.addEventListener("click", async () => {
-    console.log("Close button clicked");
-    
     try {
       const result = await safeInvoke("close_window");
-      console.log("Close result:", result);
-      
+
       if (result.startsWith("ERROR:")) {
         console.error("Failed to close window:", result);
       }
@@ -228,6 +242,8 @@ function setupWindowControls() {
 // Start server function
 async function startServer() {
   const serverPath = serverPathInput.value.trim();
+  addLogLine(`Starting server with path: ${serverPath}`, "info");
+
   if (!serverPath) {
     showNotification("Please enter the server path", "error");
     return;
@@ -236,12 +252,16 @@ async function startServer() {
   addLogLine(`Starting server...`);
 
   try {
-    // Set the server path using the working function
-    const setResult = await safeInvoke("set_server_path_d");
+    // Set the server path using the args wrapper function
+    const setResult = await safeInvoke("set_server_path_args_wrapper", {
+      args: { path: serverPath },
+    });
+    addLogLine(`Server path set result: ${setResult}`, "info");
     addLogLine(`Server path set: ${setResult}`);
 
     // Launch the server
     const result = await safeInvoke("launch_server");
+    addLogLine(`Launch server result: ${result}`, "info");
 
     // Check if result starts with "ERROR:"
     if (result && result.startsWith("ERROR:")) {
@@ -282,6 +302,8 @@ async function stopServer() {
 // Start launcher function
 async function startLauncher() {
   const launcherPath = launcherPathInput.value.trim();
+  addLogLine(`Starting launcher with path: ${launcherPath}`, "info");
+
   if (!launcherPath) {
     showNotification("Please enter the launcher path", "error");
     return;
@@ -290,12 +312,16 @@ async function startLauncher() {
   addLogLine(`Starting launcher...`);
 
   try {
-    // Set the launcher path using the working function
-    const setResult = await safeInvoke("set_launcher_path_d");
+    // Set the launcher path using the args wrapper function
+    const setResult = await safeInvoke("set_launcher_path_args_wrapper", {
+      args: { path: launcherPath },
+    });
+    addLogLine(`Launcher path set result: ${setResult}`, "info");
     addLogLine(`Launcher path set: ${setResult}`);
 
     // Launch the launcher
     const result = await safeInvoke("launch_launcher");
+    addLogLine(`Launch launcher result: ${result}`, "info");
 
     // Check if result starts with "ERROR:"
     if (result.startsWith("ERROR:")) {
@@ -309,7 +335,7 @@ async function startLauncher() {
     }
   } catch (error) {
     addLogLine(`Failed to start launcher: ${error.message}`);
-    console.error("Launcher start error:", error);
+    addLogLine(`Launcher start error: ${error}`, "error");
   }
 }
 
@@ -371,6 +397,7 @@ async function saveConfig() {
 async function loadConfig() {
   try {
     const result = await safeInvoke("load_config");
+    addLogLine(`Load config result: ${result}`, "info");
     showNotification("Configuration loaded", "success");
     addLogLine("Configuration loaded successfully");
 
@@ -378,16 +405,42 @@ async function loadConfig() {
     const serverPath = await safeInvoke("get_server_path");
     const launcherPath = await safeInvoke("get_launcher_path");
 
+    addLogLine(`Loaded server path: ${serverPath}`, "info");
+    addLogLine(`Loaded launcher path: ${launcherPath}`, "info");
+
     if (serverPath && !serverPath.startsWith("ERROR:")) {
       serverPathInput.value = serverPath;
+      addLogLine(`Set server path input to: ${serverPath}`, "info");
     }
 
     if (launcherPath && !launcherPath.startsWith("ERROR:")) {
       launcherPathInput.value = launcherPath;
+      addLogLine(`Set launcher path input to: ${launcherPath}`, "info");
     }
   } catch (error) {
+    addLogLine(`Load config error: ${error.message}`, "error");
     showNotification("Failed to load configuration", "error");
     addLogLine(`Failed to load configuration: ${error.message}`);
+  }
+}
+
+// Debug function to clear paths and help identify hard-coded path issues
+async function clearPaths() {
+  try {
+    // Clear the input fields
+    serverPathInput.value = "";
+    launcherPathInput.value = "";
+
+    // Clear the configuration file and backend paths
+    const clearResult = await safeInvoke("clear_config");
+    addLogLine(`Clear config result: ${clearResult}`, "info");
+
+    addLogLine("Paths cleared for debugging", "info");
+    addLogLine("Paths cleared for debugging");
+    showNotification("Paths cleared for debugging", "info");
+  } catch (error) {
+    addLogLine(`Failed to clear paths: ${error.message}`, "error");
+    addLogLine(`Failed to clear paths: ${error.message}`);
   }
 }
 
