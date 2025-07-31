@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SPT-AKI Launcher",
+  "productName": "SPT Launcher",
   "version": "1.0.0",
-  "identifier": "com.sptaki.launcher",
+  "identifier": "com.spt.launcher",
   "build": {
     "frontendDist": "../src",
     "beforeDevCommand": "",
@@ -12,7 +12,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "SPT-AKI Launcher",
+        "title": "SPT Launcher",
         "width": 900,
         "height": 700,
         "resizable": true,

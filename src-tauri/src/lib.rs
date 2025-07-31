@@ -24,8 +24,8 @@ static LAUNCHER_PROCESS: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
 static SELECTED_SERVER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
 static SELECTED_LAUNCHER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
 
-// Global variable for the last selected path (simpler approach)
-static LAST_SELECTED_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
+// Global variable for the last selected path (simpler approach) - UNUSED
+// static LAST_SELECTED_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
 
 // Configuration struct
 #[derive(Serialize, Deserialize, Clone)]
