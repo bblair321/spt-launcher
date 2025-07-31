@@ -522,9 +522,9 @@ async fn save_config(app_handle: tauri::AppHandle) -> String {
         server_port: 6969,
         auto_start_server: false,
         auto_start_launcher: false,
-        max_log_lines: 1000,
+        max_log_lines: 5000,
         auto_refresh: true,
-        refresh_interval: 5000,
+        refresh_interval: 1000,
     };
     
     let config_json = match serde_json::to_string_pretty(&config) {
