@@ -185,6 +185,23 @@
         background: rgba(74, 93, 35, 0.9);
       }
 
+      .form-group select {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #556b2f;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease;
+        background: rgba(74, 93, 35, 0.8);
+        color: #e8f5e8;
+      }
+
+      .form-group select:focus {
+        outline: none;
+        border-color: #6b8e23;
+        background: rgba(74, 93, 35, 0.9);
+      }
+
       .file-input-group {
         display: flex;
         gap: 10px;
@@ -702,9 +719,9 @@
               <div class="form-group">
                 <label for="log-level">Log Level:</label>
                 <select id="log-level" class="form-control">
-                  <option value="1000">Verbose</option>
-                  <option value="500">Normal</option>
-                  <option value="100">Minimal</option>
+                  <option value="Verbose">Verbose</option>
+                  <option value="Normal" selected>Normal</option>
+                  <option value="Minimal">Minimal</option>
                 </select>
               </div>
               <div class="form-group">

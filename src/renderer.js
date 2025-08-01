@@ -68,7 +68,7 @@ function safeInvoke(command, ...args) {
 
 // Initialize
 document.addEventListener("DOMContentLoaded", () => {
-  loadConfig();
+  loadConfigWithUISettings();
   setupEventListeners();
   setupTabs();
   setupWindowControls();
@@ -95,6 +95,8 @@ function setupEventListeners() {
 
         if (setResult.startsWith("SUCCESS:")) {
           showNotification("Server file selected successfully", "success");
+          // Auto-save settings when file is selected
+          setTimeout(() => saveConfigWithUISettings(), 100);
         } else {
           showNotification("Failed to set server path", "error");
           addLogLine(`Server path set failed: ${setResult}`, "error");
@@ -124,6 +126,8 @@ function setupEventListeners() {
 
         if (setResult.startsWith("SUCCESS:")) {
           showNotification("Launcher file selected successfully", "success");
+          // Auto-save settings when file is selected
+          setTimeout(() => saveConfigWithUISettings(), 100);
         } else {
           showNotification("Failed to set launcher path", "error");
           addLogLine(`Launcher path set failed: ${setResult}`, "error");
@@ -168,11 +172,14 @@ function setupEventListeners() {
   const refreshIntervalInput = document.getElementById("refresh-interval");
 
   logLevelSelect.addEventListener("change", (e) => {
-    maxLogLines = parseInt(e.target.value);
+    // Auto-save settings when changed
+    setTimeout(() => saveConfigWithUISettings(), 100);
   });
 
   maxLogLinesInput.addEventListener("change", (e) => {
     maxLogLines = parseInt(e.target.value);
+    // Auto-save settings when changed
+    setTimeout(() => saveConfigWithUISettings(), 100);
   });
 
   autoRefreshCheckbox.addEventListener("change", (e) => {
@@ -181,6 +188,8 @@ function setupEventListeners() {
     } else {
       stopAutoRefresh();
     }
+    // Auto-save settings when changed
+    setTimeout(() => saveConfigWithUISettings(), 100);
   });
 
   refreshIntervalInput.addEventListener("change", (e) => {
@@ -189,6 +198,22 @@ function setupEventListeners() {
       stopAutoRefresh();
       startAutoRefresh(interval);
     }
+    // Auto-save settings when changed
+    setTimeout(() => saveConfigWithUISettings(), 100);
+  });
+
+  // Auto-save when auto-start checkboxes change
+  autoStartCheckbox.addEventListener("change", () => {
+    setTimeout(() => saveConfigWithUISettings(), 100);
+  });
+
+  autoLauncherCheckbox.addEventListener("change", () => {
+    setTimeout(() => saveConfigWithUISettings(), 100);
+  });
+
+  // Auto-save when server port changes
+  serverPortInput.addEventListener("change", () => {
+    setTimeout(() => saveConfigWithUISettings(), 100);
   });
 }
 
@@ -382,46 +407,136 @@ async function stopAll() {
   await stopLauncher();
 }
 
-// Configuration - simplified for Tauri
-async function saveConfig() {
+// Configuration - enhanced with UI settings
+async function saveConfigWithUISettings() {
   try {
-    const result = await safeInvoke("save_config");
-    showNotification("Configuration saved", "success");
-    addLogLine("Configuration saved successfully");
+    // Collect all UI settings
+    const autoStartServer = autoStartCheckbox.checked;
+    const autoStartLauncher = autoLauncherCheckbox.checked;
+    const serverPort = parseInt(serverPortInput.value) || 6969;
+    const maxLogLines =
+      parseInt(document.getElementById("max-log-lines")?.value) || 1000;
+    const autoRefresh =
+      document.getElementById("auto-refresh")?.checked || true;
+    const refreshInterval =
+      parseInt(document.getElementById("refresh-interval")?.value) || 5000;
+    const logLevel = document.getElementById("log-level")?.value || "Normal";
+
+    const result = await safeInvoke("save_config_with_ui_settings", {
+      settings: {
+        autoStartServer,
+        autoStartLauncher,
+        serverPort,
+        maxLogLines,
+        autoRefresh,
+        refreshInterval,
+        logLevel,
+      },
+    });
+
+    if (result.startsWith("SUCCESS:")) {
+      addLogLine("Configuration saved successfully", "success");
+      // Show a subtle notification for auto-save
+      showNotification("Settings auto-saved", "success");
+    } else {
+      addLogLine(`Failed to save configuration: ${result}`, "error");
+    }
   } catch (error) {
-    showNotification("Failed to save configuration", "error");
-    addLogLine(`Failed to save configuration: ${error.message}`);
+    addLogLine(`Failed to save configuration: ${error.message}`, "error");
   }
 }
 
-async function loadConfig() {
+async function loadConfigWithUISettings() {
   try {
-    const result = await safeInvoke("load_config");
-    addLogLine(`Load config result: ${result}`, "info");
-    showNotification("Configuration loaded", "success");
-    addLogLine("Configuration loaded successfully");
+    const result = await safeInvoke("load_config_with_ui_settings");
 
-    // Update the UI with loaded paths
-    const serverPath = await safeInvoke("get_server_path");
-    const launcherPath = await safeInvoke("get_launcher_path");
+    if (result.startsWith("SUCCESS:")) {
+      // Parse the JSON settings from the result
+      const settingsJson = result.replace("SUCCESS: ", "");
+      const settings = JSON.parse(settingsJson);
 
-    addLogLine(`Loaded server path: ${serverPath}`, "info");
-    addLogLine(`Loaded launcher path: ${launcherPath}`, "info");
+      // Update UI with loaded settings
+      if (settings.server_path) {
+        serverPathInput.value = settings.server_path;
+        addLogLine(`Loaded server path: ${settings.server_path}`, "info");
+      }
 
-    if (serverPath && !serverPath.startsWith("ERROR:")) {
-      serverPathInput.value = serverPath;
-      addLogLine(`Set server path input to: ${serverPath}`, "info");
-    }
+      if (settings.launcher_path) {
+        launcherPathInput.value = settings.launcher_path;
+        addLogLine(`Loaded launcher path: ${settings.launcher_path}`, "info");
+      }
 
-    if (launcherPath && !launcherPath.startsWith("ERROR:")) {
-      launcherPathInput.value = launcherPath;
-      addLogLine(`Set launcher path input to: ${launcherPath}`, "info");
+      if (settings.server_port) {
+        serverPortInput.value = settings.server_port;
+      }
+
+      if (settings.auto_start_server !== undefined) {
+        autoStartCheckbox.checked = settings.auto_start_server;
+      }
+
+      if (settings.auto_start_launcher !== undefined) {
+        autoLauncherCheckbox.checked = settings.auto_start_launcher;
+      }
+
+      if (settings.max_log_lines) {
+        const maxLogLinesInput = document.getElementById("max-log-lines");
+        if (maxLogLinesInput) {
+          maxLogLinesInput.value = settings.max_log_lines;
+          maxLogLines = settings.max_log_lines;
+        }
+      }
+
+      if (settings.auto_refresh !== undefined) {
+        const autoRefreshCheckbox = document.getElementById("auto-refresh");
+        if (autoRefreshCheckbox) {
+          autoRefreshCheckbox.checked = settings.auto_refresh;
+          if (settings.auto_refresh) {
+            startAutoRefresh();
+          } else {
+            stopAutoRefresh();
+          }
+        }
+      }
+
+      if (settings.refresh_interval) {
+        const refreshIntervalInput =
+          document.getElementById("refresh-interval");
+        if (refreshIntervalInput) {
+          refreshIntervalInput.value = settings.refresh_interval;
+        }
+      }
+
+      if (settings.log_level) {
+        const logLevelSelect = document.getElementById("log-level");
+        if (logLevelSelect) {
+          logLevelSelect.value = settings.log_level;
+        }
+      }
+
+      addLogLine("Configuration loaded successfully", "success");
+      showNotification("Configuration loaded", "success");
+    } else if (result.includes("No configuration file found")) {
+      // This is expected for first-time users, so don't show any logs or notifications
+      // Just silently use default settings
+    } else {
+      addLogLine(`Failed to load configuration: ${result}`, "error");
+      showNotification("Failed to load configuration", "error");
     }
   } catch (error) {
     addLogLine(`Load config error: ${error.message}`, "error");
     showNotification("Failed to load configuration", "error");
-    addLogLine(`Failed to load configuration: ${error.message}`);
   }
+}
+
+// Enhanced save config function that includes UI settings
+async function saveConfig() {
+  await saveConfigWithUISettings();
+  showNotification("Configuration saved", "success");
+}
+
+// Enhanced load config function that includes UI settings
+async function loadConfig() {
+  await loadConfigWithUISettings();
 }
 
 // Debug function to clear paths and help identify hard-coded path issues
