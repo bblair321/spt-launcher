@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
 use std::process::Child;
 use crate::utils::process::{ProcessType, launch_process, stop_process, get_output, clear_output};
+use crate::utils::validation::validate_file_path;
 
 // Global state for server
 static SERVER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
@@ -69,6 +70,11 @@ pub async fn launch_server() -> String {
     } else {
         return "ERROR: Failed to access server path".to_string();
     };
+    
+    // Validate the server path before launching
+    if let Err(e) = validate_file_path(&path) {
+        return format!("ERROR: Invalid server path: {}", e);
+    }
     
     match launch_process(&path, ProcessType::Server, &SERVER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new()))), &SERVER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None)))).await {
         Ok(result) => result,

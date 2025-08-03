@@ -3,6 +3,7 @@ use std::sync::OnceLock;
 use std::fs;
 use tauri::Manager;
 use crate::models::Config;
+use crate::utils::validation::validate_config;
 
 // Global state for paths (shared with server and launcher modules)
 static SERVER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
@@ -48,6 +49,11 @@ pub async fn save_config(app_handle: tauri::AppHandle) -> String {
         refresh_interval: 1000,
         log_level: "Normal".to_string(),
     };
+    
+    // Validate the configuration before saving
+    if let Err(e) = validate_config(&config) {
+        return format!("ERROR: Configuration validation failed: {}", e);
+    }
     
     let config_json = match serde_json::to_string_pretty(&config) {
         Ok(json) => json,
@@ -186,6 +192,11 @@ pub async fn save_config_with_ui_settings(
         refresh_interval,
         log_level,
     };
+    
+    // Validate the configuration before saving
+    if let Err(e) = validate_config(&config) {
+        return format!("ERROR: Configuration validation failed: {}", e);
+    }
     
     let config_json = match serde_json::to_string_pretty(&config) {
         Ok(json) => json,

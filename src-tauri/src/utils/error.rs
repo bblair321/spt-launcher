@@ -76,6 +76,9 @@ pub enum AppError {
     
     #[error("Process error: {0}")]
     ProcessError(#[from] std::io::Error),
+    
+    #[error("Validation error in {field}: {message}")]
+    ValidationError { field: String, message: String },
 }
 
 pub type AppResult<T> = Result<T, AppError>; 

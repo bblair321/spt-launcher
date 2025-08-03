@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
 use std::process::Child;
 use crate::utils::process::{ProcessType, launch_process, stop_process, get_output, clear_output};
+use crate::utils::validation::validate_file_path;
 
 // Global state for launcher
 static LAUNCHER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
@@ -69,6 +70,11 @@ pub async fn launch_launcher() -> String {
     } else {
         return "ERROR: Failed to access launcher path".to_string();
     };
+    
+    // Validate the launcher path before launching
+    if let Err(e) = validate_file_path(&path) {
+        return format!("ERROR: Invalid launcher path: {}", e);
+    }
     
     match launch_process(&path, ProcessType::Launcher, &LAUNCHER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new()))), &LAUNCHER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None)))).await {
         Ok(result) => result,
