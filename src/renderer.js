@@ -28,6 +28,8 @@ const refreshInfoBtn = document.getElementById("refresh-info");
 
 const logOutput = document.getElementById("log-output");
 const clearLogBtn = document.getElementById("clear-log");
+const copyLogBtn = document.getElementById("copy-log"); // Add copy log button
+const resumeScrollBtn = document.getElementById("resume-scroll"); // Add resume scroll button
 const processList = document.getElementById("process-list");
 const refreshProcessesBtn = document.getElementById("refresh-processes");
 
@@ -41,6 +43,8 @@ let autoRefreshInterval = null;
 let launcherOutputInterval = null;
 let serverOutputInterval = null;
 let maxLogLines = 1000;
+let isLoading = false; // Add loading state
+let autoScrollPaused = false; // Add auto-scroll pause state
 
 // Helper function to safely invoke Tauri commands
 function safeInvoke(command, ...args) {
@@ -72,9 +76,14 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   setupTabs();
   setupWindowControls();
+  setupKeyboardShortcuts(); // Add keyboard shortcuts
+  setupLogAutoScroll(); // Add log auto-scroll setup
   startAutoRefresh();
   checkPortStatus();
   updateProcessCount();
+
+  // Store original button text for loading states
+  storeOriginalButtonText();
 });
 
 // Event Listeners
@@ -164,6 +173,12 @@ function setupEventListeners() {
   if (clearPathsBtn) {
     clearPathsBtn.addEventListener("click", clearPaths);
   }
+
+  // Copy log button
+  copyLogBtn.addEventListener("click", copyLogToClipboard);
+
+  // Resume scroll button
+  resumeScrollBtn.addEventListener("click", resumeAutoScroll);
 
   // Settings
   const logLevelSelect = document.getElementById("log-level");
@@ -266,17 +281,22 @@ function setupWindowControls() {
 
 // Start server function
 async function startServer() {
-  const serverPath = serverPathInput.value.trim();
-  addLogLine(`Starting server with path: ${serverPath}`, "info");
-
-  if (!serverPath) {
-    showNotification("Please enter the server path", "error");
-    return;
-  }
-
-  addLogLine(`Starting server...`);
+  if (isLoading) return; // Prevent multiple simultaneous operations
 
   try {
+    isLoading = true;
+    updateButtonState(startServerBtn, true, "Starting...");
+
+    const serverPath = serverPathInput.value.trim();
+    addLogLine(`Starting server with path: ${serverPath}`, "info");
+
+    if (!serverPath) {
+      showNotification("Please enter the server path", "error");
+      return;
+    }
+
+    addLogLine(`Starting server...`);
+
     // Set the server path using the args wrapper function
     const setResult = await safeInvoke("set_server_path_args_wrapper", {
       args: { path: serverPath },
@@ -286,57 +306,70 @@ async function startServer() {
 
     // Launch the server
     const result = await safeInvoke("launch_server");
-    addLogLine(`Launch server result: ${result}`, "info");
+    addLogLine(`Server start result: ${result}`, "info");
 
-    // Check if result starts with "ERROR:"
-    if (result && result.startsWith("ERROR:")) {
-      addLogLine(`Failed to start server: ${result}`);
-    } else if (result && result.startsWith("SUCCESS:")) {
-      addLogLine("Server started successfully");
-      updateServerStatus("running");
+    if (result.startsWith("SUCCESS:")) {
       serverRunning = true;
+      updateServerStatus("Running");
+      showNotification("Server started successfully", "success");
       startServerOutputRefresh();
     } else {
-      addLogLine(`Server result: ${result}`);
+      showNotification(`Failed to start server: ${result}`, "error");
     }
   } catch (error) {
-    addLogLine(`Failed to start server: ${error.message}`);
+    addLogLine(`Error starting server: ${error}`, "error");
+    showNotification("Failed to start server", "error");
+  } finally {
+    isLoading = false;
+    updateButtonState(startServerBtn, false, "Start Server");
   }
 }
 
 async function stopServer() {
+  if (isLoading) return;
+
   try {
+    isLoading = true;
+    updateButtonState(stopServerBtn, true, "Stopping...");
+
     const result = await safeInvoke("stop_server");
+    addLogLine(`Server stop result: ${result}`, "info");
 
     if (result.startsWith("SUCCESS:")) {
       serverRunning = false;
-      updateServerStatus("stopped");
-      showNotification("Server stopped", "info");
-      addLogLine("Server stopped successfully");
+      updateServerStatus("Stopped");
+      showNotification("Server stopped successfully", "success");
       stopServerOutputRefresh();
     } else {
-      addLogLine(`Failed to stop server: ${result}`);
-      showNotification("Failed to stop server", "error");
+      showNotification(`Failed to stop server: ${result}`, "error");
     }
   } catch (error) {
-    addLogLine(`Failed to stop server: ${error.message}`);
+    addLogLine(`Error stopping server: ${error}`, "error");
     showNotification("Failed to stop server", "error");
+  } finally {
+    isLoading = false;
+    updateButtonState(stopServerBtn, false, "Stop Server");
   }
 }
 
 // Start launcher function
 async function startLauncher() {
-  const launcherPath = launcherPathInput.value.trim();
-  addLogLine(`Starting launcher with path: ${launcherPath}`, "info");
-
-  if (!launcherPath) {
-    showNotification("Please enter the launcher path", "error");
-    return;
-  }
-
-  addLogLine(`Starting launcher...`);
+  if (isLoading) return;
 
   try {
+    isLoading = true;
+    updateButtonState(startLauncherBtn, true, "Starting...");
+
+    const launcherPath = launcherPathInput.value.trim();
+    addLogLine(`Starting launcher with path: ${launcherPath}`, "info");
+
+    if (!launcherPath) {
+      showNotification("Please enter the launcher path", "error");
+      return;
+    }
+
+    addLogLine(`Starting launcher...`);
+
     // Set the launcher path using the args wrapper function
     const setResult = await safeInvoke("set_launcher_path_args_wrapper", {
       args: { path: launcherPath },
@@ -346,40 +379,49 @@ async function startLauncher() {
 
     // Launch the launcher
     const result = await safeInvoke("launch_launcher");
-    addLogLine(`Launch launcher result: ${result}`, "info");
+    addLogLine(`Launcher start result: ${result}`, "info");
 
-    // Check if result starts with "ERROR:"
-    if (result.startsWith("ERROR:")) {
-      addLogLine(`Failed to start launcher: ${result}`);
-    } else if (result.startsWith("SUCCESS:")) {
-      addLogLine("Launcher started successfully");
-      updateLauncherStatus("running");
+    if (result.startsWith("SUCCESS:")) {
       launcherRunning = true;
+      updateLauncherStatus("Running");
+      showNotification("Launcher started successfully", "success");
+      startLauncherOutputRefresh();
     } else {
-      addLogLine(`Launcher result: ${result}`);
+      showNotification(`Failed to start launcher: ${result}`, "error");
     }
   } catch (error) {
-    addLogLine(`Failed to start launcher: ${error.message}`);
-    addLogLine(`Launcher start error: ${error}`, "error");
+    addLogLine(`Error starting launcher: ${error}`, "error");
+    showNotification("Failed to start launcher", "error");
+  } finally {
+    isLoading = false;
+    updateButtonState(startLauncherBtn, false, "Start Launcher");
   }
 }
 
 async function stopLauncher() {
+  if (isLoading) return;
+
   try {
+    isLoading = true;
+    updateButtonState(stopLauncherBtn, true, "Stopping...");
+
     const result = await safeInvoke("stop_launcher");
+    addLogLine(`Launcher stop result: ${result}`, "info");
 
     if (result.startsWith("SUCCESS:")) {
       launcherRunning = false;
-      updateLauncherStatus("stopped");
-      showNotification("Launcher stopped", "info");
-      addLogLine("Launcher stopped successfully");
+      updateLauncherStatus("Stopped");
+      showNotification("Launcher stopped successfully", "success");
+      stopLauncherOutputRefresh();
     } else {
-      addLogLine(`Failed to stop launcher: ${result}`);
-      showNotification("Failed to stop launcher", "error");
+      showNotification(`Failed to stop launcher: ${result}`, "error");
     }
   } catch (error) {
-    addLogLine(`Failed to stop launcher: ${error.message}`);
+    addLogLine(`Error stopping launcher: ${error}`, "error");
     showNotification("Failed to stop launcher", "error");
+  } finally {
+    isLoading = false;
+    updateButtonState(stopLauncherBtn, false, "Stop Launcher");
   }
 }
 
@@ -668,10 +710,31 @@ async function updateServerOutput() {
     const output = await safeInvoke("get_server_output");
     if (output && output.length > 0) {
       logOutput.innerHTML = output.join("<br>");
-      logOutput.scrollTop = logOutput.scrollHeight;
+
+      // Only auto-scroll if not paused
+      if (!autoScrollPaused) {
+        logOutput.scrollTop = logOutput.scrollHeight;
+      }
     }
   } catch (error) {
     console.error("Failed to update server output:", error);
+  }
+}
+
+// Update launcher output
+async function updateLauncherOutput() {
+  try {
+    const output = await safeInvoke("get_launcher_output");
+    if (output && output.length > 0) {
+      logOutput.innerHTML = output.join("<br>");
+
+      // Only auto-scroll if not paused
+      if (!autoScrollPaused) {
+        logOutput.scrollTop = logOutput.scrollHeight;
+      }
+    }
+  } catch (error) {
+    console.error("Failed to update launcher output:", error);
   }
 }
 
@@ -691,6 +754,26 @@ function stopServerOutputRefresh() {
   if (serverOutputInterval) {
     clearInterval(serverOutputInterval);
     serverOutputInterval = null;
+  }
+}
+
+// Launcher output refresh functions
+function startLauncherOutputRefresh(interval = 1000) {
+  if (launcherOutputInterval) {
+    clearInterval(launcherOutputInterval);
+  }
+
+  launcherOutputInterval = setInterval(() => {
+    if (launcherRunning) {
+      updateLauncherOutput();
+    }
+  }, interval);
+}
+
+function stopLauncherOutputRefresh() {
+  if (launcherOutputInterval) {
+    clearInterval(launcherOutputInterval);
+    launcherOutputInterval = null;
   }
 }
 
@@ -724,55 +807,74 @@ async function refreshInfo() {
 
 // Notifications
 function showNotification(message, type = "info") {
-  // Create notification element
+  // Remove existing notifications
+  const existingNotifications = document.querySelectorAll(".notification");
+  existingNotifications.forEach((notification) => notification.remove());
+
   const notification = document.createElement("div");
-  notification.className = `notification ${type}`;
+  notification.className = `notification notification-${type}`;
   notification.textContent = message;
 
-  // Style the notification
+  // Add styles for better notifications
   notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 1rem 1.5rem;
-        border-radius: 5px;
-        color: white;
-        font-weight: 500;
-        z-index: 1000;
-        animation: slideIn 0.3s ease-out;
-        max-width: 300px;
-    `;
+    position: fixed;
+    top: 50px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    color: white;
+    font-weight: 500;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease-out;
+    max-width: 300px;
+    word-wrap: break-word;
+  `;
 
   // Set background color based on type
   switch (type) {
     case "success":
-      notification.style.background =
-        "linear-gradient(45deg, #00ff88, #00cc6a)";
+      notification.style.backgroundColor = "#4CAF50";
       break;
     case "error":
-      notification.style.background =
-        "linear-gradient(45deg, #ff4757, #ff3742)";
+      notification.style.backgroundColor = "#F44336";
       break;
     case "warning":
-      notification.style.background =
-        "linear-gradient(45deg, #ffa502, #ff9500)";
+      notification.style.backgroundColor = "#FF9800";
       break;
     default:
-      notification.style.background =
-        "linear-gradient(45deg, #00d4ff, #0099cc)";
+      notification.style.backgroundColor = "#2196F3";
   }
+
+  // Add animation styles
+  const style = document.createElement("style");
+  style.textContent = `
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  `;
+  document.head.appendChild(style);
 
   document.body.appendChild(notification);
 
-  // Remove notification after 3 seconds
+  // Auto-remove after 4 seconds
   setTimeout(() => {
-    notification.style.animation = "slideOut 0.3s ease-in";
-    setTimeout(() => {
-      if (notification.parentNode) {
-        notification.parentNode.removeChild(notification);
-      }
-    }, 300);
-  }, 3000);
+    if (notification.parentNode) {
+      notification.style.animation = "slideOut 0.3s ease-in";
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.parentNode.removeChild(notification);
+        }
+      }, 300);
+    }
+  }, 4000);
 }
 
 // CSS for notifications
@@ -788,7 +890,7 @@ style.textContent = `
             opacity: 1;
         }
     }
-    
+
     @keyframes slideOut {
         from {
             transform: translateX(0);
@@ -801,3 +903,156 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Helper function to update button states
+function updateButtonState(button, isLoading, loadingText) {
+  if (isLoading) {
+    button.disabled = true;
+    button.textContent = loadingText;
+    button.style.opacity = "0.7";
+  } else {
+    button.disabled = false;
+    button.textContent =
+      button.getAttribute("data-original-text") || button.textContent;
+    button.style.opacity = "1";
+  }
+}
+
+// Store original button text for loading states
+function storeOriginalButtonText() {
+  const buttons = [
+    startServerBtn,
+    stopServerBtn,
+    startLauncherBtn,
+    stopLauncherBtn,
+    saveConfigBtn,
+    loadConfigBtn,
+  ];
+  buttons.forEach((button) => {
+    if (button) {
+      button.setAttribute("data-original-text", button.textContent);
+    }
+  });
+}
+
+// Setup keyboard shortcuts
+function setupKeyboardShortcuts() {
+  document.addEventListener("keydown", (e) => {
+    // Ctrl+S to save config
+    if (e.ctrlKey && e.key === "s") {
+      e.preventDefault();
+      saveConfigWithUISettings();
+      showNotification("Configuration saved", "success");
+    }
+
+    // Ctrl+L to load config
+    if (e.ctrlKey && e.key === "l") {
+      e.preventDefault();
+      loadConfigWithUISettings();
+      showNotification("Configuration loaded", "success");
+    }
+
+    // Ctrl+R to resume auto-scroll
+    if (e.ctrlKey && e.key === "r") {
+      e.preventDefault();
+      if (autoScrollPaused) {
+        resumeAutoScroll();
+      }
+    }
+
+    // Ctrl+1 to start server
+    if (e.ctrlKey && e.key === "1") {
+      e.preventDefault();
+      if (!serverRunning && !isLoading) {
+        startServer();
+      }
+    }
+
+    // Ctrl+2 to start launcher
+    if (e.ctrlKey && e.key === "2") {
+      e.preventDefault();
+      if (!launcherRunning && !isLoading) {
+        startLauncher();
+      }
+    }
+
+    // Ctrl+Shift+1 to stop server
+    if (e.ctrlKey && e.shiftKey && e.key === "1") {
+      e.preventDefault();
+      if (serverRunning && !isLoading) {
+        stopServer();
+      }
+    }
+
+    // Ctrl+Shift+2 to stop launcher
+    if (e.ctrlKey && e.shiftKey && e.key === "2") {
+      e.preventDefault();
+      if (launcherRunning && !isLoading) {
+        stopLauncher();
+      }
+    }
+  });
+}
+
+// Setup log auto-scroll functionality
+function setupLogAutoScroll() {
+  const logOutput = document.getElementById("log-output");
+
+  if (logOutput) {
+    // Check if user has scrolled up (not at bottom)
+    logOutput.addEventListener("scroll", () => {
+      const isAtBottom =
+        logOutput.scrollTop + logOutput.clientHeight >=
+        logOutput.scrollHeight - 5;
+      autoScrollPaused = !isAtBottom;
+
+      // Show/hide resume scroll button
+      if (autoScrollPaused) {
+        resumeScrollBtn.style.display = "inline-block";
+        showNotification(
+          "Auto-scroll paused. Scroll to bottom or click 'Resume Auto-scroll' to resume.",
+          "info"
+        );
+      } else {
+        resumeScrollBtn.style.display = "none";
+      }
+    });
+  }
+}
+
+// Resume auto-scroll function
+function resumeAutoScroll() {
+  autoScrollPaused = false;
+  resumeScrollBtn.style.display = "none";
+
+  // Scroll to bottom immediately
+  const logOutput = document.getElementById("log-output");
+  if (logOutput) {
+    logOutput.scrollTop = logOutput.scrollHeight;
+  }
+
+  showNotification("Auto-scroll resumed", "success");
+}
+
+// Copy log to clipboard
+async function copyLogToClipboard() {
+  try {
+    const logContent = logOutput.textContent;
+    if (!logContent.trim()) {
+      showNotification("No log content to copy", "warning");
+      return;
+    }
+
+    await navigator.clipboard.writeText(logContent);
+    showNotification("Log copied to clipboard", "success");
+  } catch (error) {
+    // Fallback for older browsers
+    const textArea = document.createElement("textarea");
+    textArea.value = logOutput.textContent;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textArea);
+    showNotification("Log copied to clipboard", "success");
+  }
+}
