@@ -1,3 +1,14 @@
+// Module declarations
+pub mod models;
+pub mod state;
+pub mod utils;
+
+// Re-export commonly used items
+pub use models::Config;
+pub use state::{AppState, get_app_state};
+pub use utils::error::{AppError, AppResult};
+pub use utils::process::{ProcessType, ProcessInfo, launch_process, stop_process, get_output, clear_output};
+
 use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
 use std::io::{BufRead, BufReader};
@@ -23,23 +34,6 @@ static LAUNCHER_PROCESS: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
 // Global state for selected paths (updated by file selection)
 static SELECTED_SERVER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
 static SELECTED_LAUNCHER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
-
-// Global variable for the last selected path (simpler approach) - UNUSED
-// static LAST_SELECTED_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
-
-// Configuration struct
-#[derive(Serialize, Deserialize)]
-struct Config {
-    server_path: Option<String>,
-    launcher_path: Option<String>,
-    server_port: u16,
-    auto_start_server: bool,
-    auto_start_launcher: bool,
-    max_log_lines: usize,
-    auto_refresh: bool,
-    refresh_interval: u64,
-    log_level: String,
-}
 
 // Set server path from UI (original working function)
 #[tauri::command]
@@ -140,7 +134,7 @@ fn set_launcher_path_args_wrapper(args: serde_json::Value) -> String {
 async fn launch_server() -> String {
     let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
     
-    let path = if let Ok(path_guard) = server_path.lock() {
+    let path: String = if let Ok(path_guard) = server_path.lock() {
         if let Some(ref path) = *path_guard {
             path.clone()
         } else {
@@ -150,82 +144,10 @@ async fn launch_server() -> String {
         return "ERROR: Failed to access server path".to_string();
     };
     
-    let path_obj = Path::new(&path);
-    
-    if !path_obj.exists() {
-        return format!("ERROR: Server executable not found at path: {}", path);
+    match launch_process(&path, ProcessType::Server, &SERVER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new()))), &SERVER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None)))).await {
+        Ok(result) => result,
+        Err(e) => format!("ERROR: {}", e)
     }
-    
-    let working_dir = match path_obj.parent() {
-        Some(parent) => parent.to_string_lossy().to_string(),
-        None => return "ERROR: Could not determine working directory".to_string(),
-    };
-    
-    let server_exe = match path_obj.file_name() {
-        Some(name) => name.to_string_lossy().to_string(),
-        None => return "ERROR: Could not determine executable name".to_string(),
-    };
-    
-    let full_exe_path = format!("{}\\{}", working_dir, server_exe);
-    
-    // Initialize the output storage
-    let output = SERVER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
-    
-    // Initialize the process storage
-    let process = SERVER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None)));
-    
-    match Command::new(&full_exe_path)
-        .current_dir(&working_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW flag
-        .spawn() {
-            Ok(mut child) => {
-                // Take stdout and stderr before storing the child
-                let stdout = child.stdout.take();
-                let stderr = child.stderr.take();
-                
-                // Store the process handle
-                if let Ok(mut process_guard) = process.lock() {
-                    *process_guard = Some(child);
-                } else {
-                    return "ERROR: Failed to store process handle".to_string();
-                }
-                
-                // Start output capture in a separate thread
-                if let (Some(stdout), Some(stderr)) = (stdout, stderr) {
-                    let output_clone = output.clone();
-                    
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stdout);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                if let Ok(mut output_guard) = output_clone.lock() {
-                                    output_guard.push(format!("[SERVER] {}", line));
-                                }
-                            }
-                        }
-                    });
-                    
-                    let output_clone = output.clone();
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stderr);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                if let Ok(mut output_guard) = output_clone.lock() {
-                                    output_guard.push(format!("[SERVER ERROR] {}", line));
-                                }
-                            }
-                        }
-                    });
-                }
-                
-                "SUCCESS: Server launched successfully".to_string()
-            },
-            Err(e) => {
-                format!("ERROR: Failed to start server: {}", e)
-            }
-        }
 }
 
 // Launch launcher
@@ -233,7 +155,7 @@ async fn launch_server() -> String {
 async fn launch_launcher() -> String {
     let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
     
-    let path = if let Ok(path_guard) = launcher_path.lock() {
+    let path: String = if let Ok(path_guard) = launcher_path.lock() {
         if let Some(ref path) = *path_guard {
             path.clone()
         } else {
@@ -243,82 +165,10 @@ async fn launch_launcher() -> String {
         return "ERROR: Failed to access launcher path".to_string();
     };
     
-    let path_obj = Path::new(&path);
-    
-    if !path_obj.exists() {
-        return format!("ERROR: Launcher executable not found at path: {}", path);
+    match launch_process(&path, ProcessType::Launcher, &LAUNCHER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new()))), &LAUNCHER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None)))).await {
+        Ok(result) => result,
+        Err(e) => format!("ERROR: {}", e)
     }
-    
-    let working_dir = match path_obj.parent() {
-        Some(parent) => parent.to_string_lossy().to_string(),
-        None => return "ERROR: Could not determine working directory".to_string(),
-    };
-    
-    let launcher_exe = match path_obj.file_name() {
-        Some(name) => name.to_string_lossy().to_string(),
-        None => return "ERROR: Could not determine executable name".to_string(),
-    };
-    
-    let full_exe_path = format!("{}\\{}", working_dir, launcher_exe);
-    
-    // Initialize the output storage
-    let output = LAUNCHER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
-    
-    // Initialize the process storage
-    let process = LAUNCHER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None)));
-    
-    match Command::new(&full_exe_path)
-        .current_dir(&working_dir)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW flag
-        .spawn() {
-            Ok(mut child) => {
-                // Take stdout and stderr before storing the child
-                let stdout = child.stdout.take();
-                let stderr = child.stderr.take();
-                
-                // Store the process handle
-                if let Ok(mut process_guard) = process.lock() {
-                    *process_guard = Some(child);
-                } else {
-                    return "ERROR: Failed to store process handle".to_string();
-                }
-                
-                // Start output capture in a separate thread
-                if let (Some(stdout), Some(stderr)) = (stdout, stderr) {
-                    let output_clone = output.clone();
-                    
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stdout);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                if let Ok(mut output_guard) = output_clone.lock() {
-                                    output_guard.push(format!("[LAUNCHER] {}", line));
-                                }
-                            }
-                        }
-                    });
-                    
-                    let output_clone = output.clone();
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stderr);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                if let Ok(mut output_guard) = output_clone.lock() {
-                                    output_guard.push(format!("[LAUNCHER ERROR] {}", line));
-                                }
-                            }
-                        }
-                    });
-                }
-                
-                "SUCCESS: Launcher launched successfully".to_string()
-            },
-            Err(e) => {
-                format!("ERROR: Failed to start launcher: {}", e)
-            }
-        }
 }
 
 // Select file using native dialog
@@ -394,10 +244,9 @@ async fn select_launcher_file(app_handle: tauri::AppHandle) -> String {
 #[tauri::command]
 async fn get_launcher_output() -> Vec<String> {
     let output = LAUNCHER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
-    if let Ok(output_vec) = output.lock() {
-        output_vec.clone()
-    } else {
-        vec!["ERROR: Failed to access launcher output".to_string()]
+    match get_output(output) {
+        Ok(output) => output,
+        Err(_) => vec!["ERROR: Failed to access launcher output".to_string()]
     }
 }
 
@@ -405,11 +254,9 @@ async fn get_launcher_output() -> Vec<String> {
 #[tauri::command]
 async fn clear_launcher_output() -> String {
     let output = LAUNCHER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
-    if let Ok(mut output_vec) = output.lock() {
-        output_vec.clear();
-        "SUCCESS: Launcher output cleared".to_string()
-    } else {
-        "ERROR: Failed to clear launcher output".to_string()
+    match clear_output(output) {
+        Ok(result) => result,
+        Err(_) => "ERROR: Failed to clear launcher output".to_string()
     }
 }
 
@@ -417,10 +264,9 @@ async fn clear_launcher_output() -> String {
 #[tauri::command]
 async fn get_server_output() -> Vec<String> {
     let output = SERVER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
-    if let Ok(output_vec) = output.lock() {
-        output_vec.clone()
-    } else {
-        vec!["ERROR: Failed to access server output".to_string()]
+    match get_output(output) {
+        Ok(output) => output,
+        Err(_) => vec!["ERROR: Failed to access server output".to_string()]
     }
 }
 
@@ -428,63 +274,27 @@ async fn get_server_output() -> Vec<String> {
 #[tauri::command]
 async fn clear_server_output() -> String {
     let output = SERVER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
-    if let Ok(mut output_vec) = output.lock() {
-        output_vec.clear();
-        "SUCCESS: Server output cleared".to_string()
-    } else {
-        "ERROR: Failed to clear server output".to_string()
+    match clear_output(output) {
+        Ok(result) => result,
+        Err(_) => "ERROR: Failed to clear server output".to_string()
     }
 }
 
 // Stop server
 #[tauri::command]
 async fn stop_server() -> String {
-    let process = SERVER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None)));
-    
-    if let Ok(mut process_guard) = process.lock() {
-        if let Some(mut child) = process_guard.take() {
-            match child.kill() {
-                Ok(_) => {
-                    // Clear the output when stopping
-                    let output = SERVER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
-                    if let Ok(mut output_vec) = output.lock() {
-                        output_vec.clear();
-                    }
-                    "SUCCESS: Server stopped successfully".to_string()
-                },
-                Err(e) => format!("ERROR: Failed to stop server: {}", e)
-            }
-        } else {
-            "ERROR: No server process found".to_string()
-        }
-    } else {
-        "ERROR: Failed to access server process".to_string()
+    match stop_process(&SERVER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None))), &SERVER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new()))), "Server").await {
+        Ok(result) => result,
+        Err(e) => format!("ERROR: {}", e)
     }
 }
 
 // Stop launcher
 #[tauri::command]
 async fn stop_launcher() -> String {
-    let process = LAUNCHER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None)));
-    
-    if let Ok(mut process_guard) = process.lock() {
-        if let Some(mut child) = process_guard.take() {
-            match child.kill() {
-                Ok(_) => {
-                    // Clear the output when stopping
-                    let output = LAUNCHER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new())));
-                    if let Ok(mut output_vec) = output.lock() {
-                        output_vec.clear();
-                    }
-                    "SUCCESS: Launcher stopped successfully".to_string()
-                },
-                Err(e) => format!("ERROR: Failed to stop launcher: {}", e)
-            }
-        } else {
-            "ERROR: No launcher process found".to_string()
-        }
-    } else {
-        "ERROR: Failed to access launcher process".to_string()
+    match stop_process(&LAUNCHER_PROCESS.get_or_init(|| Arc::new(Mutex::new(None))), &LAUNCHER_OUTPUT.get_or_init(|| Arc::new(Mutex::new(Vec::new()))), "Launcher").await {
+        Ok(result) => result,
+        Err(e) => format!("ERROR: {}", e)
     }
 }
 
@@ -643,24 +453,6 @@ async fn get_launcher_path() -> String {
         "ERROR: Failed to access launcher path".to_string()
     }
 }
-
-// Check port status - DISABLED due to Tauri v2 parameter issues
-// #[tauri::command]
-// async fn check_port_status(port: u16) -> String {
-//     use std::net::TcpListener;
-//     
-//     // Try to bind to the port to see if it's available
-//     match TcpListener::bind(format!("127.0.0.1:{}", port)) {
-//         Ok(_) => {
-//             // Port is available
-//             "Available".to_string()
-//         },
-//         Err(_) => {
-//             // Port is in use
-//             "In Use".to_string()
-//         }
-//     }
-// }
 
 // Check default port status (no parameters)
 #[tauri::command]
