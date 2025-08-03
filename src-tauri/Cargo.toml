@@ -1,6 +1,6 @@
 [package]
 name = "spt-launcher"
-version = "1.0.3"
+version = "1.0.4"
 description = "SPT Launcher - A desktop launcher for SPT-AKI"
 authors = ["you"]
 edition = "2021"
