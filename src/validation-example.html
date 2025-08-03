@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI Validation Example</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>UI Validation Example</h1>
+        
+        <form id="validation-form">
+            <div class="form-group">
+                <label for="server-path">Server Path:</label>
+                <input type="text" id="server-path" placeholder="C:\SPT\SPT.Server.exe">
+                <!-- Validation feedback will appear here -->
+            </div>
+            
+            <div class="form-group">
+                <label for="launcher-path">Launcher Path:</label>
+                <input type="text" id="launcher-path" placeholder="C:\SPT\SPT.Launcher.exe">
+                <!-- Validation feedback will appear here -->
+            </div>
+            
+            <div class="form-group">
+                <label for="server-port">Server Port:</label>
+                <input type="number" id="server-port" value="6969" min="1024" max="65535">
+                <!-- Validation feedback will appear here -->
+            </div>
+            
+            <div class="form-group">
+                <label for="log-level">Log Level:</label>
+                <select id="log-level">
+                    <option value="Normal">Normal</option>
+                    <option value="Verbose">Verbose</option>
+                    <option value="Debug">Debug</option>
+                    <option value="Error">Error</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="refresh-interval">Refresh Interval (ms):</label>
+                <input type="number" id="refresh-interval" value="1000" min="100" max="60000">
+                <!-- Validation feedback will appear here -->
+            </div>
+            
+            <div class="form-group">
+                <label for="max-log-lines">Max Log Lines:</label>
+                <input type="number" id="max-log-lines" value="1000" min="100" max="100000">
+                <!-- Validation feedback will appear here -->
+            </div>
+            
+            <button type="submit">Save Configuration</button>
+        </form>
+        
+        <!-- Validation summary will appear here -->
+    </div>
+    
+    <script type="module">
+        import { 
+            validateFilePath, 
+            validatePort, 
+            validateLogLevel, 
+            validateRefreshInterval, 
+            validateMaxLogLines, 
+            validateAllSettings,
+            updateValidationFeedback,
+            debounceValidation
+        } from './validation.js';
+        
+        // Setup validation listeners
+        const serverPathInput = document.getElementById('server-path');
+        const launcherPathInput = document.getElementById('launcher-path');
+        const serverPortInput = document.getElementById('server-port');
+        const refreshIntervalInput = document.getElementById('refresh-interval');
+        const maxLogLinesInput = document.getElementById('max-log-lines');
+        
+        // Real-time validation for server path
+        const debouncedServerPathValidation = debounceValidation(async (value) => {
+            if (value.trim()) {
+                const result = await validateFilePath(value);
+                updateValidationFeedback(serverPathInput, result);
+            }
+        }, 500);
+        
+        serverPathInput.addEventListener('input', (e) => {
+            debouncedServerPathValidation(e.target.value);
+        });
+        
+        // Real-time validation for launcher path
+        const debouncedLauncherPathValidation = debounceValidation(async (value) => {
+            if (value.trim()) {
+                const result = await validateFilePath(value);
+                updateValidationFeedback(launcherPathInput, result);
+            }
+        }, 500);
+        
+        launcherPathInput.addEventListener('input', (e) => {
+            debouncedLauncherPathValidation(e.target.value);
+        });
+        
+        // Real-time validation for server port
+        const debouncedPortValidation = debounceValidation(async (value) => {
+            const port = parseInt(value) || 0;
+            if (port > 0) {
+                const result = await validatePort(port);
+                updateValidationFeedback(serverPortInput, result);
+            }
+        }, 500);
+        
+        serverPortInput.addEventListener('input', (e) => {
+            debouncedPortValidation(e.target.value);
+        });
+        
+        // Real-time validation for refresh interval
+        const debouncedRefreshIntervalValidation = debounceValidation(async (value) => {
+            const interval = parseInt(value) || 0;
+            if (interval > 0) {
+                const result = await validateRefreshInterval(interval);
+                updateValidationFeedback(refreshIntervalInput, result);
+            }
+        }, 500);
+        
+        refreshIntervalInput.addEventListener('input', (e) => {
+            debouncedRefreshIntervalValidation(e.target.value);
+        });
+        
+        // Real-time validation for max log lines
+        const debouncedMaxLogLinesValidation = debounceValidation(async (value) => {
+            const lines = parseInt(value) || 0;
+            if (lines > 0) {
+                const result = await validateMaxLogLines(lines);
+                updateValidationFeedback(maxLogLinesInput, result);
+            }
+        }, 500);
+        
+        maxLogLinesInput.addEventListener('input', (e) => {
+            debouncedMaxLogLinesValidation(e.target.value);
+        });
+        
+        // Form submission with validation
+        document.getElementById('validation-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const settings = {
+                server_path: serverPathInput.value,
+                launcher_path: launcherPathInput.value,
+                server_port: parseInt(serverPortInput.value) || 6969,
+                refresh_interval: parseInt(refreshIntervalInput.value) || 1000,
+                max_log_lines: parseInt(maxLogLinesInput.value) || 1000,
+                log_level: document.getElementById('log-level').value
+            };
+            
+            const validationResult = await validateAllSettings(settings);
+            
+            if (validationResult.valid) {
+                alert('Configuration is valid! Saving...');
+                // Here you would save the configuration
+            } else {
+                showValidationSummary(validationResult);
+            }
+        });
+        
+        function showValidationSummary(validationResult) {
+            // Remove existing validation summary
+            const existingSummary = document.querySelector('.validation-summary');
+            if (existingSummary) {
+                existingSummary.remove();
+            }
+            
+            // Create validation summary
+            const summary = document.createElement('div');
+            summary.className = `validation-summary ${validationResult.valid ? 'valid' : 'invalid'}`;
+            
+            let summaryHTML = `<h4>${validationResult.message}</h4>`;
+            
+            if (validationResult.errors && validationResult.errors.length > 0) {
+                summaryHTML += '<div class="validation-errors"><h5>Errors:</h5><ul>';
+                validationResult.errors.forEach(error => {
+                    summaryHTML += `<li>${error}</li>`;
+                });
+                summaryHTML += '</ul></div>';
+            }
+            
+            if (validationResult.warnings && validationResult.warnings.length > 0) {
+                summaryHTML += '<div class="validation-warnings"><h5>Warnings:</h5><ul>';
+                validationResult.warnings.forEach(warning => {
+                    summaryHTML += `<li>${warning}</li>`;
+                });
+                summaryHTML += '</ul></div>';
+            }
+            
+            summary.innerHTML = summaryHTML;
+            
+            // Insert summary before the form
+            const form = document.getElementById('validation-form');
+            form.parentNode.insertBefore(summary, form);
+        }
+    </script>
+</body>
+</html> 

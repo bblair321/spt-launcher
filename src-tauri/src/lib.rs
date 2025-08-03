@@ -51,7 +51,16 @@ pub fn run() {
             select_launcher_file,
             check_default_port_status,
             minimize_window,
-            close_window
+            close_window,
+            
+            // UI Validation commands
+            validate_ui_file_path,
+            validate_ui_port,
+            validate_ui_log_level,
+            validate_ui_refresh_interval,
+            validate_ui_max_log_lines,
+            validate_ui_port_available,
+            validate_ui_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

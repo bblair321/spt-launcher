@@ -74,60 +74,118 @@ pub async fn launch_process(
 ) -> AppResult<String> {
     let process_info = ProcessInfo::from_path(path)?;
     
-    match Command::new("powershell")
-        .args(&["-Command", &format!("& '{}'", process_info.full_exe_path)])
+    // Try direct execution first, fallback to PowerShell if needed
+    let result = Command::new(&process_info.full_exe_path)
         .current_dir(&process_info.working_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .creation_flags(0x08000000) // CREATE_NO_WINDOW flag
-        .spawn() {
-            Ok(mut child) => {
-                // Take stdout and stderr before storing the child
-                let stdout = child.stdout.take();
-                let stderr = child.stderr.take();
+        .spawn();
+    
+    match result {
+        Ok(mut child) => {
+            // Take stdout and stderr before storing the child
+            let stdout = child.stdout.take();
+            let stderr = child.stderr.take();
+            
+            // Store the process handle
+            if let Ok(mut process_guard) = process_storage.lock() {
+                *process_guard = Some(child);
+            } else {
+                return Err(AppError::ProcessHandleError);
+            }
+            
+            // Start output capture in separate threads
+            if let (Some(stdout), Some(stderr)) = (stdout, stderr) {
+                let output_clone = output_storage.clone();
+                let tag = process_type.tag();
                 
-                // Store the process handle
-                if let Ok(mut process_guard) = process_storage.lock() {
-                    *process_guard = Some(child);
-                } else {
-                    return Err(AppError::ProcessHandleError);
-                }
-                
-                // Start output capture in separate threads
-                if let (Some(stdout), Some(stderr)) = (stdout, stderr) {
-                    let output_clone = output_storage.clone();
-                    let tag = process_type.tag();
-                    
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stdout);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                if let Ok(mut output_guard) = output_clone.lock() {
-                                    output_guard.push(format!("{} {}", tag, line));
-                                }
+                thread::spawn(move || {
+                    let reader = BufReader::new(stdout);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            if let Ok(mut output_guard) = output_clone.lock() {
+                                output_guard.push(format!("{} {}", tag, line));
                             }
                         }
-                    });
-                    
-                    let output_clone = output_storage.clone();
-                    let error_tag = process_type.error_tag();
-                    
-                    thread::spawn(move || {
-                        let reader = BufReader::new(stderr);
-                        for line in reader.lines() {
-                            if let Ok(line) = line {
-                                if let Ok(mut output_guard) = output_clone.lock() {
-                                    output_guard.push(format!("{} {}", error_tag, line));
-                                }
+                    }
+                });
+                
+                let output_clone = output_storage.clone();
+                let error_tag = process_type.error_tag();
+                
+                thread::spawn(move || {
+                    let reader = BufReader::new(stderr);
+                    for line in reader.lines() {
+                        if let Ok(line) = line {
+                            if let Ok(mut output_guard) = output_clone.lock() {
+                                output_guard.push(format!("{} {}", error_tag, line));
                             }
                         }
-                    });
+                    }
+                });
+            }
+            
+            Ok(format!("SUCCESS: {} launched successfully", process_type.tag().trim_matches('[').trim_matches(']')))
+        },
+        Err(_) => {
+            // Fallback to PowerShell if direct execution fails
+            match Command::new("powershell")
+                .args(&["-Command", &format!("& '{}'", process_info.full_exe_path)])
+                .current_dir(&process_info.working_dir)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW flag
+                .spawn() {
+                    Ok(mut child) => {
+                        // Take stdout and stderr before storing the child
+                        let stdout = child.stdout.take();
+                        let stderr = child.stderr.take();
+                        
+                        // Store the process handle
+                        if let Ok(mut process_guard) = process_storage.lock() {
+                            *process_guard = Some(child);
+                        } else {
+                            return Err(AppError::ProcessHandleError);
+                        }
+                        
+                        // Start output capture in separate threads
+                        if let (Some(stdout), Some(stderr)) = (stdout, stderr) {
+                            let output_clone = output_storage.clone();
+                            let tag = process_type.tag();
+                            
+                            thread::spawn(move || {
+                                let reader = BufReader::new(stdout);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        if let Ok(mut output_guard) = output_clone.lock() {
+                                            output_guard.push(format!("{} {}", tag, line));
+                                        }
+                                    }
+                                }
+                            });
+                            
+                            let output_clone = output_storage.clone();
+                            let error_tag = process_type.error_tag();
+                            
+                            thread::spawn(move || {
+                                let reader = BufReader::new(stderr);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        if let Ok(mut output_guard) = output_clone.lock() {
+                                            output_guard.push(format!("{} {}", error_tag, line));
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                        
+                        Ok(format!("SUCCESS: {} launched successfully (via PowerShell)", process_type.tag().trim_matches('[').trim_matches(']')))
+                    },
+                    Err(e) => Err(AppError::ProcessError(e))
                 }
-                
-                Ok(format!("SUCCESS: {} launched successfully", process_type.tag().trim_matches('[').trim_matches(']')))
-            },
-            Err(e) => Err(AppError::ProcessError(e))
         }
+    }
 }
 
 pub async fn stop_process(
@@ -137,18 +195,72 @@ pub async fn stop_process(
 ) -> AppResult<String> {
     if let Ok(mut process_guard) = process_storage.lock() {
         if let Some(mut child) = process_guard.take() {
-            match child.kill() {
+            // First try to terminate gracefully
+            let kill_result = child.kill();
+            
+            // Wait a bit for graceful termination
+            match child.wait() {
                 Ok(_) => {
-                    // Clear the output when stopping
+                    // Process terminated successfully
                     if let Ok(mut output_vec) = output_storage.lock() {
                         output_vec.clear();
                     }
                     Ok(format!("SUCCESS: {} stopped successfully", process_name))
                 },
-                Err(e) => Err(AppError::ProcessStopError(e.to_string()))
+                Err(_) => {
+                    // If graceful termination failed, try force kill
+                    match kill_result {
+                        Ok(_) => {
+                            // Clear the output when stopping
+                            if let Ok(mut output_vec) = output_storage.lock() {
+                                output_vec.clear();
+                            }
+                            Ok(format!("SUCCESS: {} force stopped", process_name))
+                        },
+                        Err(e) => {
+                            // If we can't kill the process, try to find and kill it by name
+                            let process_name_lower = process_name.to_lowercase();
+                            if process_name_lower.contains("launcher") {
+                                // Try to kill launcher processes by name
+                                let _ = std::process::Command::new("taskkill")
+                                    .args(&["/F", "/IM", "SPT.Launcher.exe"])
+                                    .output();
+                            } else if process_name_lower.contains("server") {
+                                // Try to kill server processes by name
+                                let _ = std::process::Command::new("taskkill")
+                                    .args(&["/F", "/IM", "SPT.Server.exe"])
+                                    .output();
+                            }
+                            
+                            // Clear output regardless
+                            if let Ok(mut output_vec) = output_storage.lock() {
+                                output_vec.clear();
+                            }
+                            
+                            Ok(format!("SUCCESS: {} stopped (force kill attempted)", process_name))
+                        }
+                    }
+                }
             }
         } else {
-            Err(AppError::NoProcessFound)
+            // No process found in storage, try to kill by name
+            let process_name_lower = process_name.to_lowercase();
+            if process_name_lower.contains("launcher") {
+                let _ = std::process::Command::new("taskkill")
+                    .args(&["/F", "/IM", "SPT.Launcher.exe"])
+                    .output();
+            } else if process_name_lower.contains("server") {
+                let _ = std::process::Command::new("taskkill")
+                    .args(&["/F", "/IM", "SPT.Server.exe"])
+                    .output();
+            }
+            
+            // Clear output
+            if let Ok(mut output_vec) = output_storage.lock() {
+                output_vec.clear();
+            }
+            
+            Ok(format!("SUCCESS: {} stopped (no process handle, killed by name)", process_name))
         }
     } else {
         Err(AppError::ProcessAccessError)

@@ -1,6 +1,51 @@
 // Tauri API - invoke should be globally available in Tauri v2
 // If invoke is not available, we'll use a fallback approach
 
+// Validation temporarily disabled to focus on core functionality
+// let validationModule = null;
+//
+// // Load validation module dynamically
+// async function loadValidationModule() {
+//   try {
+//     validationModule = await import("./validation.js");
+//   } catch (error) {
+//     console.warn("Validation module could not be loaded:", error);
+//     // Create fallback validation functions
+//     validationModule = {
+//       validateFilePath: async () => ({
+//         valid: true,
+//         message: "Validation disabled",
+//       }),
+//       validatePort: async () => ({
+//         valid: true,
+//         message: "Validation disabled",
+//       }),
+//       validateLogLevel: async () => ({
+//         valid: true,
+//         message: "Validation disabled",
+//       }),
+//       validateRefreshInterval: async () => ({
+//         valid: true,
+//         message: "Validation disabled",
+//       }),
+//       validateMaxLogLines: async () => ({
+//         valid: true,
+//         message: "Validation disabled",
+//       }),
+//       validateAllSettings: async () => ({
+//         valid: true,
+//         message: "Validation disabled",
+//       }),
+//       validateField: async () => ({
+//         valid: true,
+//         message: "Validation disabled",
+//       }),
+//       updateValidationFeedback: () => {},
+//       debounceValidation: (fn, delay) => fn,
+//     };
+//   }
+// }
+
 // DOM Elements
 const serverPathInput = document.getElementById("server-path");
 const launcherPathInput = document.getElementById("launcher-path");
@@ -84,6 +129,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Store original button text for loading states
   storeOriginalButtonText();
+
+  // Validation temporarily disabled to focus on core functionality
+  // setupValidationListeners();
 });
 
 // Event Listeners
@@ -1056,3 +1104,129 @@ async function copyLogToClipboard() {
     showNotification("Log copied to clipboard", "success");
   }
 }
+
+// Validation Functions - temporarily disabled
+// function setupValidationListeners() {
+//   if (!validationModule) {
+//     console.warn('Validation module not loaded, skipping validation setup');
+//     return;
+//   }
+
+//   // Real-time validation for server path
+//   const debouncedServerPathValidation = validationModule.debounceValidation(async (value) => {
+//     if (value.trim()) {
+//       const result = await validationModule.validateFilePath(value);
+//       validationModule.updateValidationFeedback(serverPathInput, result);
+//     }
+//   }, 500);
+
+//   serverPathInput.addEventListener("input", (e) => {
+//     debouncedServerPathValidation(e.target.value);
+//   });
+
+//   // Real-time validation for launcher path
+//   const debouncedLauncherPathValidation = validationModule.debounceValidation(async (value) => {
+//     if (value.trim()) {
+//       const result = await validationModule.validateFilePath(value);
+//       validationModule.updateValidationFeedback(launcherPathInput, result);
+//     }
+//   }, 500);
+
+//   launcherPathInput.addEventListener("input", (e) => {
+//     debouncedLauncherPathValidation(e.target.value);
+//   });
+
+//   // Real-time validation for server port
+//   const debouncedPortValidation = validationModule.debounceValidation(async (value) => {
+//     const port = parseInt(value) || 0;
+//     if (port > 0) {
+//       const result = await validationModule.validatePort(port);
+//       validationModule.updateValidationFeedback(serverPortInput, result);
+//     }
+//   }, 500);
+
+//   serverPortInput.addEventListener("input", (e) => {
+//     debouncedPortValidation(e.target.value);
+//   });
+
+//   // Validation on form submission
+//   const form = document.querySelector("form");
+//   if (form) {
+//     form.addEventListener("submit", async (e) => {
+//       e.preventDefault();
+//       await validateAndSubmitForm();
+//     });
+//   }
+// }
+
+// async function validateAndSubmitForm() {
+//   if (!validationModule) {
+//     console.warn("Validation module not loaded, proceeding without validation");
+//     await saveConfigWithUISettings();
+//     showNotification("Configuration saved successfully!", "success");
+//     return;
+//   }
+
+//   const settings = {
+//     server_path: serverPathInput.value,
+//     launcher_path: launcherPathInput.value,
+//     server_port: parseInt(serverPortInput.value) || 6969,
+//     auto_start_server: autoStartCheckbox.checked,
+//     auto_start_launcher: autoLauncherCheckbox.checked,
+//     max_log_lines: maxLogLines,
+//     auto_refresh: true,
+//     refresh_interval: 1000,
+//     log_level: "Normal",
+//   };
+
+//   const validationResult = await validationModule.validateAllSettings(settings);
+
+//   if (validationResult.valid) {
+//     // Proceed with form submission
+//     await saveConfigWithUISettings();
+//     showNotification("Configuration saved successfully!", "success");
+//   } else {
+//     // Show validation errors
+//     showValidationSummary(validationResult);
+//   }
+// }
+
+// function showValidationSummary(validationResult) {
+//   // Remove existing validation summary
+//   const existingSummary = document.querySelector(".validation-summary");
+//   if (existingSummary) {
+//     existingSummary.remove();
+//   }
+
+//   // Create validation summary
+//   const summary = document.createElement("div");
+//   summary.className = `validation-summary ${
+//     validationResult.valid ? "valid" : "invalid"
+//   }`;
+
+//   let summaryHTML = `<h4>${validationResult.message}</h4>`;
+
+//   if (validationResult.errors && validationResult.errors.length > 0) {
+//     summaryHTML += '<div class="validation-errors"><h5>Errors:</h5><ul>';
+//     validationResult.errors.forEach((error) => {
+//       summaryHTML += `<li>${error}</li>`;
+//     });
+//     summaryHTML += "</ul></div>";
+//   }
+
+//   if (validationResult.warnings && validationResult.warnings.length > 0) {
+//     summaryHTML += '<div class="validation-warnings"><h5>Warnings:</h5><ul>';
+//     validationResult.warnings.forEach((warning) => {
+//       summaryHTML += `<li>${warning}</li>`;
+//     });
+//     summaryHTML += "</ul></div>";
+//   }
+
+//   summary.innerHTML = summaryHTML;
+
+//   // Insert summary before the form
+//   const form = document.querySelector("form");
+//   if (form) {
+//     form.parentNode.insertBefore(summary, form);
+//   }
+// }
