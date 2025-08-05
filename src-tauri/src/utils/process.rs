@@ -222,13 +222,15 @@ pub async fn stop_process(
                             let process_name_lower = process_name.to_lowercase();
                             if process_name_lower.contains("launcher") {
                                 // Try to kill launcher processes by name
+                                let config = crate::state::get_app_state().config.lock().unwrap().clone();
                                 let _ = std::process::Command::new("taskkill")
-                                    .args(&["/F", "/IM", "SPT.Launcher.exe"])
+                                    .args(&["/F", "/IM", &config.launcher_exe_name])
                                     .output();
                             } else if process_name_lower.contains("server") {
                                 // Try to kill server processes by name
+                                let config = crate::state::get_app_state().config.lock().unwrap().clone();
                                 let _ = std::process::Command::new("taskkill")
-                                    .args(&["/F", "/IM", "SPT.Server.exe"])
+                                    .args(&["/F", "/IM", &config.server_exe_name])
                                     .output();
                             }
                             
@@ -245,13 +247,14 @@ pub async fn stop_process(
         } else {
             // No process found in storage, try to kill by name
             let process_name_lower = process_name.to_lowercase();
+            let config = crate::state::get_app_state().config.lock().unwrap().clone();
             if process_name_lower.contains("launcher") {
                 let _ = std::process::Command::new("taskkill")
-                    .args(&["/F", "/IM", "SPT.Launcher.exe"])
+                    .args(&["/F", "/IM", &config.launcher_exe_name])
                     .output();
             } else if process_name_lower.contains("server") {
                 let _ = std::process::Command::new("taskkill")
-                    .args(&["/F", "/IM", "SPT.Server.exe"])
+                    .args(&["/F", "/IM", &config.server_exe_name])
                     .output();
             }
             

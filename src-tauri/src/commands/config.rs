@@ -48,6 +48,19 @@ pub async fn save_config(app_handle: tauri::AppHandle) -> String {
         auto_refresh: true,
         refresh_interval: 1000,
         log_level: "Normal".to_string(),
+        // Update configuration
+        github_repo_owner: "bblair321".to_string(),
+        github_repo_name: "spt-launcher".to_string(),
+        github_token: None,
+        update_check_interval: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+        auto_check_updates: true,
+        // Application names and patterns
+        launcher_exe_name: "SPT.Launcher.exe".to_string(),
+        server_exe_name: "SPT.Server.exe".to_string(),
+        update_file_pattern: "SPT-Launcher-".to_string(),
+        // Default paths
+        default_launcher_path: "D:\\SPT\\SPT.Launcher.exe".to_string(),
+        default_server_path: "D:\\SPT\\SPT.Server.exe".to_string(),
     };
     
     // Validate the configuration before saving
@@ -191,6 +204,19 @@ pub async fn save_config_with_ui_settings(
         auto_refresh,
         refresh_interval,
         log_level,
+        // Update configuration
+        github_repo_owner: "bblair321".to_string(),
+        github_repo_name: "spt-launcher".to_string(),
+        github_token: None,
+        update_check_interval: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+        auto_check_updates: true,
+        // Application names and patterns
+        launcher_exe_name: "SPT.Launcher.exe".to_string(),
+        server_exe_name: "SPT.Server.exe".to_string(),
+        update_file_pattern: "SPT-Launcher-".to_string(),
+        // Default paths
+        default_launcher_path: "D:\\SPT\\SPT.Launcher.exe".to_string(),
+        default_server_path: "D:\\SPT\\SPT.Server.exe".to_string(),
     };
     
     // Validate the configuration before saving

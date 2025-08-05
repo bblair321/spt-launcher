@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
 use std::process::Child;
+use crate::models::Config;
 
 pub struct AppState {
     pub server_path: Arc<Mutex<Option<String>>>,
@@ -11,6 +12,7 @@ pub struct AppState {
     pub launcher_process: Arc<Mutex<Option<Child>>>,
     pub selected_server_path: Arc<Mutex<Option<String>>>,
     pub selected_launcher_path: Arc<Mutex<Option<String>>>,
+    pub config: Arc<Mutex<Config>>,
 }
 
 impl AppState {
@@ -24,6 +26,7 @@ impl AppState {
             launcher_process: Arc::new(Mutex::new(None)),
             selected_server_path: Arc::new(Mutex::new(None)),
             selected_launcher_path: Arc::new(Mutex::new(None)),
+            config: Arc::new(Mutex::new(Config::default())),
         }
     }
 }

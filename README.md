@@ -76,7 +76,7 @@ A modern, single-executable desktop launcher for SPT-AKI (Single Player Tarkov -
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/spt-aki-launcher.git
+git clone https://github.com/bblair321/spt-launcher.git
 cd spt-aki-launcher
 
 # Install dependencies

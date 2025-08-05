@@ -14,7 +14,8 @@ static LAUNCHER_PROCESS: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
 pub fn set_launcher_path_from_ui() -> String {
     let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
     if let Ok(mut path_guard) = launcher_path.lock() {
-        *path_guard = Some("D:\\SPT\\SPT.Launcher.exe".to_string());
+        let config = crate::state::get_app_state().config.lock().unwrap().clone();
+        *path_guard = Some(config.default_launcher_path);
         "SUCCESS: Launcher path set to default".to_string()
     } else {
         "ERROR: Failed to set launcher path".to_string()

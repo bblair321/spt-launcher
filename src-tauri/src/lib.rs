@@ -60,7 +60,16 @@ pub fn run() {
             validate_ui_refresh_interval,
             validate_ui_max_log_lines,
             validate_ui_port_available,
-            validate_ui_settings
+            validate_ui_settings,
+            
+            // Update commands
+            check_for_updates,
+            get_update_state,
+            get_current_version,
+            download_update,
+            install_update,
+            skip_update,
+            get_release_notes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

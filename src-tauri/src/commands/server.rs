@@ -14,7 +14,8 @@ static SERVER_PROCESS: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
 pub fn set_server_path_from_ui() -> String {
     let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
     if let Ok(mut path_guard) = server_path.lock() {
-        *path_guard = Some("D:\\SPT\\SPT.Server.exe".to_string());
+        let config = crate::state::get_app_state().config.lock().unwrap().clone();
+        *path_guard = Some(config.default_server_path);
         "SUCCESS: Server path set to default".to_string()
     } else {
         "ERROR: Failed to set server path".to_string()
