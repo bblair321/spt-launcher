@@ -1,13 +1,8 @@
-use std::sync::{Arc, Mutex};
-use std::sync::OnceLock;
 use std::fs;
 use tauri::Manager;
 use crate::models::Config;
 use crate::utils::validation::validate_config;
-
-// Global state for paths (shared with server and launcher modules)
-static SERVER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
-static LAUNCHER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
+use crate::state::get_app_state;
 
 // Save configuration
 #[tauri::command]
@@ -23,16 +18,15 @@ pub async fn save_config(app_handle: tauri::AppHandle) -> String {
     
     let config_path = app_dir.join("config.json");
     
-    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    
-    let server_path_value = if let Ok(path_guard) = server_path.lock() {
+    // Get paths from AppState instead of separate global variables
+    let app_state = get_app_state();
+    let server_path_value = if let Ok(path_guard) = app_state.server_path.lock() {
         (*path_guard).clone()
     } else {
         None
     };
     
-    let launcher_path_value = if let Ok(path_guard) = launcher_path.lock() {
+    let launcher_path_value = if let Ok(path_guard) = app_state.launcher_path.lock() {
         (*path_guard).clone()
     } else {
         None
@@ -104,18 +98,18 @@ pub async fn load_config(app_handle: tauri::AppHandle) -> String {
         Err(e) => return format!("ERROR: Failed to parse config file: {}", e),
     };
     
-    // Update server path
+    // Update server path in AppState
     if let Some(server_path) = config.server_path {
-        let server_path_guard = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-        if let Ok(mut path_guard) = server_path_guard.lock() {
+        let app_state = get_app_state();
+        if let Ok(mut path_guard) = app_state.server_path.lock() {
             *path_guard = Some(server_path);
         }
     }
     
-    // Update launcher path
+    // Update launcher path in AppState
     if let Some(launcher_path) = config.launcher_path {
-        let launcher_path_guard = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-        if let Ok(mut path_guard) = launcher_path_guard.lock() {
+        let app_state = get_app_state();
+        if let Ok(mut path_guard) = app_state.launcher_path.lock() {
             *path_guard = Some(launcher_path);
         }
     }
@@ -139,14 +133,13 @@ pub async fn clear_config(app_handle: tauri::AppHandle) -> String {
         }
     }
     
-    // Also clear the global path variables
-    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(mut path_guard) = server_path.lock() {
+    // Also clear the AppState path variables
+    let app_state = get_app_state();
+    if let Ok(mut path_guard) = app_state.server_path.lock() {
         *path_guard = None;
     }
     
-    let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(mut path_guard) = launcher_path.lock() {
+    if let Ok(mut path_guard) = app_state.launcher_path.lock() {
         *path_guard = None;
     }
     
@@ -179,16 +172,15 @@ pub async fn save_config_with_ui_settings(
     
     let config_path = app_dir.join("config.json");
     
-    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    let launcher_path = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    
-    let server_path_value = if let Ok(path_guard) = server_path.lock() {
+    // Get paths from AppState instead of separate global variables
+    let app_state = get_app_state();
+    let server_path_value = if let Ok(path_guard) = app_state.server_path.lock() {
         (*path_guard).clone()
     } else {
         None
     };
     
-    let launcher_path_value = if let Ok(path_guard) = launcher_path.lock() {
+    let launcher_path_value = if let Ok(path_guard) = app_state.launcher_path.lock() {
         (*path_guard).clone()
     } else {
         None
@@ -260,18 +252,18 @@ pub async fn load_config_with_ui_settings(app_handle: tauri::AppHandle) -> Strin
         Err(e) => return format!("ERROR: Failed to parse config file: {}", e),
     };
     
-    // Update server path
+    // Update server path in AppState
     if let Some(ref server_path) = config.server_path {
-        let server_path_guard = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-        if let Ok(mut path_guard) = server_path_guard.lock() {
+        let app_state = get_app_state();
+        if let Ok(mut path_guard) = app_state.server_path.lock() {
             *path_guard = Some(server_path.clone());
         }
     }
     
-    // Update launcher path
+    // Update launcher path in AppState
     if let Some(ref launcher_path) = config.launcher_path {
-        let launcher_path_guard = LAUNCHER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-        if let Ok(mut path_guard) = launcher_path_guard.lock() {
+        let app_state = get_app_state();
+        if let Ok(mut path_guard) = app_state.launcher_path.lock() {
             *path_guard = Some(launcher_path.clone());
         }
     }

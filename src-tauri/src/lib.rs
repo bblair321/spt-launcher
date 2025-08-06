@@ -12,11 +12,47 @@ pub use utils::process::{ProcessType, ProcessInfo, launch_process, stop_process,
 
 // Import all commands
 use commands::*;
+use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .setup(|_app| {
+        .setup(|app| {
+            // Load configuration on startup
+            let app_handle = app.handle();
+            let app_dir = match app_handle.path().app_data_dir() {
+                Ok(dir) => dir,
+                Err(_) => return Ok(()), // Continue without config if we can't get app dir
+            };
+            
+            let config_path = app_dir.join("config.json");
+            
+            if config_path.exists() {
+                if let Ok(config_json) = std::fs::read_to_string(&config_path) {
+                    if let Ok(config) = serde_json::from_str::<Config>(&config_json) {
+                        // Load paths into AppState
+                        let app_state = get_app_state();
+                        
+                        if let Some(ref server_path) = config.server_path {
+                            if let Ok(mut path_guard) = app_state.server_path.lock() {
+                                *path_guard = Some(server_path.clone());
+                            }
+                        }
+                        
+                        if let Some(ref launcher_path) = config.launcher_path {
+                            if let Ok(mut path_guard) = app_state.launcher_path.lock() {
+                                *path_guard = Some(launcher_path.clone());
+                            }
+                        }
+                        
+                        // Update the config in AppState
+                        if let Ok(mut config_guard) = app_state.config.lock() {
+                            *config_guard = config;
+                        }
+                    }
+                }
+            }
+            
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

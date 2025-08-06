@@ -88,8 +88,8 @@ pub async fn check_for_updates(app_handle: tauri::AppHandle) -> Result<UpdateInf
                 state_guard.update_available = true;
                 state_guard.error_message = None;
             }
-            Err(_e) => {
-                state_guard.error_message = Some(_e.clone());
+            Err(e) => {
+                state_guard.error_message = Some(e.clone());
                 state_guard.update_available = false;
             }
         }
@@ -217,8 +217,7 @@ pub fn get_current_version() -> String {
 
 // Download and install update
 #[tauri::command]
-pub async fn download_update(app_handle: tauri::AppHandle, downloadUrl: String, version: String) -> Result<String, String> {
-    let download_url = downloadUrl;
+pub async fn download_update(app_handle: tauri::AppHandle, download_url: String, version: String) -> Result<String, String> {
     
     let state = UPDATE_STATE.get_or_init(|| Arc::new(Mutex::new(UpdateState::default())));
     

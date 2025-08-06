@@ -3,18 +3,18 @@ use std::sync::OnceLock;
 use std::process::Child;
 use crate::utils::process::{ProcessType, launch_process, stop_process, get_output, clear_output};
 use crate::utils::validation::validate_file_path;
+use crate::state::get_app_state;
 
-// Global state for server
-static SERVER_PATH: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
+// Global state for server output and process
 static SERVER_OUTPUT: OnceLock<Arc<Mutex<Vec<String>>>> = OnceLock::new();
 static SERVER_PROCESS: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
 
 // Set server path from UI (original working function)
 #[tauri::command]
 pub fn set_server_path_from_ui() -> String {
-    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(mut path_guard) = server_path.lock() {
-        let config = crate::state::get_app_state().config.lock().unwrap().clone();
+    let app_state = get_app_state();
+    if let Ok(mut path_guard) = app_state.server_path.lock() {
+        let config = app_state.config.lock().unwrap().clone();
         *path_guard = Some(config.default_server_path);
         "SUCCESS: Server path set to default".to_string()
     } else {
@@ -48,8 +48,8 @@ pub fn set_server_path_args_wrapper(args: serde_json::Value) -> String {
         return "ERROR: No args or path provided".to_string();
     };
     
-    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(mut path_guard) = server_path.lock() {
+    let app_state = get_app_state();
+    if let Ok(mut path_guard) = app_state.server_path.lock() {
         *path_guard = Some(path.clone());
         format!("SUCCESS: Server path set to: {}", path)
     } else {
@@ -60,9 +60,9 @@ pub fn set_server_path_args_wrapper(args: serde_json::Value) -> String {
 // Launch server
 #[tauri::command]
 pub async fn launch_server() -> String {
-    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
+    let app_state = get_app_state();
     
-    let path: String = if let Ok(path_guard) = server_path.lock() {
+    let path: String = if let Ok(path_guard) = app_state.server_path.lock() {
         if let Some(ref path) = *path_guard {
             path.clone()
         } else {
@@ -115,8 +115,8 @@ pub async fn stop_server() -> String {
 // Get server path
 #[tauri::command]
 pub async fn get_server_path() -> String {
-    let server_path = SERVER_PATH.get_or_init(|| Arc::new(Mutex::new(None)));
-    if let Ok(path_guard) = server_path.lock() {
+    let app_state = get_app_state();
+    if let Ok(path_guard) = app_state.server_path.lock() {
         if let Some(ref path) = *path_guard {
             path.clone()
         } else {
