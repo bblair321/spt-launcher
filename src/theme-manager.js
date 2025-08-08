@@ -3,6 +3,7 @@ class ThemeManager {
   constructor() {
     this.currentTheme = "default";
     this.customColors = {};
+    this.gradientsEnabled = true; // New gradient toggle setting
     this.saveTimeout = null;
     this.currentNotificationElement = null;
     this.notificationTimeout = null;
@@ -230,6 +231,14 @@ class ThemeManager {
         this.customColors = JSON.parse(savedCustomColors);
       }
 
+      // Load gradient setting
+      const savedGradientsEnabled = localStorage.getItem(
+        "spt-gradients-enabled"
+      );
+      if (savedGradientsEnabled !== null) {
+        this.gradientsEnabled = JSON.parse(savedGradientsEnabled);
+      }
+
       // Load imported themes
       const savedImportedThemes = localStorage.getItem("spt-imported-themes");
       if (savedImportedThemes) {
@@ -253,6 +262,10 @@ class ThemeManager {
         localStorage.setItem(
           "spt-custom-colors",
           JSON.stringify(this.customColors)
+        );
+        localStorage.setItem(
+          "spt-gradients-enabled",
+          JSON.stringify(this.gradientsEnabled)
         );
 
         // Save imported themes
@@ -278,19 +291,28 @@ class ThemeManager {
 
     const colors = { ...theme.colors, ...this.customColors };
 
-    // Handle background color - if custom background is set, generate a gradient
+    // Handle background color based on gradient setting
     if (this.customColors.background) {
       const bgColor = this.customColors.background;
-      // Generate a gradient based on the custom background color
-      const lighterColor = this.lightenColor(bgColor, 0.3);
-      const darkerColor = this.darkenColor(bgColor, 0.2);
-      colors.background = `linear-gradient(135deg, ${darkerColor} 0%, ${bgColor} 20%, ${lighterColor} 40%, ${this.lightenColor(
-        bgColor,
-        0.5
-      )} 60%, ${this.lightenColor(bgColor, 0.7)} 80%, ${this.lightenColor(
-        bgColor,
-        0.9
-      )} 100%)`;
+      if (this.gradientsEnabled) {
+        // Generate a gradient based on the custom background color
+        const lighterColor = this.lightenColor(bgColor, 0.3);
+        const darkerColor = this.darkenColor(bgColor, 0.2);
+        colors.background = `linear-gradient(135deg, ${darkerColor} 0%, ${bgColor} 20%, ${lighterColor} 40%, ${this.lightenColor(
+          bgColor,
+          0.5
+        )} 60%, ${this.lightenColor(bgColor, 0.7)} 80%, ${this.lightenColor(
+          bgColor,
+          0.9
+        )} 100%)`;
+      } else {
+        // Use solid color
+        colors.background = bgColor;
+      }
+    } else if (!this.gradientsEnabled) {
+      // Convert existing gradient backgrounds to solid colors
+      const bgColor = this.extractPrimaryColor(colors.background);
+      colors.background = bgColor;
     }
 
     // Apply CSS custom properties
@@ -299,12 +321,22 @@ class ThemeManager {
       root.style.setProperty(`--color-${key}`, value);
     });
 
-    // Set button-specific variables
-    root.style.setProperty(
-      "--btn-background",
-      `linear-gradient(45deg, ${colors.primary}, ${colors.secondary})`
-    );
+    // Set button-specific variables based on gradient setting
+    if (this.gradientsEnabled) {
+      root.style.setProperty(
+        "--btn-background",
+        `linear-gradient(45deg, ${colors.primary}, ${colors.secondary})`
+      );
+    } else {
+      root.style.setProperty("--btn-background", colors.primary);
+    }
     root.style.setProperty("--btn-color", colors.textSecondary);
+
+    // Apply gradient toggle class to body
+    document.body.classList.toggle(
+      "gradients-disabled",
+      !this.gradientsEnabled
+    );
 
     // Apply specific theme classes
     document.body.className = `theme-${this.currentTheme}`;
@@ -330,6 +362,16 @@ class ThemeManager {
     this.customColors[colorKey] = colorValue;
     this.applyTheme();
     this.showNotification(`Updated ${colorKey} color`, "info");
+  }
+
+  toggleGradients() {
+    this.gradientsEnabled = !this.gradientsEnabled;
+    this.applyTheme();
+    this.updateGradientToggle();
+    this.showNotification(
+      `Gradients ${this.gradientsEnabled ? "enabled" : "disabled"}`,
+      "info"
+    );
   }
 
   resetCustomColors() {
@@ -594,6 +636,16 @@ class ThemeManager {
             <button class="btn btn-info" id="import-theme">Import Theme</button>
             <input type="file" id="theme-file-input" accept=".json" style="display: none;">
           </div>
+        <div class="gradient-toggle-section">
+          <h4>Gradient Settings</h4>
+          <div class="checkbox-item">
+            <input type="checkbox" id="gradient-toggle" ${
+              this.gradientsEnabled ? "checked" : ""
+            }>
+            <label for="gradient-toggle">Enable Gradients</label>
+          </div>
+          <small class="theme-description">Toggle between gradient and solid color backgrounds</small>
+        </div>
         </div>
       `;
 
@@ -684,6 +736,14 @@ class ThemeManager {
         }
       });
     }
+
+    // Gradient toggle
+    const gradientToggle = document.getElementById("gradient-toggle");
+    if (gradientToggle) {
+      gradientToggle.addEventListener("change", () => {
+        this.toggleGradients();
+      });
+    }
   }
 
   updateThemeUI() {
@@ -694,6 +754,7 @@ class ThemeManager {
 
     this.updateColorPickers();
     this.updateThemeDescription();
+    this.updateGradientToggle();
   }
 
   // Method to force update theme selector
@@ -737,6 +798,13 @@ class ThemeManager {
         picker.value = currentColors[colorKey];
       }
     });
+  }
+
+  updateGradientToggle() {
+    const gradientToggle = document.getElementById("gradient-toggle");
+    if (gradientToggle) {
+      gradientToggle.checked = this.gradientsEnabled;
+    }
   }
 
   showThemePreview() {
@@ -857,6 +925,17 @@ class ThemeManager {
         .toString(16)
         .slice(1)
     );
+  }
+
+  // Helper method to extract primary color from gradient
+  extractPrimaryColor(gradient) {
+    if (!gradient || !gradient.includes("linear-gradient")) {
+      return gradient || "#4a5d23";
+    }
+
+    // Extract the first color from the gradient
+    const match = gradient.match(/#[0-9a-fA-F]{6}/);
+    return match ? match[0] : "#4a5d23";
   }
 
   // Method to remove imported themes

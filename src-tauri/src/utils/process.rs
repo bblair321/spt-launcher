@@ -217,7 +217,7 @@ pub async fn stop_process(
                             }
                             Ok(format!("SUCCESS: {} force stopped", process_name))
                         },
-                        Err(e) => {
+                        Err(_e) => {
                             // If we can't kill the process, try to find and kill it by name
                             let process_name_lower = process_name.to_lowercase();
                             if process_name_lower.contains("launcher") {

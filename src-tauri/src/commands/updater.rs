@@ -47,6 +47,7 @@ impl Default for UpdateState {
 #[derive(Debug, Deserialize)]
 struct GitHubRelease {
     tag_name: String,
+    #[allow(dead_code)]
     name: String,
     body: String,
     published_at: String,

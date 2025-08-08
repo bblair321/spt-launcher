@@ -690,6 +690,52 @@
         border-color: var(--color-accent, #9acd32);
       }
 
+      .gradient-toggle-section {
+        margin-top: 20px;
+        padding: 20px;
+        background: var(--color-cardBackground, rgba(74, 93, 35, 0.8));
+        border-radius: 10px;
+        border: 1px solid var(--color-border, #556b2f);
+      }
+
+      .gradient-toggle-section h4 {
+        color: var(--color-textSecondary, #e8f5e8);
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+      }
+
+      .gradient-toggle-section .checkbox-item {
+        margin-bottom: 10px;
+      }
+
+      .gradient-toggle-section .theme-description {
+        color: var(--color-textMuted, #c3e6cb);
+        font-style: italic;
+        margin-top: 5px;
+        display: block;
+      }
+
+      /* Gradient disabled styles */
+      .gradients-disabled .btn {
+        background: var(--color-primary, #556b2f) !important;
+      }
+
+      .gradients-disabled .status-item.running {
+        background: var(--color-success, #228b22) !important;
+      }
+
+      .gradients-disabled .status-item.stopped {
+        background: var(--color-danger, #8b4513) !important;
+      }
+
+      .gradients-disabled .title-bar {
+        background: var(--color-primary, #556b2f) !important;
+      }
+
+      .gradients-disabled body {
+        background: var(--color-primary, #4a5d23) !important;
+      }
+
       .control-buttons {
         display: flex;
         gap: 10px;
