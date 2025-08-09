@@ -64,6 +64,8 @@ pub fn run() {
             clear_server_output,
             stop_server,
             get_server_path,
+            check_server_readiness,
+            wait_for_server_ready,
             
             // Launcher commands
             set_launcher_path_from_ui,

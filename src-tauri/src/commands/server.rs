@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
 use std::process::Child;
+use std::net::TcpStream;
+use std::time::Duration;
 use crate::utils::process::{ProcessType, launch_process, stop_process, get_output, clear_output};
 use crate::utils::validation::validate_file_path;
 use crate::state::get_app_state;
@@ -125,4 +127,51 @@ pub async fn get_server_path() -> String {
     } else {
         "ERROR: Failed to access server path".to_string()
     }
+}
+
+// Check if server is ready for connections
+#[tauri::command]
+pub async fn check_server_readiness() -> String {
+    let app_state = get_app_state();
+    let config = app_state.config.lock().unwrap();
+    let port = config.server_port;
+    
+    // Try to connect to the server port
+    match TcpStream::connect(format!("127.0.0.1:{}", port)) {
+        Ok(_) => {
+            // Connection successful, server is ready
+            "SUCCESS: Server is ready for connections".to_string()
+        },
+        Err(_) => {
+            // Connection failed, server not ready
+            "ERROR: Server not ready for connections".to_string()
+        }
+    }
+}
+
+// Wait for server to be ready with timeout
+#[tauri::command]
+pub async fn wait_for_server_ready(timeout_seconds: u64) -> String {
+    let app_state = get_app_state();
+    let config = app_state.config.lock().unwrap();
+    let port = config.server_port;
+    let timeout = Duration::from_secs(timeout_seconds);
+    let start_time = std::time::Instant::now();
+    
+    while start_time.elapsed() < timeout {
+        // Try to connect to the server port
+        match TcpStream::connect(format!("127.0.0.1:{}", port)) {
+            Ok(_) => {
+                // Connection successful, server is ready
+                return "SUCCESS: Server is ready for connections".to_string();
+            },
+            Err(_) => {
+                // Connection failed, wait a bit and try again
+                std::thread::sleep(Duration::from_millis(500));
+            }
+        }
+    }
+    
+    // Timeout reached
+    format!("ERROR: Server not ready after {} seconds", timeout_seconds)
 } 

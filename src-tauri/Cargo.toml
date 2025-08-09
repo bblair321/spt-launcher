@@ -5,6 +5,8 @@ description = "SPT Launcher - A desktop launcher for SPT-AKI"
 authors = ["you"]
 edition = "2021"
 
+
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
@@ -13,6 +15,8 @@ edition = "2021"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "spt_launcher_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -1,8 +1,6 @@
 // Tauri API - invoke should be globally available in Tauri v2
 // If invoke is not available, we'll use a fallback approach
 
-
-
 // DOM Elements
 const serverPathInput = document.getElementById("server-path");
 const launcherPathInput = document.getElementById("launcher-path");
@@ -436,9 +434,70 @@ async function startAll() {
   if (autoStartCheckbox.checked) {
     addLogLine("Auto-start server enabled, starting server...");
     await startServer();
-  }
 
-  if (autoLauncherCheckbox.checked) {
+    // Wait for server to be ready before starting launcher
+    if (autoLauncherCheckbox.checked) {
+      addLogLine("Waiting for server to be ready for connections...");
+      showNotification("Waiting for server to be ready...", "info");
+
+      // Wait up to 30 seconds for server to be ready
+      const maxWaitTime = 30000; // 30 seconds
+      const checkInterval = 1000; // Check every second
+      let waitedTime = 0;
+      let serverReady = false;
+
+      // Update button to show waiting status
+      updateButtonState(startAllBtn, true, "Waiting for server...");
+
+      while (waitedTime < maxWaitTime && !serverReady) {
+        try {
+          const readinessResult = await safeInvoke("check_server_readiness");
+          if (readinessResult.startsWith("SUCCESS:")) {
+            serverReady = true;
+            addLogLine("Server is ready for connections!", "success");
+            showNotification("Server is ready!", "success");
+          } else {
+            const secondsElapsed = Math.round(waitedTime / 1000);
+            const secondsRemaining = Math.round(
+              (maxWaitTime - waitedTime) / 1000
+            );
+            addLogLine(
+              `Waiting for server... (${secondsElapsed}s elapsed, ${secondsRemaining}s remaining)`,
+              "info"
+            );
+            updateButtonState(
+              startAllBtn,
+              true,
+              `Waiting... (${secondsElapsed}s)`
+            );
+            await new Promise((resolve) => setTimeout(resolve, checkInterval));
+            waitedTime += checkInterval;
+          }
+        } catch (error) {
+          addLogLine(`Error checking server readiness: ${error}`, "error");
+          await new Promise((resolve) => setTimeout(resolve, checkInterval));
+          waitedTime += checkInterval;
+        }
+      }
+
+      if (!serverReady) {
+        addLogLine(
+          "Server did not become ready within timeout period",
+          "warning"
+        );
+        showNotification(
+          "Server timeout - launcher may not connect properly",
+          "warning"
+        );
+        updateButtonState(startAllBtn, false, "Start All");
+        return; // Don't start launcher if server isn't ready
+      }
+
+      addLogLine("Auto-start launcher enabled, starting launcher...");
+      await startLauncher();
+    }
+  } else if (autoLauncherCheckbox.checked) {
+    // Only launcher is checked, start it directly
     addLogLine("Auto-start launcher enabled, starting launcher...");
     await startLauncher();
   }
@@ -447,6 +506,9 @@ async function startAll() {
     addLogLine("No auto-start options enabled");
     showNotification("No auto-start options enabled", "warning");
   }
+
+  // Reset button state
+  updateButtonState(startAllBtn, false, "Start All");
 }
 
 async function stopAll() {
@@ -482,7 +544,7 @@ async function saveConfigWithUISettings() {
       maxLogLines,
       autoRefresh,
       refreshInterval,
-      logLevel
+      logLevel,
     });
 
     // First, set the paths in the backend
@@ -494,9 +556,12 @@ async function saveConfigWithUISettings() {
     }
 
     if (launcherPath) {
-      const setLauncherResult = await safeInvoke("set_launcher_path_args_wrapper", {
-        args: { path: launcherPath },
-      });
+      const setLauncherResult = await safeInvoke(
+        "set_launcher_path_args_wrapper",
+        {
+          args: { path: launcherPath },
+        }
+      );
       console.log("Set launcher path result:", setLauncherResult);
     }
 
@@ -1107,5 +1172,3 @@ async function copyLogToClipboard() {
     showNotification("Log copied to clipboard", "success");
   }
 }
-
-
