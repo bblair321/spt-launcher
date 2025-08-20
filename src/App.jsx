@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Play,
   Server,
@@ -6,14 +6,14 @@ import {
   Settings,
   Search,
   Wrench,
-  FolderOpen,
-  FileText,
-  Save,
   X,
   Minimize,
   Square,
   Maximize,
 } from "lucide-react";
+
+// Constants
+import { TABS } from "./constants";
 
 // Tab Components
 import LauncherTab from "./components/LauncherTab";
@@ -23,43 +23,56 @@ import SettingsTab from "./components/SettingsTab";
 import DevToolsTab from "./components/DevToolsTab";
 import SearchTab from "./components/SearchTab";
 
+// Icon mapping
+const ICON_MAP = {
+  Play,
+  Server,
+  Puzzle,
+  Settings,
+  Search,
+  Wrench,
+};
+
 function App() {
   const [activeTab, setActiveTab] = useState("launcher");
   const [isMaximized, setIsMaximized] = useState(false);
 
-  const tabs = [
-    { id: "launcher", name: "Launcher", icon: Play, component: LauncherTab },
-    { id: "servers", name: "Servers", icon: Server, component: ServersTab },
-    { id: "addons", name: "Addons", icon: Puzzle, component: AddonsTab },
-    {
-      id: "settings",
-      name: "Settings",
-      icon: Settings,
-      component: SettingsTab,
-    },
-    { id: "devtools", name: "Dev Tools", icon: Wrench, component: DevToolsTab },
-    { id: "search", name: "Search", icon: Search, component: SearchTab },
-  ];
+  // Memoized tab configuration with components
+  const tabConfig = useMemo(
+    () => [
+      { ...TABS[0], component: LauncherTab },
+      { ...TABS[1], component: ServersTab },
+      { ...TABS[2], component: AddonsTab },
+      { ...TABS[3], component: SettingsTab },
+      { ...TABS[4], component: DevToolsTab },
+      { ...TABS[5], component: SearchTab },
+    ],
+    []
+  );
 
   const handleWindowControl = (action) => {
-    if (window.electronAPI) {
-      switch (action) {
-        case "minimize":
-          window.electronAPI.minimize();
-          break;
-        case "maximize":
-          window.electronAPI.maximize();
-          setIsMaximized(!isMaximized);
-          break;
-        case "close":
-          window.electronAPI.close();
-          break;
-      }
+    if (!window.electronAPI) return;
+
+    switch (action) {
+      case "minimize":
+        window.electronAPI.minimize();
+        break;
+      case "maximize":
+        window.electronAPI.maximize();
+        setIsMaximized(!isMaximized);
+        break;
+      case "close":
+        window.electronAPI.close();
+        break;
+      default:
+        break;
     }
   };
 
-  const ActiveComponent =
-    tabs.find((tab) => tab.id === activeTab)?.component || LauncherTab;
+  const ActiveComponent = useMemo(() => {
+    const tab = tabConfig.find((tab) => tab.id === activeTab);
+    return tab?.component || LauncherTab;
+  }, [activeTab, tabConfig]);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
@@ -83,12 +96,14 @@ function App() {
           <button
             onClick={() => handleWindowControl("minimize")}
             className="w-8 h-8 hover:bg-blue-500 rounded flex items-center justify-center transition-colors"
+            title="Minimize"
           >
             <Minimize className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleWindowControl("maximize")}
             className="w-8 h-8 hover:bg-blue-500 rounded flex items-center justify-center transition-colors"
+            title={isMaximized ? "Restore" : "Maximize"}
           >
             {isMaximized ? (
               <Square className="w-4 h-4" />
@@ -99,6 +114,7 @@ function App() {
           <button
             onClick={() => handleWindowControl("close")}
             className="w-8 h-8 hover:bg-red-500 rounded flex items-center justify-center transition-colors"
+            title="Close"
           >
             <X className="w-4 h-4" />
           </button>
@@ -108,8 +124,8 @@ function App() {
       {/* Sticky Tab Navigation */}
       <div className="sticky top-12 z-40 bg-white border-b border-gray-200 shadow-sm">
         <div className="flex space-x-1 px-4 py-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
+          {tabConfig.map((tab) => {
+            const Icon = ICON_MAP[tab.icon];
             return (
               <button
                 key={tab.id}
@@ -119,6 +135,7 @@ function App() {
                     ? "bg-blue-600 text-white shadow-sm"
                     : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
                 }`}
+                title={tab.name}
               >
                 <Icon className="w-4 h-4" />
                 <span className="font-medium">{tab.name}</span>
