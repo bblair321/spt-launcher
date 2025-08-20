@@ -1,0 +1,117 @@
+name: Build and Release SPT Launcher
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Build Electron app
+        run: npm run electron:build
+        
+      - name: Create release assets
+        run: |
+          # Create a portable zip for Windows
+          cd out/make/zip/win32/x64
+          zip -r "SPT-Launcher-${GITHUB_REF_NAME}-Windows-x64.zip" .
+          
+          # Create a simple installer script
+          echo '@echo off' > install.bat
+          echo 'echo Installing SPT Launcher...' >> install.bat
+          echo 'echo.' >> install.bat
+          echo 'set /p INSTALL_PATH="Enter installation path (default: C:\Program Files\SPT Launcher): "' >> install.bat
+          echo 'if "%INSTALL_PATH%"=="" set INSTALL_PATH=C:\Program Files\SPT Launcher' >> install.bat
+          echo 'echo Installing to: %INSTALL_PATH%' >> install.bat
+          echo 'echo.' >> install.bat
+          echo 'REM Create directory' >> install.bat
+          echo 'if not exist "%INSTALL_PATH%" mkdir "%INSTALL_PATH%"' >> install.bat
+          echo 'REM Copy files' >> install.bat
+          echo 'xcopy /E /I /Y . "%INSTALL_PATH%"' >> install.bat
+          echo 'echo Installation completed!' >> install.bat
+          echo 'pause' >> install.bat
+          
+          # Create uninstall script
+          echo '@echo off' > uninstall.bat
+          echo 'echo Uninstalling SPT Launcher...' >> uninstall.bat
+          echo 'set /p INSTALL_PATH="Enter installation path: "' >> uninstall.bat
+          echo 'if exist "%INSTALL_PATH%" rmdir /S /Q "%INSTALL_PATH%"' >> uninstall.bat
+          echo 'echo Uninstallation completed!' >> uninstall.bat
+          echo 'pause' >> uninstall.bat
+          
+          # Create Inno Setup configuration
+          echo '[Setup]' > installer.iss
+          echo 'AppName=SPT Launcher' >> installer.iss
+          echo 'AppVersion=2.0.0' >> installer.iss
+          echo 'DefaultDirName={pf}\SPT Launcher' >> installer.iss
+          echo 'DefaultGroupName=SPT Launcher' >> installer.iss
+          echo 'OutputBaseFilename=SPT-Launcher-Setup-2.0.0' >> installer.iss
+          echo '' >> installer.iss
+          echo '[Files]' >> installer.iss
+          echo 'Source: "*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs' >> installer.iss
+          echo '' >> installer.iss
+          echo '[Icons]' >> installer.iss
+          echo 'Name: "{group}\SPT Launcher"; Filename: "{app}\SPT Launcher.exe"' >> installer.iss
+          echo 'Name: "{commondesktop}\SPT Launcher"; Filename: "{app}\SPT Launcher.exe"' >> installer.iss
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: |
+            out/make/zip/win32/x64/SPT-Launcher-*.zip
+            out/make/zip/win32/x64/install.bat
+            out/make/zip/win32/x64/uninstall.bat
+            out/make/zip/win32/x64/installer.iss
+          retention-days: 30
+          
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            out/make/zip/win32/x64/SPT-Launcher-*.zip
+            out/make/zip/win32/x64/install.bat
+            out/make/zip/win32/x64/uninstall.bat
+            out/make/zip/win32/x64/installer.iss
+          body: |
+            ## SPT Launcher Release
+            
+            ### What's New
+            - Built with GitHub Actions on Linux runners
+            - Avoids Windows code signing issues
+            - Multiple installation options
+            
+            ### Installation Options
+            1. **Simple Installer** - Run `install.bat` as Administrator
+            2. **Manual Installation** - Extract and run directly
+            3. **Professional Installer** - Use `installer.iss` with Inno Setup
+            
+            ### System Requirements
+            - Windows 10 or later
+            - Administrator privileges for installation
+            
+            ### Files Included
+            - `SPT-Launcher-*.zip` - Portable application
+            - `install.bat` - Simple installer script
+            - `uninstall.bat` - Uninstaller script
+            - `installer.iss` - Inno Setup configuration
