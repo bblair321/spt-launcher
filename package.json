@@ -10,9 +10,9 @@
     "preview": "vite preview",
     "electron": "wait-on tcp:5173 && cross-env IS_DEV=true electron .",
     "electron:dev": "concurrently \"npm run dev\" \"npm run electron\"",
-    "electron:build": "npm run build && electron-forge make",
-    "dist": "npm run build && electron-forge make",
-    "dist:win": "npm run build && electron-forge make --platform win32"
+    "electron:build": "npm run build && electron-builder",
+    "dist": "npm run build && electron-builder --publish=never",
+    "dist:win": "npm run build && electron-builder --win --publish=never"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
@@ -20,8 +20,7 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^28.0.0",
-    "@electron-forge/cli": "^7.2.0",
-    "@electron-forge/maker-zip": "^7.2.0",
+    "electron-builder": "^24.9.1",
     "postcss": "^8.x.x",
     "vite": "^5.0.8",
     "wait-on": "^7.2.0"
@@ -35,17 +34,18 @@
     "tailwind-merge": "^2.0.0",
     "tailwindcss": "^3.4.0"
   },
-  "config": {
-    "forge": {
-      "packagerConfig": {
-        "asar": true
-      },
-      "makers": [
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": ["win32", "linux"]
-        }
-      ]
+  "build": {
+    "appId": "com.spt-launcher.app",
+    "productName": "SPT Launcher",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": "portable"
     }
   }
 }

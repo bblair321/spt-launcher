@@ -1,0 +1,12 @@
+directories:
+  output: release
+  buildResources: build
+appId: com.spt-launcher.app
+productName: SPT Launcher
+files:
+  - filter:
+      - dist/**/*
+      - electron/**/*
+win:
+  target: portable
+electronVersion: 28.3.3
