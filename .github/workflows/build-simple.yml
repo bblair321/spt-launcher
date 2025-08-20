@@ -10,34 +10,48 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "18"
           cache: "npm"
-          
+
       - name: Install dependencies
         run: npm ci
-        
+
       - name: Build application
         run: npm run build
-        
+
       - name: Build Electron app
         run: npm run electron:build
-        
+
       - name: Create portable package
         run: |
-          cd out/make/zip/win32/x64
-          zip -r "SPT-Launcher-$(date +%Y%m%d)-Windows-x64.zip" .
+          # Find the build output and create appropriate package
+          if [ -d "out/make/zip/win32/x64" ]; then
+            echo "Found Windows build, creating Windows package..."
+            cd out/make/zip/win32/x64
+            zip -r "SPT-Launcher-$(date +%Y%m%d)-Windows-x64.zip" .
+            cd ../../../..
+          elif [ -d "out/make/zip/linux/x64" ]; then
+            echo "Found Linux build, creating Linux package..."
+            cd out/make/zip/linux/x64
+            zip -r "SPT-Launcher-$(date +%Y%m%d)-Linux-x64.zip" .
+            cd ../../../..
+          else
+            echo "No build output found in expected locations"
+            ls -la out/make/
+            exit 1
+          fi
           
       - name: Upload portable package
         uses: actions/upload-artifact@v4
         with:
           name: spt-launcher-portable
-          path: out/make/zip/win32/x64/SPT-Launcher-*.zip
+          path: SPT-Launcher-*.zip
           retention-days: 30
