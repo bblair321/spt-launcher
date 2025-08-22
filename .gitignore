@@ -6,8 +6,10 @@ yarn-error.log*
 
 # Build outputs
 dist/
+dist-electron/
 build/
 out/
+release/
 
 # Environment files
 .env
