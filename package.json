@@ -1,9 +1,10 @@
 {
   "name": "spt-launcher-electron",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "SPT Launcher - A comprehensive desktop launcher for SPT-AKI with Fika co-op support",
   "main": "electron/main.js",
-  "homepage": "./",
+  "repository": "https://github.com/bblair321/spt-launcher",
+  "homepage": "https://github.com/bblair321/spt-launcher#readme",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -27,25 +28,51 @@
   },
   "dependencies": {
     "clsx": "^2.0.0",
+    "electron-updater": "^6.6.2",
     "lucide-react": "^0.294.0",
     "path-browserify": "^1.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "smart-buffer": "^4.2.0",
     "tailwind-merge": "^2.0.0",
-    "tailwindcss": "^3.4.0"
+    "tailwindcss": "^3.4.0",
+    "update-electron-app": "^3.1.1"
   },
   "build": {
-    "appId": "com.spt-launcher.app",
+    "appId": "com.sptlauncher.app",
     "productName": "SPT Launcher",
     "directories": {
-      "output": "release"
+      "output": "dist-electron",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
     ],
+    "artifactName": "SPT-Launcher-${platform}-${arch}-${version}.${ext}",
     "win": {
-      "target": "portable"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SPT Launcher"
+    },
+    "forceCodeSigning": false,
+    "generateUpdatesFilesForAllChannels": true,
+    "publish": {
+      "provider": "github",
+      "owner": "bblair321",
+      "repo": "spt-launcher"
     }
   }
 }

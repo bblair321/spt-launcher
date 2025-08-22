@@ -1,12 +1,16 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const AutoUpdateManager = require("./autoUpdater");
 
 // Keep a global reference of the window object
 let mainWindow;
 
 // Store running processes
 const runningProcesses = new Map();
+
+// Initialize auto-update manager
+const autoUpdateManager = new AutoUpdateManager();
 
 function createWindow() {
   // Create the browser window
@@ -45,6 +49,12 @@ function createWindow() {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  // Set up auto-update manager with the main window
+  autoUpdateManager.setMainWindow(mainWindow);
+
+  // Start checking for updates
+  autoUpdateManager.startUpdateCheck();
 
   // Handle window errors
   mainWindow.webContents.on(
