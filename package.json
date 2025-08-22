@@ -2,6 +2,7 @@
   "name": "spt-launcher-electron",
   "version": "2.0.1",
   "description": "SPT Launcher - A comprehensive desktop launcher for SPT-AKI with Fika co-op support",
+  "author": "bblair321",
   "main": "electron/main.js",
   "repository": "https://github.com/bblair321/spt-launcher",
   "homepage": "https://github.com/bblair321/spt-launcher#readme",
@@ -45,6 +46,13 @@
       "output": "dist-electron",
       "buildResources": "build"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "bblair321",
+      "repo": "spt-launcher",
+      "private": false,
+      "releaseType": "release"
+    },
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -68,11 +76,6 @@
       "shortcutName": "SPT Launcher"
     },
     "forceCodeSigning": false,
-    "generateUpdatesFilesForAllChannels": true,
-    "publish": {
-      "provider": "github",
-      "owner": "bblair321",
-      "repo": "spt-launcher"
-    }
+    "generateUpdatesFilesForAllChannels": true
   }
 }

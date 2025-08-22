@@ -17,15 +17,8 @@ class AutoUpdateManager {
     autoUpdater.autoDownload = false; // Let user decide
     autoUpdater.autoInstallOnAppQuit = true;
 
-    // Set update server configuration for GitHub releases
-    console.log("Using GitHub provider for updates");
-    autoUpdater.setFeedURL({
-      provider: "github",
-      owner: "bblair321",
-      repo: "spt-launcher",
-      private: false,
-      releaseType: "release"
-    });
+    // GitHub provider configuration is now in package.json
+    console.log("Using GitHub provider for updates (configured in package.json)");
 
     // Standard configuration
     autoUpdater.allowPrerelease = false;
