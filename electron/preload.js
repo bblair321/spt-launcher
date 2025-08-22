@@ -39,4 +39,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("update-spt-config", configData, sptInstallPath),
   getSptConfigPath: (sptInstallPath) =>
     ipcRenderer.invoke("get-spt-config-path", sptInstallPath),
+
+  // Auto-update system
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  downloadUpdate: () => ipcRenderer.invoke("download-update"),
+  installUpdate: () => ipcRenderer.invoke("install-update"),
+
+  // Auto-update event listeners
+  on: (channel, callback) => ipcRenderer.on(channel, callback),
+  removeListener: (channel, callback) =>
+    ipcRenderer.removeListener(channel, callback),
 });
