@@ -104,7 +104,7 @@ function setupAutoUpdater() {
   if (!process.env.IS_DEV) {
     console.log("Checking for updates...");
     autoUpdater.checkForUpdates();
-    
+
     // Set up periodic background checks (every 30 minutes)
     setInterval(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -424,7 +424,203 @@ ipcMain.handle("launch-process", async (event, filePath, args = []) => {
 });
 
 ipcMain.handle("get-running-processes", async () => {
-  return Array.from(runningProcesses.values());
+  try {
+    const { exec } = require("child_process");
+
+    // Get both tracked processes and system processes
+    const trackedProcesses = Array.from(runningProcesses.values());
+
+    // Get all running processes from system with better parsing
+    const systemProcesses = await new Promise((resolve, reject) => {
+      // Try tasklist first, fallback to wmic if it fails
+      exec("tasklist /FO CSV", (error, stdout) => {
+        if (error) {
+          console.log("=== DEBUG: tasklist failed, trying wmic ===");
+          // Fallback to wmic for better process information
+          exec(
+            "wmic process get ProcessId,Name,WorkingSetSize /format:csv",
+            (wmicError, wmicStdout) => {
+              if (wmicError) {
+                reject(wmicError);
+                return;
+              }
+
+              console.log("=== DEBUG: Using WMIC fallback ===");
+              const processes = wmicStdout
+                .split("\n")
+                .slice(1) // Skip header row
+                .filter((line) => line.trim())
+                .map((line) => {
+                  try {
+                    const parts = line.split(",");
+                    if (parts.length >= 3) {
+                      const name = parts[1]?.replace(/"/g, "").trim();
+                      const pid = parts[0]?.replace(/"/g, "").trim();
+                      const memory = parts[2]?.replace(/"/g, "").trim() || "0";
+
+                      if (!name || !pid || isNaN(parseInt(pid))) return null;
+
+                      console.log(
+                        `=== DEBUG: WMIC process: name="${name}", pid="${pid}", memory="${memory}" ===`
+                      );
+                      return { name, pid, memory };
+                    }
+                  } catch (parseError) {
+                    console.error(
+                      `=== DEBUG: WMIC parse error: "${line}" ===`,
+                      parseError
+                    );
+                  }
+                  return null;
+                })
+                .filter(Boolean);
+
+              console.log(
+                `=== DEBUG: WMIC processes parsed: ${processes.length} ===`
+              );
+              resolve(processes);
+            }
+          );
+          return;
+        }
+
+        console.log("=== DEBUG: Raw tasklist output ===");
+        console.log(stdout.substring(0, 500)); // Log first 500 chars for debugging
+
+        const processes = stdout
+          .split("\n")
+          .slice(1) // Skip header row
+          .filter((line) => line.trim())
+          .map((line) => {
+            try {
+              // More robust CSV parsing
+              const parts = line.split(",");
+              if (parts.length >= 2) {
+                const name = parts[0].replace(/"/g, "").trim();
+                const pid = parts[1].replace(/"/g, "").trim();
+                const memory =
+                  parts.length >= 5 ? parts[4].replace(/"/g, "").trim() : "0";
+
+                // Validate the data
+                if (!name || name === "" || name === "N/A") {
+                  console.log(
+                    `=== DEBUG: Invalid process name: "${name}" from line: "${line}" ===`
+                  );
+                  return null;
+                }
+
+                if (!pid || isNaN(parseInt(pid))) {
+                  console.log(
+                    `=== DEBUG: Invalid PID: "${pid}" from line: "${line}" ===`
+                  );
+                  return null;
+                }
+
+                console.log(
+                  `=== DEBUG: Parsed process: name="${name}", pid="${pid}", memory="${memory}" ===`
+                );
+
+                return { name, pid, memory };
+              }
+            } catch (parseError) {
+              console.error(
+                `=== DEBUG: Error parsing line: "${line}" ===`,
+                parseError
+              );
+            }
+            return null;
+          })
+          .filter(Boolean);
+
+        console.log(
+          `=== DEBUG: Total processes parsed: ${processes.length} ===`
+        );
+        resolve(processes);
+      });
+    });
+
+    // SAFETY FEATURE: Filter for SPT-related processes, but EXCLUDE launcher processes
+    // This prevents users from accidentally stopping the launcher itself
+    // Users can only see and manage actual SPT game processes (Server, Client, Mods)
+    const sptProcesses = systemProcesses.filter((proc) => {
+      const name = proc.name.toLowerCase();
+
+      console.log(
+        `=== DEBUG: Checking process: "${proc.name}" (PID: ${proc.pid}) ===`
+      );
+
+      // Include SPT game processes
+      const isGameProcess =
+        name.includes("aki") ||
+        name.includes("spt") ||
+        name.includes("tarkov") ||
+        name.includes("fika");
+
+      // EXCLUDE launcher processes to prevent users from accidentally stopping the launcher
+      const isLauncherProcess =
+        name.includes("launcher") ||
+        name.includes("spt launcher") ||
+        name.includes("spt-launcher") ||
+        name.includes("sptlauncher");
+
+      const shouldInclude = isGameProcess && !isLauncherProcess;
+      console.log(
+        `=== DEBUG: Process "${proc.name}" - isGame: ${isGameProcess}, isLauncher: ${isLauncherProcess}, include: ${shouldInclude} ===`
+      );
+
+      return shouldInclude;
+    });
+
+    console.log(`=== DEBUG: SPT processes found: ${sptProcesses.length} ===`);
+    sptProcesses.forEach((proc) => {
+      console.log(
+        `=== DEBUG: SPT process: "${proc.name}" (PID: ${proc.pid}) ===`
+      );
+    });
+
+    // Combine tracked processes with detected SPT processes
+    const allProcesses = [...trackedProcesses];
+
+    sptProcesses.forEach((proc) => {
+      // Check if we already have this process tracked
+      const alreadyTracked = allProcesses.some(
+        (p) => p.pid === parseInt(proc.pid)
+      );
+      if (!alreadyTracked) {
+        // Ensure we have a valid process name
+        const processName =
+          proc.name && proc.name.trim() !== ""
+            ? proc.name
+            : `Unknown Process (PID: ${proc.pid})`;
+
+        console.log(
+          `=== DEBUG: Adding process: "${processName}" (PID: ${proc.pid}) ===`
+        );
+
+        allProcesses.push({
+          pid: parseInt(proc.pid),
+          name: processName,
+          memory: proc.memory,
+          startTime: new Date(), // We don't know the actual start time
+          tracked: false, // Mark as not tracked by our launcher
+        });
+      }
+    });
+
+    console.log(
+      `=== DEBUG: Final process list: ${allProcesses.length} processes ===`
+    );
+    allProcesses.forEach((proc) => {
+      console.log(
+        `=== DEBUG: Final process: "${proc.name}" (PID: ${proc.pid}) ===`
+      );
+    });
+
+    return { success: true, processes: allProcesses };
+  } catch (error) {
+    console.error("Failed to get running processes:", error);
+    return { success: false, error: error.message, processes: [] };
+  }
 });
 
 ipcMain.handle("stop-process", async (event, pid) => {
