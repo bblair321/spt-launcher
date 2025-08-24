@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const AutoUpdateManager = require("./autoUpdater");
+const { autoUpdater } = require("electron-updater");
 
 // Keep a global reference of the window object
 let mainWindow;
@@ -9,8 +9,18 @@ let mainWindow;
 // Store running processes
 const runningProcesses = new Map();
 
-// Initialize auto-update manager
-const autoUpdateManager = new AutoUpdateManager();
+// Configure auto-updater
+autoUpdater.logger = require("electron-log");
+autoUpdater.logger.transports.file.level = "info";
+
+// Set the feed URL for updates
+autoUpdater.setFeedURL({
+  provider: "github",
+  owner: "bblair321",
+  repo: "spt-launcher",
+  private: false,
+  releaseType: "release",
+});
 
 function createWindow() {
   // Create the browser window
@@ -50,11 +60,8 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Set up auto-update manager with the main window
-  autoUpdateManager.setMainWindow(mainWindow);
-
-  // Start checking for updates
-  autoUpdateManager.startUpdateCheck();
+  // Set up auto-updater events
+  setupAutoUpdater();
 
   // Handle window errors
   mainWindow.webContents.on(
@@ -66,6 +73,68 @@ function createWindow() {
       }
     }
   );
+}
+
+function setupAutoUpdater() {
+  // Check for updates when app starts (only in production)
+  if (!process.env.IS_DEV) {
+    console.log("Checking for updates...");
+    autoUpdater.checkForUpdates();
+  }
+
+  // Auto-updater events
+  autoUpdater.on("checking-for-update", () => {
+    console.log("Checking for updates...");
+    if (mainWindow) {
+      mainWindow.webContents.send("update-status", { status: "checking" });
+    }
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    console.log("Update available:", info);
+    if (mainWindow) {
+      mainWindow.webContents.send("update-available", {
+        version: info.version,
+        releaseNotes: info.releaseNotes || "No release notes available",
+      });
+    }
+  });
+
+  autoUpdater.on("update-not-available", (info) => {
+    console.log("Update not available:", info);
+    if (mainWindow) {
+      mainWindow.webContents.send("update-status", { status: "no-update" });
+    }
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("Auto-updater error:", err);
+    if (mainWindow) {
+      mainWindow.webContents.send("update-error", err.message);
+    }
+  });
+
+  autoUpdater.on("download-progress", (progressObj) => {
+    console.log("Download progress:", progressObj);
+    if (mainWindow) {
+      mainWindow.webContents.send("update-download-progress", {
+        percent: progressObj.percent,
+        speed: progressObj.bytesPerSecond,
+        downloaded: progressObj.transferred,
+        total: progressObj.total,
+      });
+    }
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    console.log("Update downloaded:", info);
+    if (mainWindow) {
+      mainWindow.webContents.send("update-downloaded", {
+        version: info.version,
+        releaseNotes: info.releaseNotes,
+      });
+    }
+  });
 }
 
 // This method will be called when Electron has finished initialization
@@ -81,6 +150,44 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
+  }
+});
+
+// IPC handlers for update management
+ipcMain.handle("get-app-version", () => {
+  return app.getVersion();
+});
+
+ipcMain.handle("check-for-updates", async () => {
+  try {
+    console.log("Manual update check requested");
+    const result = await autoUpdater.checkForUpdates();
+    return { success: true, result };
+  } catch (error) {
+    console.error("Update check failed:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("download-update", async () => {
+  try {
+    console.log("Download update requested");
+    const result = await autoUpdater.downloadUpdate();
+    return { success: true, result };
+  } catch (error) {
+    console.error("Download failed:", error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle("install-update", async () => {
+  try {
+    console.log("Install update requested");
+    autoUpdater.quitAndInstall();
+    return { success: true };
+  } catch (error) {
+    console.error("Install failed:", error);
+    return { success: false, error: error.message };
   }
 });
 
@@ -219,6 +326,21 @@ ipcMain.on("maximize-window", () => {
 
 ipcMain.on("close-window", () => {
   if (mainWindow) mainWindow.close();
+});
+
+// App version is already handled above in the update management section
+
+// Handle app restart
+ipcMain.handle("restart-app", async () => {
+  try {
+    console.log("=== MAIN: Restart app requested ===");
+    app.relaunch();
+    app.exit(0);
+    return { success: true, message: "App restarting..." };
+  } catch (error) {
+    console.error("=== MAIN: Restart app error ===", error);
+    return { success: false, error: error.message };
+  }
 });
 
 // File system operations

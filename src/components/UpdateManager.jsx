@@ -2,16 +2,32 @@ import React, { useState, useEffect } from "react";
 import { Download, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 
 const UpdateManager = () => {
+  console.log("=== UPDATE MANAGER COMPONENT RENDERED ===");
+  console.log("electronAPI available:", !!window.electronAPI);
+  
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [error, setError] = useState(null);
-  const [currentVersion] = useState("2.0.0"); // This should come from package.json
+  const [currentVersion, setCurrentVersion] = useState("");
 
   useEffect(() => {
+    // Get the current app version
+    const getAppVersion = async () => {
+      try {
+        const version = await window.electronAPI?.invoke("get-app-version");
+        setCurrentVersion(version || "Unknown");
+      } catch (err) {
+        setCurrentVersion("Unknown");
+      }
+    };
+
+    getAppVersion();
+
     // Listen for update events from main process
     window.electronAPI?.on("update-available", (info) => {
+      console.log("Update available event received:", info);
       setUpdateInfo(info);
       setError(null);
     });
@@ -21,6 +37,7 @@ const UpdateManager = () => {
     });
 
     window.electronAPI?.on("update-error", (errorMessage) => {
+      console.log("Update error event received:", errorMessage);
       setError(errorMessage);
       setIsDownloading(false);
     });
@@ -37,8 +54,9 @@ const UpdateManager = () => {
     try {
       const result = await window.electronAPI?.invoke("check-for-updates");
       if (result.success) {
-        if (result.updateInfo) {
+        if (result.updateInfo && result.updateInfo.hasUpdate) {
           setUpdateInfo(result.updateInfo);
+          console.log("Update info set from check:", result.updateInfo);
         } else {
           setUpdateInfo(null);
         }
@@ -53,18 +71,35 @@ const UpdateManager = () => {
   };
 
   const downloadUpdate = async () => {
-    if (!updateInfo) return;
+    console.log("=== DOWNLOAD UPDATE FUNCTION CALLED ===");
+    console.log("Download update called with updateInfo:", updateInfo);
+    console.log("updateInfo.downloadUrl:", updateInfo?.downloadUrl);
+    
+    if (!updateInfo) {
+      console.log("No updateInfo, setting error");
+      setError("Please check for updates first");
+      return;
+    }
 
+    console.log("Setting downloading state to true");
     setIsDownloading(true);
     setError(null);
 
     try {
-      const result = await window.electronAPI?.invoke("download-update");
+      console.log("Calling IPC download-update with:", updateInfo);
+      const result = await window.electronAPI?.invoke("download-update", updateInfo);
+      console.log("IPC download-update result:", result);
+      
       if (!result.success) {
+        console.log("Download failed, setting error:", result.error);
         setError(result.error || "Failed to download update");
         setIsDownloading(false);
+      } else {
+        console.log("Download succeeded:", result.message);
+        // Keep downloading state true to show success
       }
     } catch (err) {
+      console.error("Download update error:", err);
       setError("Error downloading update");
       setIsDownloading(false);
     }
@@ -121,6 +156,18 @@ const UpdateManager = () => {
           />
           {isChecking ? "Checking..." : "Check for Updates"}
         </button>
+        
+        {/* Test Button */}
+        <button
+          onClick={() => {
+            console.log("=== TEST BUTTON CLICKED ===");
+            console.log("electronAPI:", window.electronAPI);
+            console.log("updateInfo:", updateInfo);
+          }}
+          className="ml-2 flex items-center px-3 py-2 text-sm font-medium text-red-700 bg-red-100 border border-red-300 rounded-md hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+        >
+          Test API
+        </button>
       </div>
 
       <div className="space-y-4">
@@ -149,7 +196,10 @@ const UpdateManager = () => {
 
                 {!isDownloading && (
                   <button
-                    onClick={downloadUpdate}
+                    onClick={() => {
+                      console.log("=== DOWNLOAD BUTTON CLICKED ===");
+                      downloadUpdate();
+                    }}
                     className="mt-3 inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     <Download className="h-4 w-4 mr-2" />
