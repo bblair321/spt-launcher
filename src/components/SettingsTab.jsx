@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Settings, Save, RefreshCw, Sun, Moon, Monitor } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
+import { useToastContext } from "../contexts/ToastContext";
 
 function SettingsTab() {
   const { theme, changeTheme } = useTheme();
-  
+  const { showSuccess, showError, showInfo } = useToastContext();
+
   const [settings, setSettings] = useState({
     autoStart: false,
     minimizeToTray: true,
@@ -13,12 +15,6 @@ function SettingsTab() {
     silentUpdates: false,
     autoInstallUpdates: true,
     backgroundChecks: true,
-  });
-
-  const [saveFeedback, setSaveFeedback] = useState({
-    show: false,
-    message: "",
-    type: "success", // "success" or "error"
   });
 
   const [updateStatus, setUpdateStatus] = useState({
@@ -97,6 +93,10 @@ function SettingsTab() {
             newVersion: data.version,
             releaseNotes: data.releaseNotes,
           }));
+          showSuccess(
+            "Update Available!",
+            `Version ${data.version} is ready to download.`
+          );
         },
         "update-error": (event, error) => {
           console.log("Update error event:", error);
@@ -126,6 +126,10 @@ function SettingsTab() {
             newVersion: data.version,
             releaseNotes: data.releaseNotes,
           }));
+          showSuccess(
+            "Download Complete!",
+            `Version ${data.version} has been downloaded successfully.`
+          );
         },
       };
 
@@ -158,26 +162,13 @@ function SettingsTab() {
     try {
       localStorage.setItem("appSettings", JSON.stringify(settings));
       console.log("Settings saved successfully:", settings);
-      setSaveFeedback({
-        show: true,
-        message: "Settings saved successfully!",
-        type: "success",
-      });
-      // Hide feedback after 3 seconds
-      setTimeout(() => {
-        setSaveFeedback({ show: false, message: "", type: "success" });
-      }, 3000);
+      showSuccess(
+        "Settings Saved",
+        "Your preferences have been saved successfully!"
+      );
     } catch (error) {
       console.error("Failed to save settings:", error);
-      setSaveFeedback({
-        show: true,
-        message: "Failed to save settings",
-        type: "error",
-      });
-      // Hide feedback after 3 seconds
-      setTimeout(() => {
-        setSaveFeedback({ show: false, message: "", type: "success" });
-      }, 3000);
+      showError("Save Failed", "Failed to save settings. Please try again.");
     }
   };
 
@@ -203,12 +194,17 @@ function SettingsTab() {
           checking: false,
           error: result.error || "Update check failed",
         }));
+        showError("Update Check Failed", result.error || "Update check failed");
       } else {
         setUpdateStatus((prev) => ({
           ...prev,
           checking: false,
           lastChecked: new Date().toLocaleTimeString(),
         }));
+        showSuccess(
+          "Update Check Complete",
+          "No updates available at this time."
+        );
       }
     } catch (error) {
       console.error("=== SETTINGS TAB: Update check error ===", error);
@@ -283,17 +279,21 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6">
-             <div className="text-center">
-         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Settings</h1>
-         <p className="text-gray-600 dark:text-gray-400">Configure your SPT Launcher preferences</p>
-         {updateStatus.currentVersion && (
-           <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-             <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md font-mono">
-               v{updateStatus.currentVersion}
-             </span>
-           </div>
-         )}
-       </div>
+      <div className="text-center">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+          Settings
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          Configure your SPT Launcher preferences
+        </p>
+        {updateStatus.currentVersion && (
+          <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md font-mono">
+              v{updateStatus.currentVersion}
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="max-w-2xl mx-auto">
         {/* Application Settings Section */}
@@ -304,13 +304,15 @@ function SettingsTab() {
           </h2>
 
           <div className="space-y-4">
-                         <div className="flex items-center justify-between">
-               <div>
-                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Auto-start with Windows</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                   Launch SPT Launcher when Windows starts
-                 </p>
-               </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Auto-start with Windows
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Launch SPT Launcher when Windows starts
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={settings.autoStart}
@@ -321,13 +323,15 @@ function SettingsTab() {
               />
             </div>
 
-                         <div className="flex items-center justify-between">
-               <div>
-                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Minimize to System Tray</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                   Keep launcher running in background
-                 </p>
-               </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Minimize to System Tray
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Keep launcher running in background
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={settings.minimizeToTray}
@@ -338,13 +342,15 @@ function SettingsTab() {
               />
             </div>
 
-                         <div className="flex items-center justify-between">
-               <div>
-                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Check for Updates</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                   Automatically check for launcher updates
-                 </p>
-               </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Check for Updates
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Automatically check for launcher updates
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={settings.checkForUpdates}
@@ -355,69 +361,54 @@ function SettingsTab() {
               />
             </div>
 
-                                                   <div className="space-y-3">
-                <div>
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100">Theme</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Choose your preferred appearance
-                  </p>
-                </div>
-               <div className="grid grid-cols-3 gap-3">
-                 <button
-                   onClick={() => changeTheme('light')}
-                   className={`p-4 rounded-lg border-2 transition-all ${
-                     theme === 'light'
-                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-                   }`}
-                 >
-                   <Sun className="w-6 h-6 mx-auto mb-2 text-yellow-600" />
-                   <span className="text-sm font-medium">Light</span>
-                 </button>
-                 
-                 <button
-                   onClick={() => changeTheme('dark')}
-                   className={`p-4 rounded-lg border-2 transition-all ${
-                     theme === 'dark'
-                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-                   }`}
-                 >
-                   <Moon className="w-6 h-6 mx-auto mb-2 text-blue-600" />
-                   <span className="text-sm font-medium">Dark</span>
-                 </button>
-                 
-                 <button
-                   onClick={() => changeTheme('system')}
-                   className={`p-4 rounded-lg border-2 transition-all ${
-                     theme === 'system'
-                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-                   }`}
-                 >
-                   <Monitor className="w-6 h-6 mx-auto mb-2 text-gray-600" />
-                   <span className="text-sm font-medium">System</span>
-                 </button>
-               </div>
-             </div>
-          </div>
+            <div className="space-y-3">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Theme
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Choose your preferred appearance
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  onClick={() => changeTheme("light")}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    theme === "light"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+                  }`}
+                >
+                  <Sun className="w-6 h-6 mx-auto mb-2 text-yellow-600" />
+                  <span className="text-sm font-medium">Light</span>
+                </button>
 
-          {/* Save Feedback */}
-          {saveFeedback.show && (
-            <div className={`p-3 rounded-md ${
-              saveFeedback.type === "success" 
-                ? "bg-green-100 dark:bg-green-900/20 border border-green-300 dark:border-green-700" 
-                : "bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700"
-            }`}>
-              <p className={`text-sm ${
-                saveFeedback.type === "success" 
-                  ? "text-green-700 dark:text-green-300" 
-                  : "text-red-700 dark:text-red-300"
-              }`}>
-                {saveFeedback.message}
-              </p>
+                <button
+                  onClick={() => changeTheme("dark")}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    theme === "dark"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+                  }`}
+                >
+                  <Moon className="w-6 h-6 mx-auto mb-2 text-blue-600" />
+                  <span className="text-sm font-medium">Dark</span>
+                </button>
+
+                <button
+                  onClick={() => changeTheme("system")}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    theme === "system"
+                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                      : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+                  }`}
+                >
+                  <Monitor className="w-6 h-6 mx-auto mb-2 text-gray-600" />
+                  <span className="text-sm font-medium">System</span>
+                </button>
+              </div>
             </div>
-          )}
+          </div>
 
           <div className="flex justify-end">
             <button
@@ -430,22 +421,24 @@ function SettingsTab() {
           </div>
         </div>
 
-                                   {/* Update Management Section */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm space-y-6">
-            <h2 className="text-xl font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-              <RefreshCw className="w-5 h-5" />
-              <span>Update Management</span>
-            </h2>
+        {/* Update Management Section */}
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm space-y-6">
+          <h2 className="text-xl font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+            <RefreshCw className="w-5 h-5" />
+            <span>Update Management</span>
+          </h2>
 
           {/* Update Automation Settings */}
           <div className="space-y-4">
-                         <div className="flex items-center justify-between">
-               <div>
-                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Auto-download Updates</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                   Automatically download updates when available
-                 </p>
-               </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Auto-download Updates
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Automatically download updates when available
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={settings.autoDownloadUpdates}
@@ -456,13 +449,15 @@ function SettingsTab() {
               />
             </div>
 
-                         <div className="flex items-center justify-between">
-               <div>
-                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Silent Updates</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                   Download updates in background without notifications
-                 </p>
-               </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Silent Updates
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Download updates in background without notifications
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={settings.silentUpdates}
@@ -473,13 +468,15 @@ function SettingsTab() {
               />
             </div>
 
-                         <div className="flex items-center justify-between">
-               <div>
-                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Auto-install Updates</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                   Automatically install updates after download
-                 </p>
-               </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Auto-install Updates
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Automatically install updates after download
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={settings.autoInstallUpdates}
@@ -490,13 +487,15 @@ function SettingsTab() {
               />
             </div>
 
-                         <div className="flex items-center justify-between">
-               <div>
-                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Background Update Checks</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                   Check for updates while launcher is running
-                 </p>
-               </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Background Update Checks
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Check for updates while launcher is running
+                </p>
+              </div>
               <input
                 type="checkbox"
                 checked={settings.backgroundChecks}
@@ -510,11 +509,15 @@ function SettingsTab() {
 
           {/* Manual Update Controls */}
           <div className="border-t pt-4">
-                         <div className="flex items-center justify-between mb-4">
-               <div>
-                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Manual Update Check</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">Check for updates now</p>
-               </div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                  Manual Update Check
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Check for updates now
+                </p>
+              </div>
               <button
                 onClick={handleManualUpdateCheck}
                 disabled={updateStatus.checking}
