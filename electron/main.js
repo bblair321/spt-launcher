@@ -22,6 +22,30 @@ autoUpdater.setFeedURL({
   releaseType: "release",
 });
 
+// Common SPT installation paths
+const SPT_POSSIBLE_PATHS = [
+  "C:\\SPT",
+  "D:\\SPT",
+  "E:\\SPT",
+  "F:\\SPT",
+  "C:\\SPT-AKI",
+  "D:\\SPT-AKI",
+  "E:\\SPT-AKI",
+  "F:\\SPT-AKI",
+  path.join(process.env.USERPROFILE || "", "Documents", "SPT"),
+  path.join(process.env.USERPROFILE || "", "Documents", "SPT-AKI"),
+  path.join(process.env.USERPROFILE || "", "Desktop", "SPT"),
+  path.join(process.env.USERPROFILE || "", "Desktop", "SPT-AKI"),
+];
+
+// Common SPT launcher names
+const SPT_LAUNCHER_NAMES = [
+  "Aki.Launcher.exe",
+  "SPT.Launcher.exe",
+  "Launcher.exe",
+  "SPT.exe",
+];
+
 function createWindow() {
   // Create the browser window
   mainWindow = new BrowserWindow({
@@ -80,61 +104,119 @@ function setupAutoUpdater() {
   if (!process.env.IS_DEV) {
     console.log("Checking for updates...");
     autoUpdater.checkForUpdates();
+    
+    // Set up periodic background checks (every 30 minutes)
+    setInterval(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        console.log("Background update check...");
+        autoUpdater.checkForUpdates();
+      }
+    }, 30 * 60 * 1000); // 30 minutes
   }
 
   // Auto-updater events
-  autoUpdater.on("checking-for-update", () => {
-    console.log("Checking for updates...");
-    if (mainWindow) {
-      mainWindow.webContents.send("update-status", { status: "checking" });
-    }
-  });
-
-  autoUpdater.on("update-available", (info) => {
-    console.log("Update available:", info);
-    if (mainWindow) {
-      mainWindow.webContents.send("update-available", {
+  const events = [
+    { name: "checking-for-update", message: "Checking for updates..." },
+    {
+      name: "update-available",
+      data: (info) => ({
         version: info.version,
         releaseNotes: info.releaseNotes || "No release notes available",
-      });
-    }
-  });
-
-  autoUpdater.on("update-not-available", (info) => {
-    console.log("Update not available:", info);
-    if (mainWindow) {
-      mainWindow.webContents.send("update-status", { status: "no-update" });
-    }
-  });
-
-  autoUpdater.on("error", (err) => {
-    console.error("Auto-updater error:", err);
-    if (mainWindow) {
-      mainWindow.webContents.send("update-error", err.message);
-    }
-  });
-
-  autoUpdater.on("download-progress", (progressObj) => {
-    console.log("Download progress:", progressObj);
-    if (mainWindow) {
-      mainWindow.webContents.send("update-download-progress", {
+      }),
+    },
+    { name: "update-not-available", data: () => ({ status: "no-update" }) },
+    { name: "error", data: (err) => ({ message: err.message }) },
+    {
+      name: "download-progress",
+      data: (progressObj) => ({
         percent: progressObj.percent,
         speed: progressObj.bytesPerSecond,
         downloaded: progressObj.transferred,
         total: progressObj.total,
-      });
-    }
-  });
-
-  autoUpdater.on("update-downloaded", (info) => {
-    console.log("Update downloaded:", info);
-    if (mainWindow) {
-      mainWindow.webContents.send("update-downloaded", {
+      }),
+    },
+    {
+      name: "update-downloaded",
+      data: (info) => ({
         version: info.version,
         releaseNotes: info.releaseNotes,
-      });
-    }
+      }),
+    },
+  ];
+
+  events.forEach(({ name, message, data }) => {
+    autoUpdater.on(name, (info) => {
+      if (message) console.log(message);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const channel =
+          name === "checking-for-update"
+            ? "update-status"
+            : name === "update-not-available"
+            ? "update-status"
+            : name === "error"
+            ? "update-error"
+            : name === "download-progress"
+            ? "update-download-progress"
+            : name === "update-downloaded"
+            ? "update-downloaded"
+            : name === "update-available"
+            ? "update-available"
+            : name;
+
+        mainWindow.webContents.send(
+          channel,
+          data ? data(info) : { status: name }
+        );
+      }
+    });
   });
+}
+
+// Utility function to find SPT installation
+function findSptInstallation(userPath = null) {
+  if (userPath && fs.existsSync(userPath)) {
+    return userPath;
+  }
+
+  // Try to find launcher in possible paths
+  for (const basePath of SPT_POSSIBLE_PATHS) {
+    if (fs.existsSync(basePath)) {
+      for (const launcherName of SPT_LAUNCHER_NAMES) {
+        const potentialPath = path.join(basePath, launcherName);
+        if (fs.existsSync(potentialPath)) {
+          return potentialPath;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Utility function to find SPT config path
+function findSptConfigPath(sptInstallPath = null) {
+  if (sptInstallPath) {
+    const potentialPaths = [
+      path.join(sptInstallPath, "user", "launcher", "config.json"),
+      path.join(sptInstallPath, "config.json"),
+    ];
+
+    for (const configPath of potentialPaths) {
+      if (fs.existsSync(configPath)) {
+        return configPath;
+      }
+    }
+  }
+
+  // Auto-detection
+  for (const basePath of SPT_POSSIBLE_PATHS) {
+    if (fs.existsSync(basePath)) {
+      const configPath = path.join(basePath, "config.json");
+      if (fs.existsSync(configPath)) {
+        return configPath;
+      }
+    }
+  }
+  return null;
 }
 
 // This method will be called when Electron has finished initialization
@@ -153,10 +235,10 @@ app.on("activate", () => {
   }
 });
 
-// IPC handlers for update management
-ipcMain.handle("get-app-version", () => {
-  return app.getVersion();
-});
+// ===== IPC HANDLERS =====
+
+// Update management
+ipcMain.handle("get-app-version", () => app.getVersion());
 
 ipcMain.handle("check-for-updates", async () => {
   try {
@@ -191,7 +273,42 @@ ipcMain.handle("install-update", async () => {
   }
 });
 
-// IPC handlers for your SPT Launcher features
+// Window control
+ipcMain.handle("minimize-window", () => {
+  if (mainWindow) mainWindow.minimize();
+  return { success: true };
+});
+
+ipcMain.handle("maximize-window", () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+  return { success: true };
+});
+
+ipcMain.handle("close-window", () => {
+  if (mainWindow) mainWindow.close();
+  return { success: true };
+});
+
+// App restart
+ipcMain.handle("restart-app", async () => {
+  try {
+    console.log("=== MAIN: Restart app requested ===");
+    app.relaunch();
+    app.exit(0);
+    return { success: true, message: "App restarting..." };
+  } catch (error) {
+    console.error("=== MAIN: Restart app error ===", error);
+    return { success: false, error: error.message };
+  }
+});
+
+// File operations
 ipcMain.handle("select-file", async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ["openFile"],
@@ -210,140 +327,6 @@ ipcMain.handle("select-folder", async () => {
   return result.filePaths[0];
 });
 
-ipcMain.handle("launch-process", async (event, filePath, args = []) => {
-  const { spawn } = require("child_process");
-
-  console.log("Launching process:", filePath, "with args:", args);
-
-  try {
-    // Check if file exists
-    if (!require("fs").existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`);
-    }
-
-    // Get the directory of the executable
-    const execDir = path.dirname(filePath);
-
-    const childProcess = spawn(filePath, args, {
-      cwd: execDir, // Set working directory to executable's folder
-      detached: false, // Don't detach - let it run normally
-      stdio: "pipe", // Capture stdio for debugging
-      shell: false, // Don't use shell
-    });
-
-    console.log("Process spawned with PID:", childProcess.pid);
-    console.log("Working directory:", execDir);
-
-    // Store process info
-    const processInfo = {
-      pid: childProcess.pid,
-      filePath: filePath,
-      startTime: new Date(),
-      killed: false,
-    };
-
-    runningProcesses.set(childProcess.pid, processInfo);
-
-    // Handle process exit
-    childProcess.on("exit", (code) => {
-      console.log(`Process ${childProcess.pid} exited with code:`, code);
-      runningProcesses.delete(childProcess.pid);
-    });
-
-    // Handle process errors
-    childProcess.on("error", (error) => {
-      console.error(`Process ${childProcess.pid} error:`, error);
-      runningProcesses.delete(childProcess.pid);
-    });
-
-    // Capture stdout/stderr for debugging and send to renderer
-    if (childProcess.stdout) {
-      childProcess.stdout.on("data", (data) => {
-        const output = data.toString();
-        console.log(`Process ${childProcess.pid} stdout:`, output);
-
-        // Send to renderer process if window exists
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("process-output", {
-            pid: childProcess.pid,
-            type: "stdout",
-            data: output,
-          });
-        }
-      });
-    }
-
-    if (childProcess.stderr) {
-      childProcess.stderr.on("data", (data) => {
-        const output = data.toString();
-        console.error(`Process ${childProcess.pid} stderr:`, output);
-
-        // Send to renderer process if window exists
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("process-output", {
-            pid: childProcess.pid,
-            type: "stderr",
-            data: output,
-          });
-        }
-      });
-    }
-
-    // Wait a moment to ensure process starts properly
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    // Check if process is still running
-    if (childProcess.killed) {
-      throw new Error("Process was killed immediately after launch");
-    }
-
-    // Return success
-    return {
-      code: 0,
-      pid: childProcess.pid,
-      killed: false,
-    };
-  } catch (error) {
-    console.error("Failed to launch process:", error);
-    throw error;
-  }
-});
-
-// Window control handlers
-ipcMain.on("minimize-window", () => {
-  if (mainWindow) mainWindow.minimize();
-});
-
-ipcMain.on("maximize-window", () => {
-  if (mainWindow) {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow.maximize();
-    }
-  }
-});
-
-ipcMain.on("close-window", () => {
-  if (mainWindow) mainWindow.close();
-});
-
-// App version is already handled above in the update management section
-
-// Handle app restart
-ipcMain.handle("restart-app", async () => {
-  try {
-    console.log("=== MAIN: Restart app requested ===");
-    app.relaunch();
-    app.exit(0);
-    return { success: true, message: "App restarting..." };
-  } catch (error) {
-    console.error("=== MAIN: Restart app error ===", error);
-    return { success: false, error: error.message };
-  }
-});
-
-// File system operations
 ipcMain.handle("read-file", async (event, filePath) => {
   try {
     const content = fs.readFileSync(filePath, "utf8");
@@ -362,56 +345,141 @@ ipcMain.handle("write-file", async (event, filePath, content) => {
   }
 });
 
-// SPT Launcher configuration management
+// Process management
+ipcMain.handle("launch-process", async (event, filePath, args = []) => {
+  const { spawn } = require("child_process");
+
+  console.log("Launching process:", filePath, "with args:", args);
+
+  try {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+
+    const execDir = path.dirname(filePath);
+    const childProcess = spawn(filePath, args, {
+      cwd: execDir,
+      detached: false,
+      stdio: "pipe",
+      shell: false,
+    });
+
+    console.log("Process spawned with PID:", childProcess.pid);
+
+    const processInfo = {
+      pid: childProcess.pid,
+      filePath: filePath,
+      startTime: new Date(),
+      killed: false,
+    };
+
+    runningProcesses.set(childProcess.pid, processInfo);
+
+    // Handle process lifecycle
+    childProcess.on("exit", (code) => {
+      console.log(`Process ${childProcess.pid} exited with code:`, code);
+      runningProcesses.delete(childProcess.pid);
+    });
+
+    childProcess.on("error", (error) => {
+      console.error(`Process ${childProcess.pid} error:`, error);
+      runningProcesses.delete(childProcess.pid);
+    });
+
+    // Capture output
+    [childProcess.stdout, childProcess.stderr].forEach((stream, index) => {
+      if (stream) {
+        stream.on("data", (data) => {
+          const output = data.toString();
+          const type = index === 0 ? "stdout" : "stderr";
+
+          if (index === 0) {
+            console.log(`Process ${childProcess.pid} ${type}:`, output);
+          } else {
+            console.error(`Process ${childProcess.pid} ${type}:`, output);
+          }
+
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("process-output", {
+              pid: childProcess.pid,
+              type,
+              data: output,
+            });
+          }
+        });
+      }
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    if (childProcess.killed) {
+      throw new Error("Process was killed immediately after launch");
+    }
+
+    return { code: 0, pid: childProcess.pid, killed: false };
+  } catch (error) {
+    console.error("Failed to launch process:", error);
+    throw error;
+  }
+});
+
+ipcMain.handle("get-running-processes", async () => {
+  return Array.from(runningProcesses.values());
+});
+
+ipcMain.handle("stop-process", async (event, pid) => {
+  try {
+    const { exec } = require("child_process");
+    await new Promise((resolve, reject) => {
+      exec(`taskkill /PID ${pid} /F`, (error) => {
+        if (error) reject(error);
+        else resolve(true);
+      });
+    });
+
+    runningProcesses.delete(pid);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to stop process:", error);
+    throw error;
+  }
+});
+
+ipcMain.handle("get-system-processes", async () => {
+  const { exec } = require("child_process");
+  return new Promise((resolve, reject) => {
+    exec("tasklist /FO CSV", (error, stdout) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      const processes = stdout
+        .split("\n")
+        .slice(1)
+        .filter((line) => line.trim())
+        .map((line) => {
+          const [name, pid] = line.split(",");
+          return { name: name.replace(/"/g, ""), pid: pid.replace(/"/g, "") };
+        });
+      resolve(processes);
+    });
+  });
+});
+
+ipcMain.handle("kill-process", async (event, pid) => {
+  const { exec } = require("child_process");
+  return new Promise((resolve, reject) => {
+    exec(`taskkill /PID ${pid} /F`, (error) => {
+      if (error) reject(error);
+      else resolve(true);
+    });
+  });
+});
+
+// SPT Launcher specific handlers
 ipcMain.handle("get-spt-config", async (event, sptInstallPath = null) => {
   try {
-    let configPath = null;
-
-    // If SPT path is provided, look for config.json in the user/launcher subdirectory
-    if (sptInstallPath) {
-      const potentialConfigPath = path.join(
-        sptInstallPath,
-        "user",
-        "launcher",
-        "config.json"
-      );
-      if (fs.existsSync(potentialConfigPath)) {
-        configPath = potentialConfigPath;
-      }
-    }
-
-    // If no config found, try to detect SPT installation automatically
-    if (!configPath) {
-      const possiblePaths = [
-        "C:\\SPT",
-        "D:\\SPT",
-        "E:\\SPT",
-        "F:\\SPT",
-        "C:\\SPT-AKI",
-        "D:\\SPT-AKI",
-        "E:\\SPT-AKI",
-        "F:\\SPT-AKI",
-        path.join(process.env.USERPROFILE || "", "Documents", "SPT"),
-        path.join(process.env.USERPROFILE || "", "Documents", "SPT-AKI"),
-        path.join(process.env.USERPROFILE || "", "Desktop", "SPT"),
-        path.join(process.env.USERPROFILE || "", "Desktop", "SPT-AKI"),
-      ];
-
-      for (const basePath of possiblePaths) {
-        if (fs.existsSync(basePath)) {
-          const potentialConfigPath = path.join(
-            basePath,
-            "user",
-            "launcher",
-            "config.json"
-          );
-          if (fs.existsSync(potentialConfigPath)) {
-            configPath = potentialConfigPath;
-            break;
-          }
-        }
-      }
-    }
+    const configPath = findSptConfigPath(sptInstallPath);
 
     if (!configPath) {
       return {
@@ -424,7 +492,6 @@ ipcMain.handle("get-spt-config", async (event, sptInstallPath = null) => {
     const content = fs.readFileSync(configPath, "utf8");
     const config = JSON.parse(content);
 
-    // Extract Fika-relevant settings from the SPT config
     const fikaConfig = {
       enableFika: config.IsDevMode === true,
       serverAddress: config.Server?.Url
@@ -451,136 +518,28 @@ ipcMain.handle(
       console.log("🔍 Backend Debug: Received configData:", configData);
       console.log("🔍 Backend Debug: Received sptInstallPath:", sptInstallPath);
 
-      let configPath = null;
-
-      // If SPT path is provided, use that directory
-      if (sptInstallPath) {
-        // First, try to find the actual SPT launcher config location
-        let actualConfigPath = null;
-
-        // Common SPT launcher config locations
-        const possibleConfigPaths = [
-          // Primary location: SPT installation\user\launcher\config.json
-          path.join(sptInstallPath, "user", "launcher", "config.json"),
-          // Alternative: SPT installation directory
-          path.join(sptInstallPath, "config.json"),
-        ];
-
-        console.log("🔍 Backend Debug: Checking possible config locations:");
-        for (const potentialPath of possibleConfigPaths) {
-          console.log("  - Checking:", potentialPath);
-          if (fs.existsSync(potentialPath)) {
-            actualConfigPath = potentialPath;
-            console.log(
-              "✅ Backend Debug: Found existing config at:",
-              actualConfigPath
-            );
-            break;
-          }
-        }
-
-        if (actualConfigPath) {
-          // Use the existing config location
-          configPath = actualConfigPath;
-          console.log(
-            "🔍 Backend Debug: Using existing config at:",
-            configPath
-          );
-        } else {
-          // Create new config in SPT installation directory
-          configPath = path.join(sptInstallPath, "config.json");
-          console.log("🔍 Backend Debug: Creating new config at:", configPath);
-
-          // Check if the directory exists
-          if (!fs.existsSync(sptInstallPath)) {
-            console.log(
-              "❌ Backend Debug: SPT directory does not exist:",
-              sptInstallPath
-            );
-            return {
-              success: false,
-              error: `SPT directory does not exist: ${sptInstallPath}`,
-            };
-          }
-
-          // List directory contents for debugging
-          try {
-            const dirContents = fs.readdirSync(sptInstallPath);
-            console.log("🔍 Backend Debug: Directory contents:", dirContents);
-          } catch (readError) {
-            console.log(
-              "🔍 Backend Debug: Could not read directory contents:",
-              readError.message
-            );
-          }
-
-          // Create the config file if it doesn't exist
-          if (!fs.existsSync(configPath)) {
-            try {
-              // Create empty config file
-              fs.writeFileSync(configPath, "{}", "utf8");
-              console.log("✅ Backend Debug: Successfully created config.json");
-            } catch (writeError) {
-              console.error(
-                "❌ Backend Debug: Failed to create config.json:",
-                writeError
-              );
-              return {
-                success: false,
-                error: `Failed to create config.json: ${writeError.message}`,
-              };
-            }
-          } else {
-            console.log("✅ Backend Debug: config.json already exists");
-          }
-        }
-      } else {
-        console.log(
-          "🔍 Backend Debug: No SPT path provided, trying auto-detection"
-        );
-        // Try to detect SPT installation automatically
-        const possiblePaths = [
-          "C:\\SPT",
-          "D:\\SPT",
-          "E:\\SPT",
-          "F:\\SPT",
-          "C:\\SPT-AKI",
-          "D:\\SPT-AKI",
-          "E:\\SPT-AKI",
-          "F:\\SPT-AKI",
-          path.join(process.env.USERPROFILE || "", "Documents", "SPT"),
-          path.join(process.env.USERPROFILE || "", "Documents", "SPT-AKI"),
-          path.join(process.env.USERPROFILE || "", "Desktop", "SPT"),
-          path.join(process.env.USERPROFILE || "", "Desktop", "SPT-AKI"),
-        ];
-
-        for (const basePath of possiblePaths) {
-          if (fs.existsSync(basePath)) {
-            const potentialConfigPath = path.join(basePath, "config.json");
-            if (fs.existsSync(potentialConfigPath)) {
-              configPath = potentialConfigPath;
-              console.log(
-                "🔍 Backend Debug: Found config via auto-detection:",
-                configPath
-              );
-              break;
-            }
-          }
-        }
-      }
+      let configPath = findSptConfigPath(sptInstallPath);
 
       if (!configPath) {
-        console.log("❌ Backend Debug: No config path found");
-        return {
-          success: false,
-          error:
-            "SPT config.json not found. Please ensure SPT-AKI is properly installed.",
-        };
+        // Create new config if none exists
+        if (sptInstallPath && fs.existsSync(sptInstallPath)) {
+          configPath = path.join(sptInstallPath, "config.json");
+          if (!fs.existsSync(configPath)) {
+            fs.writeFileSync(configPath, "{}", "utf8");
+            console.log("✅ Backend Debug: Successfully created config.json");
+          }
+        } else {
+          return {
+            success: false,
+            error:
+              "SPT config.json not found. Please ensure SPT-AKI is properly installed.",
+          };
+        }
       }
 
       console.log("🔍 Backend Debug: Final config path:", configPath);
 
-      // Read existing config first
+      // Read existing config
       let existingConfig = {};
       if (fs.existsSync(configPath)) {
         const content = fs.readFileSync(configPath, "utf8");
@@ -588,47 +547,32 @@ ipcMain.handle(
         console.log("🔍 Backend Debug: Existing config:", existingConfig);
       }
 
-      // Merge with new config data and handle SPT launcher specific structure
+      // Update config
       const updatedConfig = { ...existingConfig };
 
-      // Set required SPT launcher fields for Fika to work
       if (configData.enableFika) {
-        // Enable dev mode (required for custom server settings)
         updatedConfig.IsDevMode = true;
-
-        // Update server configuration
-        if (!updatedConfig.Server) {
-          updatedConfig.Server = {};
-        }
-
-        // Set the server URL to the Fika server
+        if (!updatedConfig.Server) updatedConfig.Server = {};
         updatedConfig.Server.Url = `https://${configData.serverAddress}:${configData.serverPort}`;
-
-        console.log(
-          "🔍 Backend Debug: Fika mode enabled - setting dev mode and server URL"
-        );
+        console.log("🔍 Backend Debug: Fika mode enabled");
       } else {
-        // If Fika is disabled, revert to default SPT settings
         updatedConfig.IsDevMode = false;
         if (updatedConfig.Server) {
           updatedConfig.Server.Url = "https://127.0.0.1:6969";
           updatedConfig.Server.Name = "SPT";
         }
-        console.log(
-          "🔍 Backend Debug: Fika mode disabled - reverting to default SPT settings"
-        );
+        console.log("🔍 Backend Debug: Fika mode disabled");
       }
 
       console.log("🔍 Backend Debug: Updated config:", updatedConfig);
 
-      // Write updated config
       fs.writeFileSync(
         configPath,
         JSON.stringify(updatedConfig, null, 2),
         "utf8"
       );
-
       console.log("✅ Backend Debug: Config saved successfully");
+
       return { success: true, configPath };
     } catch (error) {
       console.error("❌ Backend Debug: Exception occurred:", error);
@@ -642,38 +586,7 @@ ipcMain.handle(
 
 ipcMain.handle("get-spt-config-path", async (event, sptInstallPath = null) => {
   try {
-    let configPath = null;
-
-    // If SPT path is provided, use that directory
-    if (sptInstallPath) {
-      configPath = path.join(sptInstallPath, "config.json");
-    } else {
-      // Try to detect SPT installation automatically
-      const possiblePaths = [
-        "C:\\SPT",
-        "D:\\SPT",
-        "E:\\SPT",
-        "F:\\SPT",
-        "C:\\SPT-AKI",
-        "D:\\SPT-AKI",
-        "E:\\SPT-AKI",
-        "F:\\SPT-AKI",
-        path.join(process.env.USERPROFILE || "", "Documents", "SPT"),
-        path.join(process.env.USERPROFILE || "", "Documents", "SPT-AKI"),
-        path.join(process.env.USERPROFILE || "", "Desktop", "SPT"),
-        path.join(process.env.USERPROFILE || "", "Desktop", "SPT-AKI"),
-      ];
-
-      for (const basePath of possiblePaths) {
-        if (fs.existsSync(basePath)) {
-          const potentialConfigPath = path.join(basePath, "config.json");
-          if (fs.existsSync(potentialConfigPath)) {
-            configPath = potentialConfigPath;
-            break;
-          }
-        }
-      }
-    }
+    const configPath = findSptConfigPath(sptInstallPath);
 
     if (!configPath) {
       return { success: false, error: "SPT config.json not found" };
@@ -692,165 +605,13 @@ ipcMain.handle("get-spt-config-path", async (event, sptInstallPath = null) => {
   }
 });
 
-// Process management - Get system processes (for reference)
-ipcMain.handle("get-system-processes", async () => {
-  const { exec } = require("child_process");
-  return new Promise((resolve, reject) => {
-    exec("tasklist /FO CSV", (error, stdout) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      const processes = stdout
-        .split("\n")
-        .slice(1) // Skip header
-        .filter((line) => line.trim())
-        .map((line) => {
-          const [name, pid] = line.split(",");
-          return { name: name.replace(/"/g, ""), pid: pid.replace(/"/g, "") };
-        });
-      resolve(processes);
-    });
-  });
-});
-
-ipcMain.handle("kill-process", async (event, pid) => {
-  const { exec } = require("child_process");
-  return new Promise((resolve, reject) => {
-    exec(`taskkill /PID ${pid} /F`, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(true);
-    });
-  });
-});
-
-// Get running processes
-ipcMain.handle("get-running-processes", async () => {
-  return Array.from(runningProcesses.values());
-});
-
-// Stop a specific process
-ipcMain.handle("stop-process", async (event, pid) => {
-  try {
-    const { exec } = require("child_process");
-    await new Promise((resolve, reject) => {
-      exec(`taskkill /PID ${pid} /F`, (error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(true);
-      });
-    });
-
-    // Remove from running processes
-    runningProcesses.delete(pid);
-    return { success: true };
-  } catch (error) {
-    console.error("Failed to stop process:", error);
-    throw error;
-  }
-});
-
-// Launch Tarkov with SPT-AKI client
 ipcMain.handle("launch-tarkov", async (event, userSptPath = null) => {
   try {
     const { spawn } = require("child_process");
 
     console.log("🔍 Debug: Received userSptPath:", userSptPath);
-    console.log("🔍 Debug: userSptPath type:", typeof userSptPath);
-    console.log(
-      "🔍 Debug: userSptPath length:",
-      userSptPath ? userSptPath.length : 0
-    );
 
-    let sptPath = null;
-
-    // First, try to use the user-specified path if provided
-    if (userSptPath) {
-      if (fs.existsSync(userSptPath)) {
-        sptPath = userSptPath;
-        console.log("✅ Using user-specified SPT path:", sptPath);
-      } else {
-        // Try to find the launcher in the same directory with different names
-        const userDir = path.dirname(userSptPath);
-        const possibleLauncherNames = [
-          "Aki.Launcher.exe",
-          "SPT.Launcher.exe",
-          "Launcher.exe",
-          "SPT.exe",
-        ];
-
-        for (const launcherName of possibleLauncherNames) {
-          const potentialPath = path.join(userDir, launcherName);
-          if (fs.existsSync(potentialPath)) {
-            sptPath = potentialPath;
-            console.log("✅ Found launcher with different name:", sptPath);
-            break;
-          }
-        }
-
-        if (!sptPath) {
-          console.log("❌ User path exists but file not found:", userSptPath);
-          console.log(
-            "❌ File exists check result:",
-            fs.existsSync(userSptPath)
-          );
-        }
-      }
-    }
-
-    if (!sptPath) {
-      // Fall back to automatic detection
-      console.log(
-        "⚠️ User path not found or invalid, trying automatic detection..."
-      );
-
-      // Common SPT-AKI installation paths with multiple launcher names
-      const possibleLauncherNames = [
-        "Aki.Launcher.exe",
-        "SPT.Launcher.exe",
-        "Launcher.exe",
-        "SPT.exe",
-      ];
-
-      const possiblePaths = [
-        // SPT-AKI launcher paths
-        "C:\\SPT",
-        "D:\\SPT",
-        "E:\\SPT",
-        "F:\\SPT",
-        // Alternative SPT folder names
-        "C:\\SPT-AKI",
-        "D:\\SPT-AKI",
-        "E:\\SPT-AKI",
-        "F:\\SPT-AKI",
-        // User Documents folder
-        path.join(process.env.USERPROFILE || "", "Documents", "SPT"),
-        path.join(process.env.USERPROFILE || "", "Documents", "SPT-AKI"),
-        // Desktop folder
-        path.join(process.env.USERPROFILE || "", "Desktop", "SPT"),
-        path.join(process.env.USERPROFILE || "", "Desktop", "SPT-AKI"),
-      ];
-
-      // Check each directory for any of the possible launcher names
-      for (const basePath of possiblePaths) {
-        if (fs.existsSync(basePath)) {
-          for (const launcherName of possibleLauncherNames) {
-            const potentialPath = path.join(basePath, launcherName);
-            if (fs.existsSync(potentialPath)) {
-              sptPath = potentialPath;
-              console.log("✅ Found launcher in automatic detection:", sptPath);
-              break;
-            }
-          }
-          if (sptPath) break;
-        }
-      }
-    }
+    const sptPath = findSptInstallation(userSptPath);
 
     if (!sptPath) {
       return {
@@ -862,14 +623,12 @@ ipcMain.handle("launch-tarkov", async (event, userSptPath = null) => {
 
     console.log("Launching SPT-AKI from:", sptPath);
 
-    // Launch SPT-AKI launcher (which will then launch Tarkov with mods)
     const sptProcess = spawn(sptPath, [], {
       detached: true,
       stdio: "ignore",
-      cwd: path.dirname(sptPath), // Set working directory to SPT folder
+      cwd: path.dirname(sptPath),
     });
 
-    // Don't wait for the process to exit
     sptProcess.unref();
 
     return { success: true, pid: sptProcess.pid };
