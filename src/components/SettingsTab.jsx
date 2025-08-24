@@ -15,6 +15,12 @@ function SettingsTab() {
     backgroundChecks: true,
   });
 
+  const [saveFeedback, setSaveFeedback] = useState({
+    show: false,
+    message: "",
+    type: "success", // "success" or "error"
+  });
+
   const [updateStatus, setUpdateStatus] = useState({
     checking: false,
     lastChecked: null,
@@ -33,6 +39,19 @@ function SettingsTab() {
     installCompleted: false,
     currentVersion: null,
   });
+
+  // Load saved settings from localStorage
+  useEffect(() => {
+    const savedSettings = localStorage.getItem("appSettings");
+    if (savedSettings) {
+      try {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSettings(parsedSettings);
+      } catch (error) {
+        console.error("Failed to parse saved settings:", error);
+      }
+    }
+  }, []);
 
   // Get current app version and set up event listeners
   useEffect(() => {
@@ -136,8 +155,30 @@ function SettingsTab() {
   };
 
   const saveSettings = () => {
-    localStorage.setItem("appSettings", JSON.stringify(settings));
-    // Show success message
+    try {
+      localStorage.setItem("appSettings", JSON.stringify(settings));
+      console.log("Settings saved successfully:", settings);
+      setSaveFeedback({
+        show: true,
+        message: "Settings saved successfully!",
+        type: "success",
+      });
+      // Hide feedback after 3 seconds
+      setTimeout(() => {
+        setSaveFeedback({ show: false, message: "", type: "success" });
+      }, 3000);
+    } catch (error) {
+      console.error("Failed to save settings:", error);
+      setSaveFeedback({
+        show: true,
+        message: "Failed to save settings",
+        type: "error",
+      });
+      // Hide feedback after 3 seconds
+      setTimeout(() => {
+        setSaveFeedback({ show: false, message: "", type: "success" });
+      }, 3000);
+    }
   };
 
   const handleManualUpdateCheck = async () => {
@@ -360,6 +401,23 @@ function SettingsTab() {
                </div>
              </div>
           </div>
+
+          {/* Save Feedback */}
+          {saveFeedback.show && (
+            <div className={`p-3 rounded-md ${
+              saveFeedback.type === "success" 
+                ? "bg-green-100 dark:bg-green-900/20 border border-green-300 dark:border-green-700" 
+                : "bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700"
+            }`}>
+              <p className={`text-sm ${
+                saveFeedback.type === "success" 
+                  ? "text-green-700 dark:text-green-300" 
+                  : "text-red-700 dark:text-red-300"
+              }`}>
+                {saveFeedback.message}
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-end">
             <button

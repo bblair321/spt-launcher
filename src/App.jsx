@@ -35,6 +35,7 @@ const ICON_MAP = {
 };
 
 function App() {
+  const { theme, resolvedTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("launcher");
   const [isMaximized, setIsMaximized] = useState(false);
 
