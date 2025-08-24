@@ -4,14 +4,16 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
     min-height: 100vh;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
   
   #root {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
   }
 }
 

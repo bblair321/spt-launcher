@@ -11,6 +11,7 @@ import {
   Square,
   Maximize,
 } from "lucide-react";
+import { useTheme } from "./hooks/useTheme";
 
 // Constants
 import { TABS } from "./constants";
@@ -75,7 +76,7 @@ function App() {
   }, [activeTab, tabConfig]);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-300">
       {/* Fixed Custom Title Bar */}
       <div
         className="fixed top-0 left-0 right-0 z-50 bg-blue-600 text-white h-12 flex items-center justify-between px-4 select-none"
@@ -122,7 +123,7 @@ function App() {
       </div>
 
       {/* Sticky Tab Navigation */}
-      <div className="sticky top-12 z-40 bg-white border-b border-gray-200 shadow-sm">
+      <div className="sticky top-12 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-300">
         <div className="flex space-x-1 px-4 py-2">
           {tabConfig.map((tab) => {
             const Icon = ICON_MAP[tab.icon];
@@ -133,7 +134,7 @@ function App() {
                 className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all ${
                   activeTab === tab.id
                     ? "bg-blue-600 text-white shadow-sm"
-                    : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
                 }`}
                 title={tab.name}
               >
@@ -146,7 +147,7 @@ function App() {
       </div>
 
       {/* Main Content with top margin to account for fixed header */}
-      <div className="flex-1 overflow-hidden bg-gray-50 mt-12">
+      <div className="flex-1 overflow-hidden mt-12 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
         <div className="h-full p-6">
           <ActiveComponent />
         </div>

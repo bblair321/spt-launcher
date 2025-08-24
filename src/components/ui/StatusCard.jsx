@@ -14,16 +14,20 @@ import { getStatusIcon, getStatusText } from "../../utils/statusUtils";
  */
 function StatusCard({ title, status, isRunning, onRefresh, children }) {
   return (
-    <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">{title}</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          {title}
+        </h2>
         <div className="flex items-center space-x-2">
           {getStatusIcon(status)}
-          <span className="font-medium">{getStatusText(status)}</span>
+          <span className="font-medium text-gray-900 dark:text-gray-100">
+            {getStatusText(status)}
+          </span>
           {onRefresh && (
             <button
               onClick={onRefresh}
-              className="ml-2 p-1 text-gray-500 hover:text-gray-700 transition-colors"
+              className="ml-2 p-1 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
               title="Refresh status"
             >
               <RefreshCw className="w-4 h-4" />
@@ -38,7 +42,9 @@ function StatusCard({ title, status, isRunning, onRefresh, children }) {
             isRunning ? "bg-green-500" : "bg-gray-400"
           }`}
         ></div>
-        <span>Status: {isRunning ? "Running" : "Stopped"}</span>
+        <span className="text-gray-900 dark:text-gray-100">
+          Status: {isRunning ? "Running" : "Stopped"}
+        </span>
       </div>
 
       {children}

@@ -1,6 +1,6 @@
 {
   "name": "spt-launcher-electron",
-  "version": "2.0.2",
+  "version": "2.0.0",
   "description": "SPT Launcher - A comprehensive desktop launcher for SPT-AKI with Fika co-op support",
   "author": "bblair321",
   "main": "electron/main.js",

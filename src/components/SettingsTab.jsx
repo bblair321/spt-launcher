@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw } from "lucide-react";
+import { Settings, Save, RefreshCw, Sun, Moon, Monitor } from "lucide-react";
+import { useTheme } from "../hooks/useTheme";
 
 function SettingsTab() {
+  const { theme, changeTheme } = useTheme();
+  
   const [settings, setSettings] = useState({
     autoStart: false,
     minimizeToTray: true,
@@ -10,7 +13,6 @@ function SettingsTab() {
     silentUpdates: false,
     autoInstallUpdates: true,
     backgroundChecks: true,
-    theme: "system",
   });
 
   const [updateStatus, setUpdateStatus] = useState({
@@ -240,34 +242,34 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Settings</h1>
-        <p className="text-gray-600">Configure your SPT Launcher preferences</p>
-        {updateStatus.currentVersion && (
-          <div className="mt-2 text-sm text-gray-500">
-            <span className="bg-gray-100 px-2 py-1 rounded-md font-mono">
-              v{updateStatus.currentVersion}
-            </span>
-          </div>
-        )}
-      </div>
+             <div className="text-center">
+         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">Settings</h1>
+         <p className="text-gray-600 dark:text-gray-400">Configure your SPT Launcher preferences</p>
+         {updateStatus.currentVersion && (
+           <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+             <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md font-mono">
+               v{updateStatus.currentVersion}
+             </span>
+           </div>
+         )}
+       </div>
 
       <div className="max-w-2xl mx-auto">
         {/* Application Settings Section */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm space-y-6">
-          <h2 className="text-xl font-semibold flex items-center space-x-2">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm space-y-6">
+          <h2 className="text-xl font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
             <Settings className="w-5 h-5" />
             <span>Application Settings</span>
           </h2>
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Auto-start with Windows</h3>
-                <p className="text-sm text-gray-600">
-                  Launch SPT Launcher when Windows starts
-                </p>
-              </div>
+                         <div className="flex items-center justify-between">
+               <div>
+                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Auto-start with Windows</h3>
+                 <p className="text-sm text-gray-600 dark:text-gray-400">
+                   Launch SPT Launcher when Windows starts
+                 </p>
+               </div>
               <input
                 type="checkbox"
                 checked={settings.autoStart}
@@ -278,13 +280,13 @@ function SettingsTab() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Minimize to System Tray</h3>
-                <p className="text-sm text-gray-600">
-                  Keep launcher running in background
-                </p>
-              </div>
+                         <div className="flex items-center justify-between">
+               <div>
+                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Minimize to System Tray</h3>
+                 <p className="text-sm text-gray-600 dark:text-gray-400">
+                   Keep launcher running in background
+                 </p>
+               </div>
               <input
                 type="checkbox"
                 checked={settings.minimizeToTray}
@@ -295,13 +297,13 @@ function SettingsTab() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Check for Updates</h3>
-                <p className="text-sm text-gray-600">
-                  Automatically check for launcher updates
-                </p>
-              </div>
+                         <div className="flex items-center justify-between">
+               <div>
+                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Check for Updates</h3>
+                 <p className="text-sm text-gray-600 dark:text-gray-400">
+                   Automatically check for launcher updates
+                 </p>
+               </div>
               <input
                 type="checkbox"
                 checked={settings.checkForUpdates}
@@ -312,23 +314,51 @@ function SettingsTab() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Theme</h3>
-                <p className="text-sm text-gray-600">
-                  Choose your preferred appearance
-                </p>
-              </div>
-              <select
-                value={settings.theme}
-                onChange={(e) => handleSettingChange("theme", e.target.value)}
-                className="rounded border-gray-300 px-3 py-1"
-              >
-                <option value="system">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </div>
+                                                   <div className="space-y-3">
+                <div>
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100">Theme</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Choose your preferred appearance
+                  </p>
+                </div>
+               <div className="grid grid-cols-3 gap-3">
+                 <button
+                   onClick={() => changeTheme('light')}
+                   className={`p-4 rounded-lg border-2 transition-all ${
+                     theme === 'light'
+                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                   }`}
+                 >
+                   <Sun className="w-6 h-6 mx-auto mb-2 text-yellow-600" />
+                   <span className="text-sm font-medium">Light</span>
+                 </button>
+                 
+                 <button
+                   onClick={() => changeTheme('dark')}
+                   className={`p-4 rounded-lg border-2 transition-all ${
+                     theme === 'dark'
+                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                   }`}
+                 >
+                   <Moon className="w-6 h-6 mx-auto mb-2 text-blue-600" />
+                   <span className="text-sm font-medium">Dark</span>
+                 </button>
+                 
+                 <button
+                   onClick={() => changeTheme('system')}
+                   className={`p-4 rounded-lg border-2 transition-all ${
+                     theme === 'system'
+                       ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                       : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                   }`}
+                 >
+                   <Monitor className="w-6 h-6 mx-auto mb-2 text-gray-600" />
+                   <span className="text-sm font-medium">System</span>
+                 </button>
+               </div>
+             </div>
           </div>
 
           <div className="flex justify-end">
@@ -342,22 +372,22 @@ function SettingsTab() {
           </div>
         </div>
 
-        {/* Update Management Section */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm space-y-6">
-          <h2 className="text-xl font-semibold flex items-center space-x-2">
-            <RefreshCw className="w-5 h-5" />
-            <span>Update Management</span>
-          </h2>
+                                   {/* Update Management Section */}
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm space-y-6">
+            <h2 className="text-xl font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+              <RefreshCw className="w-5 h-5" />
+              <span>Update Management</span>
+            </h2>
 
           {/* Update Automation Settings */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Auto-download Updates</h3>
-                <p className="text-sm text-gray-600">
-                  Automatically download updates when available
-                </p>
-              </div>
+                         <div className="flex items-center justify-between">
+               <div>
+                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Auto-download Updates</h3>
+                 <p className="text-sm text-gray-600 dark:text-gray-400">
+                   Automatically download updates when available
+                 </p>
+               </div>
               <input
                 type="checkbox"
                 checked={settings.autoDownloadUpdates}
@@ -368,13 +398,13 @@ function SettingsTab() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Silent Updates</h3>
-                <p className="text-sm text-gray-600">
-                  Download updates in background without notifications
-                </p>
-              </div>
+                         <div className="flex items-center justify-between">
+               <div>
+                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Silent Updates</h3>
+                 <p className="text-sm text-gray-600 dark:text-gray-400">
+                   Download updates in background without notifications
+                 </p>
+               </div>
               <input
                 type="checkbox"
                 checked={settings.silentUpdates}
@@ -385,13 +415,13 @@ function SettingsTab() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Auto-install Updates</h3>
-                <p className="text-sm text-gray-600">
-                  Automatically install updates after download
-                </p>
-              </div>
+                         <div className="flex items-center justify-between">
+               <div>
+                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Auto-install Updates</h3>
+                 <p className="text-sm text-gray-600 dark:text-gray-400">
+                   Automatically install updates after download
+                 </p>
+               </div>
               <input
                 type="checkbox"
                 checked={settings.autoInstallUpdates}
@@ -402,13 +432,13 @@ function SettingsTab() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium">Background Update Checks</h3>
-                <p className="text-sm text-gray-600">
-                  Check for updates while launcher is running
-                </p>
-              </div>
+                         <div className="flex items-center justify-between">
+               <div>
+                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Background Update Checks</h3>
+                 <p className="text-sm text-gray-600 dark:text-gray-400">
+                   Check for updates while launcher is running
+                 </p>
+               </div>
               <input
                 type="checkbox"
                 checked={settings.backgroundChecks}
@@ -422,11 +452,11 @@ function SettingsTab() {
 
           {/* Manual Update Controls */}
           <div className="border-t pt-4">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-medium">Manual Update Check</h3>
-                <p className="text-sm text-gray-600">Check for updates now</p>
-              </div>
+                         <div className="flex items-center justify-between mb-4">
+               <div>
+                 <h3 className="font-medium text-gray-900 dark:text-gray-100">Manual Update Check</h3>
+                 <p className="text-sm text-gray-600 dark:text-gray-400">Check for updates now</p>
+               </div>
               <button
                 onClick={handleManualUpdateCheck}
                 disabled={updateStatus.checking}
@@ -581,31 +611,6 @@ function SettingsTab() {
               </div>
             </div>
           )}
-        </div>
-
-        {/* Quick Actions Section */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button
-              onClick={() => window.electronAPI.selectFile()}
-              className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
-            >
-              <h3 className="font-medium mb-1">Select Executable</h3>
-              <p className="text-sm text-gray-600">
-                Choose a program to launch
-              </p>
-            </button>
-            <button
-              onClick={() => window.electronAPI.selectFolder()}
-              className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-left"
-            >
-              <h3 className="font-medium mb-1">Select Folder</h3>
-              <p className="text-sm text-gray-600">
-                Choose a working directory
-              </p>
-            </button>
-          </div>
         </div>
       </div>
     </div>

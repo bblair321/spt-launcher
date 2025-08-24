@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   selectFolder: () => ipcRenderer.invoke("select-folder"),
   launchProcess: (filePath, args) =>
     ipcRenderer.invoke("launch-process", filePath, args),
+  launchTarkov: (sptPath) => ipcRenderer.invoke("launch-tarkov", sptPath),
+  stopProcess: (pid) => ipcRenderer.invoke("stop-process", pid),
+  getSptConfig: (sptDir) => ipcRenderer.invoke("get-spt-config", sptDir),
+  updateSptConfig: (configData, sptDir) =>
+    ipcRenderer.invoke("update-spt-config", configData, sptDir),
+  getRunningProcesses: () => ipcRenderer.invoke("get-running-processes"),
 
   // Update events
   onUpdateStatus: (callback) => ipcRenderer.on("update-status", callback),
@@ -30,6 +36,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("update-download-progress", callback),
   onUpdateDownloaded: (callback) =>
     ipcRenderer.on("update-downloaded", callback),
+
+  // Process management
+  onProcessOutput: (callback) => ipcRenderer.on("process-output", callback),
+  removeProcessOutputListener: (callback) =>
+    ipcRenderer.removeListener("process-output", callback),
 
   // Remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),

@@ -257,8 +257,10 @@ function LauncherTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">SPT Launcher</h1>
-        <p className="text-gray-600">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+          SPT Launcher
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">
           Launch and manage your SPT-AKI installation
         </p>
       </div>
@@ -273,8 +275,8 @@ function LauncherTab() {
 
       {/* Path Configuration */}
       <div className="grid grid-cols-1 gap-6">
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-          <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
             <Play className="w-5 h-5" />
             <span>SPT Launcher Executable</span>
           </h3>
@@ -311,9 +313,9 @@ function LauncherTab() {
       </div>
 
       {/* Fika Configuration */}
-      <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold flex items-center space-x-2">
+          <h3 className="text-lg font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
             <Server className="w-5 h-5" />
             <span>Fika Co-op Configuration</span>
           </h3>
@@ -335,7 +337,10 @@ function LauncherTab() {
                 onChange={(e) => handleFikaToggle(e.target.checked)}
                 className="rounded border-gray-300"
               />
-              <label htmlFor="enableFika" className="text-sm font-medium">
+              <label
+                htmlFor="enableFika"
+                className="text-sm font-medium text-gray-900 dark:text-gray-100"
+              >
                 Enable Fika Co-op Mode
               </label>
             </div>
@@ -343,7 +348,7 @@ function LauncherTab() {
             {fikaConfig.enableFika && (
               <>
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                     Server Address
                   </label>
                   <input
@@ -356,12 +361,12 @@ function LauncherTab() {
                       }))
                     }
                     placeholder="e.g., 192.168.1.100 or server.example.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                     Server Port
                   </label>
                   <input
@@ -374,7 +379,7 @@ function LauncherTab() {
                       }))
                     }
                     placeholder="6969"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                 </div>
               </>
@@ -398,12 +403,14 @@ function LauncherTab() {
               </button>
             </div>
 
-            <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-              <p className="font-medium mb-1">Configuration Location:</p>
-              <p className="font-mono text-xs">
+            <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+              <p className="font-medium mb-1 text-gray-900 dark:text-gray-100">
+                Configuration Location:
+              </p>
+              <p className="font-mono text-xs text-gray-700 dark:text-gray-300">
                 {configPath || getConfigPath(parseSptDirectory(launcherPath))}
               </p>
-              <p className="mt-2">
+              <p className="mt-2 text-gray-600 dark:text-gray-400">
                 This configuration will be applied to your SPT launcher's
                 config.json file. When Fika mode is enabled, the launcher will
                 connect to the specified server.
@@ -414,8 +421,10 @@ function LauncherTab() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
+          Quick Actions
+        </h3>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <button
             onClick={() => setLauncherPath("")}

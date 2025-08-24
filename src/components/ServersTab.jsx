@@ -417,13 +417,24 @@ function ServersTab() {
     };
 
     // Listen for process output events
-    if (window.electronAPI) {
-      window.electronAPI.onProcessOutput(handleProcessOutput);
+    if (window.electronAPI && window.electronAPI.onProcessOutput) {
+      try {
+        window.electronAPI.onProcessOutput(handleProcessOutput);
+      } catch (error) {
+        console.warn("Failed to register process output listener:", error);
+      }
     }
 
     return () => {
-      if (window.electronAPI) {
-        window.electronAPI.removeProcessOutputListener(handleProcessOutput);
+      if (
+        window.electronAPI &&
+        window.electronAPI.removeProcessOutputListener
+      ) {
+        try {
+          window.electronAPI.removeProcessOutputListener(handleProcessOutput);
+        } catch (error) {
+          console.warn("Failed to remove process output listener:", error);
+        }
       }
     };
   }, [runningServers]);
@@ -442,25 +453,25 @@ function ServersTab() {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           Server Management
         </h1>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Configure and manage your SPT-AKI servers
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Server Form */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
             <Settings className="w-5 h-5" />
             <span>{isEditing ? "Edit Server" : "Add New Server"}</span>
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                 Server Name
               </label>
               <input
@@ -470,13 +481,13 @@ function ServersTab() {
                   setFormData((prev) => ({ ...prev, name: e.target.value }))
                 }
                 placeholder="My SPT Server"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                 Server Type
               </label>
               <div className="flex space-x-2">
@@ -517,7 +528,7 @@ function ServersTab() {
 
             {formData.serverType === "local" ? (
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                   Server Executable
                 </label>
                 <div className="flex space-x-2">
@@ -528,7 +539,7 @@ function ServersTab() {
                       setFormData((prev) => ({ ...prev, path: e.target.value }))
                     }
                     placeholder="e.g., D:\\SPT\\Aki.Server.exe"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     required={formData.serverType === "local"}
                   />
                   <button
@@ -543,7 +554,7 @@ function ServersTab() {
             ) : (
               <>
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                     Remote Server Address
                   </label>
                   <input
@@ -556,12 +567,12 @@ function ServersTab() {
                       }))
                     }
                     placeholder="e.g., 192.168.1.100 or server.example.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     required={formData.serverType === "remote"}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                     Remote Server Port
                   </label>
                   <input
@@ -574,7 +585,7 @@ function ServersTab() {
                       }))
                     }
                     placeholder="6969"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     required={formData.serverType === "remote"}
                   />
                 </div>
@@ -582,7 +593,9 @@ function ServersTab() {
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-2">Port</label>
+              <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
+                Port
+              </label>
               <input
                 type="number"
                 value={formData.port}
@@ -590,13 +603,13 @@ function ServersTab() {
                   setFormData((prev) => ({ ...prev, port: e.target.value }))
                 }
                 placeholder="6969"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                 Description
               </label>
               <textarea
@@ -609,7 +622,7 @@ function ServersTab() {
                 }
                 placeholder="Optional server description..."
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
 
@@ -626,7 +639,10 @@ function ServersTab() {
                 }
                 className="rounded border-gray-300"
               />
-              <label htmlFor="autoStart" className="text-sm font-medium">
+              <label
+                htmlFor="autoStart"
+                className="text-sm font-medium text-gray-900 dark:text-gray-100"
+              >
                 Auto-start with launcher
               </label>
             </div>
@@ -664,14 +680,14 @@ function ServersTab() {
         </div>
 
         {/* Server List */}
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
             <Server className="w-5 h-5" />
             <span>Configured Servers</span>
           </h2>
 
           {servers.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <Server className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p>No servers configured yet</p>
               <p className="text-sm">Add your first server using the form</p>
@@ -744,7 +760,7 @@ function ServersTab() {
                     </div>
                   </div>
 
-                  <div className="text-sm text-gray-600 space-y-1">
+                  <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                     {runningServers.has(server.id) && (
                       <p className="text-green-600 font-medium">🟢 Running</p>
                     )}
@@ -785,9 +801,9 @@ function ServersTab() {
       </div>
 
       {/* SPT-AKI Settings */}
-      <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold flex items-center space-x-2">
+          <h3 className="text-lg font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
             <Zap className="w-5 h-5" />
             <span>SPT-AKI Settings</span>
           </h3>
@@ -802,7 +818,7 @@ function ServersTab() {
         {showSptSettings && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">
+              <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                 SPT-AKI Launcher Path
               </label>
               <div className="flex space-x-2">
@@ -811,7 +827,7 @@ function ServersTab() {
                   value={sptPath}
                   onChange={(e) => setSptPath(e.target.value)}
                   placeholder="e.g., C:\\SPT\\Aki.Launcher.exe"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
                 <button
                   type="button"
@@ -821,7 +837,7 @@ function ServersTab() {
                   <FileText className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 Path to Aki.Launcher.exe. This is required for Quick Connect to
                 work properly.
               </p>
@@ -863,9 +879,9 @@ function ServersTab() {
       </div>
 
       {/* Console Output */}
-      <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold flex items-center space-x-2">
+          <h3 className="text-lg font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
             <Settings className="w-5 h-5" />
             <span>Server Console Output</span>
             {consoleOutput.length > 0 && (
@@ -926,7 +942,7 @@ function ServersTab() {
           className="bg-gray-900 text-green-400 p-4 rounded-md font-mono text-sm h-64 overflow-y-auto"
         >
           {consoleOutput.length === 0 ? (
-            <div className="text-gray-500 text-center py-8">
+            <div className="text-gray-500 dark:text-gray-400 text-center py-8">
               <p>No server output yet</p>
               <p className="text-xs">Launch a server to see console output</p>
             </div>
