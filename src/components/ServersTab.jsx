@@ -10,7 +10,6 @@ import {
   Edit,
   Copy,
   FileText,
-  Zap,
 } from "lucide-react";
 
 function ServersTab() {
@@ -32,20 +31,12 @@ function ServersTab() {
   const [autoScroll, setAutoScroll] = useState(true);
   const consoleRef = React.useRef(null);
   const lastOutputRef = React.useRef(0);
-  const [sptPath, setSptPath] = useState("");
-  const [showSptSettings, setShowSptSettings] = useState(false);
 
   // Load saved servers from localStorage
   useEffect(() => {
     const savedServers = localStorage.getItem("sptServers");
     if (savedServers) {
       setServers(JSON.parse(savedServers));
-    }
-
-    // Load saved SPT path
-    const savedSptPath = localStorage.getItem("sptPath");
-    if (savedSptPath) {
-      setSptPath(savedSptPath);
     }
   }, []);
 
@@ -63,21 +54,6 @@ function ServersTab() {
         }
       } catch (error) {
         console.error("Failed to select server path:", error);
-      }
-    }
-  };
-
-  const selectSptPath = async () => {
-    if (window.electronAPI) {
-      try {
-        const path = await window.electronAPI.selectFile();
-        if (path) {
-          setSptPath(path);
-          // Save to localStorage
-          localStorage.setItem("sptPath", path);
-        }
-      } catch (error) {
-        console.error("Failed to select SPT path:", error);
       }
     }
   };
@@ -255,14 +231,14 @@ function ServersTab() {
 
       // Launch Tarkov with SPT-AKI client
       if (window.electronAPI && window.electronAPI.launchTarkov) {
-        addConsoleOutput(`🔍 Debug: SPT path being sent: ${sptPath}`, "info");
-        addConsoleOutput(`🔍 Debug: SPT path type: ${typeof sptPath}`, "info");
-        addConsoleOutput(
-          `🔍 Debug: SPT path length: ${sptPath ? sptPath.length : 0}`,
-          "info"
-        );
+        // addConsoleOutput(`🔍 Debug: SPT path being sent: ${sptPath}`, "info"); // This line is removed
+        // addConsoleOutput(`🔍 Debug: SPT path type: ${typeof sptPath}`, "info"); // This line is removed
+        // addConsoleOutput( // This line is removed
+        //   `🔍 Debug: SPT path length: ${sptPath ? sptPath.length : 0}`,
+        //   "info"
+        // );
 
-        const result = await window.electronAPI.launchTarkov(sptPath);
+        const result = await window.electronAPI.launchTarkov(); // Removed sptPath argument
         if (result.success) {
           addConsoleOutput(`✓ Tarkov launched successfully!`, "success");
           addConsoleOutput(
@@ -709,7 +685,7 @@ function ServersTab() {
                             className="p-1 hover:bg-gray-200 rounded transition-colors"
                             title="Quick Connect (Launch Tarkov + Connect)"
                           >
-                            <Zap className="w-4 h-4 text-yellow-500" />
+                            <Play className="w-4 h-4 text-yellow-500" />
                           </button>
                           <button
                             onClick={() => testRemoteServer(server)}
@@ -800,84 +776,6 @@ function ServersTab() {
         </div>
       </div>
 
-      {/* SPT-AKI Settings */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Zap className="w-5 h-5" />
-            <span>SPT-AKI Settings</span>
-          </h3>
-          <button
-            onClick={() => setShowSptSettings(!showSptSettings)}
-            className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
-            {showSptSettings ? "Hide" : "Configure"}
-          </button>
-        </div>
-
-        {showSptSettings && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
-                SPT-AKI Launcher Path
-              </label>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={sptPath}
-                  onChange={(e) => setSptPath(e.target.value)}
-                  placeholder="e.g., C:\\SPT\\Aki.Launcher.exe"
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                />
-                <button
-                  type="button"
-                  onClick={selectSptPath}
-                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Path to Aki.Launcher.exe. This is required for Quick Connect to
-                work properly.
-              </p>
-            </div>
-
-            <div className="flex space-x-2">
-              <button
-                onClick={() => {
-                  if (sptPath) {
-                    localStorage.setItem("sptPath", sptPath);
-                    addConsoleOutput(
-                      "✓ SPT-AKI path saved successfully",
-                      "success"
-                    );
-                  } else {
-                    addConsoleOutput(
-                      "✗ Please select a valid SPT-AKI path first",
-                      "error"
-                    );
-                  }
-                }}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-              >
-                Save Path
-              </button>
-              <button
-                onClick={() => {
-                  setSptPath("");
-                  localStorage.removeItem("sptPath");
-                  addConsoleOutput("SPT-AKI path cleared", "info");
-                }}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-              >
-                Clear Path
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Console Output */}
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex items-center justify-between mb-4">
@@ -904,7 +802,7 @@ function ServersTab() {
               </span>
             </div>
           </h3>
-          <div className="flex space-x-2">
+          <div className="flex items-center space-x-2">
             {!autoScroll && (
               <button
                 onClick={() => setAutoScroll(true)}

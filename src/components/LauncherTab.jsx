@@ -419,36 +419,6 @@ function LauncherTab() {
           </div>
         )}
       </div>
-
-      {/* Quick Actions */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">
-          Quick Actions
-        </h3>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <button
-            onClick={() => setLauncherPath("")}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-          >
-            Clear Launcher Executable
-          </button>
-          <button
-            onClick={() => {
-              setLauncherPath("");
-              localStorage.removeItem("launcherPath");
-            }}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-          >
-            Reset Launcher Path
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

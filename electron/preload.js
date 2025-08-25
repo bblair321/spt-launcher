@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   removeProcessOutputListener: (callback) =>
     ipcRenderer.removeListener("process-output", callback),
 
+  // SPT Log reading
+  readSptLogs: (sptPath, maxLines) =>
+    ipcRenderer.invoke("readSptLogs", sptPath, maxLines),
+  scanSptLogDirectory: (sptPath) =>
+    ipcRenderer.invoke("scanSptLogDirectory", sptPath),
+
   // Remove listeners
   removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
 });

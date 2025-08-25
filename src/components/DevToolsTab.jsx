@@ -1,25 +1,11 @@
 import React, { useState, useEffect } from "react";
-import {
-  Wrench,
-  Terminal,
-  FileText,
-  Database,
-  RefreshCw,
-  Trash2,
-  Download,
-  Upload,
-  Eye,
-  Settings,
-  Code,
-  Monitor,
-} from "lucide-react";
+import { Wrench, Terminal, Database, RefreshCw, Monitor } from "lucide-react";
 import { useToastContext } from "../contexts/ToastContext";
 
 function DevToolsTab() {
   const { showSuccess, showError, showInfo } = useToastContext();
   const [activeTool, setActiveTool] = useState(null);
   const [processes, setProcesses] = useState([]);
-  const [logs, setLogs] = useState([]);
   const [configData, setConfigData] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -172,40 +158,8 @@ function DevToolsTab() {
     fetchProcesses();
   }, []);
 
-  // Load logs and config data
+  // Load config data
   useEffect(() => {
-    // Simulate logs
-    setLogs([
-      {
-        id: 1,
-        timestamp: "2024-01-15 14:30:22",
-        level: "INFO",
-        message: "SPT-AKI Server started successfully",
-        source: "Server",
-      },
-      {
-        id: 2,
-        timestamp: "2024-01-15 14:30:25",
-        level: "INFO",
-        message: "Database connection established",
-        source: "Database",
-      },
-      {
-        id: 3,
-        timestamp: "2024-01-15 14:31:00",
-        level: "WARN",
-        message: "High memory usage detected",
-        source: "System",
-      },
-      {
-        id: 4,
-        timestamp: "2024-01-15 14:31:15",
-        level: "ERROR",
-        message: "Failed to load addon: SPT Realism",
-        source: "AddonManager",
-      },
-    ]);
-
     // Simulate config data
     setConfigData({
       server: { port: 6969, host: "127.0.0.1", maxPlayers: 100 },
@@ -266,23 +220,6 @@ function DevToolsTab() {
         error
       );
     }
-  };
-
-  const clearLogs = () => {
-    setLogs([]);
-  };
-
-  const exportLogs = () => {
-    const logText = logs
-      .map((log) => `[${log.timestamp}] ${log.level}: ${log.message}`)
-      .join("\n");
-    const blob = new Blob([logText], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "spt-logs.txt";
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const renderProcessMonitor = () => (
@@ -414,61 +351,6 @@ function DevToolsTab() {
     </div>
   );
 
-  const renderLogViewer = () => (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          System Logs
-        </h3>
-        <div className="flex space-x-2">
-          <button
-            onClick={exportLogs}
-            className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 flex items-center space-x-1"
-          >
-            <Download className="w-3 h-3" />
-            <span>Export</span>
-          </button>
-          <button
-            onClick={clearLogs}
-            className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 flex items-center space-x-1"
-          >
-            <Trash2 className="w-3 h-3" />
-            <span>Clear</span>
-          </button>
-          <button
-            onClick={() => setActiveTool(null)}
-            className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-sm hover:bg-gray-300 dark:hover:bg-gray-600"
-          >
-            Back to Tools
-          </button>
-        </div>
-      </div>
-
-      <div className="max-h-96 overflow-y-auto space-y-2">
-        {logs.map((log) => (
-          <div
-            key={log.id}
-            className={`p-3 rounded text-sm font-mono ${
-              log.level === "ERROR"
-                ? "bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300"
-                : log.level === "WARN"
-                ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300"
-                : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="font-medium">
-                [{log.timestamp}] {log.level}
-              </span>
-              <span className="text-xs opacity-75">{log.source}</span>
-            </div>
-            <div className="mt-1">{log.message}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
   const renderConfigEditor = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -511,14 +393,13 @@ function DevToolsTab() {
   );
 
   if (activeTool === "process") return renderProcessMonitor();
-  if (activeTool === "logs") return renderLogViewer();
   if (activeTool === "config") return renderConfigEditor();
 
   return (
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          Developer Tools
+          Tools
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
           Advanced tools for developers and power users
@@ -539,35 +420,6 @@ function DevToolsTab() {
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             Open Process Monitor
-          </button>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <FileText className="w-5 h-5" />
-            <span>Log Viewer</span>
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            View and analyze SPT server and client logs
-          </p>
-          <button
-            onClick={() => setActiveTool("logs")}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Open Log Viewer
-          </button>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Database className="w-5 h-5" />
-            <span>Database Tools</span>
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Manage SPT database and profile data
-          </p>
-          <button className="px-4 py-2 bg-gray-400 text-white rounded-md cursor-not-allowed">
-            Coming Soon
           </button>
         </div>
 

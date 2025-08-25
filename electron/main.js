@@ -836,3 +836,197 @@ ipcMain.handle("launch-tarkov", async (event, userSptPath = null) => {
     };
   }
 });
+
+// SPT Log Reading Functionality
+ipcMain.handle("scanSptLogDirectory", async (event, userSptPath = null) => {
+  try {
+    const sptPath = findSptInstallation(userSptPath);
+    if (!sptPath) {
+      return { success: false, error: "SPT installation not found" };
+    }
+
+    const logsDir = path.join(path.dirname(sptPath), "Logs");
+    console.log("🔍 Scanning SPT logs directory:", logsDir);
+
+    if (!fs.existsSync(logsDir)) {
+      return {
+        success: false,
+        error: "SPT Logs directory not found",
+        files: [],
+      };
+    }
+
+    const files = fs
+      .readdirSync(logsDir)
+      .filter((file) => file.endsWith(".txt") && file.startsWith("log_"))
+      .sort((a, b) => {
+        // Sort by modification time (newest first)
+        const statA = fs.statSync(path.join(logsDir, a));
+        const statB = fs.statSync(path.join(logsDir, b));
+        return statB.mtime.getTime() - statA.mtime.getTime();
+      });
+
+    console.log(`✅ Found ${files.length} log files in SPT directory`);
+    return { success: true, files, logsDir };
+  } catch (error) {
+    console.error("❌ Failed to scan SPT log directory:", error);
+    return { success: false, error: error.message, files: [] };
+  }
+});
+
+ipcMain.handle(
+  "readSptLogs",
+  async (event, userSptPath = null, maxLines = 1000) => {
+    try {
+      const sptPath = findSptInstallation(userSptPath);
+      if (!sptPath) {
+        return { success: false, error: "SPT installation not found" };
+      }
+
+      const logsDir = path.join(path.dirname(sptPath), "Logs");
+      console.log("🔍 Reading SPT logs from:", logsDir);
+
+      if (!fs.existsSync(logsDir)) {
+        return {
+          success: false,
+          error: "SPT Logs directory not found",
+          logs: [],
+        };
+      }
+
+      // Get all log files
+      const logFiles = fs
+        .readdirSync(logsDir)
+        .filter((file) => file.endsWith(".txt") && file.startsWith("log_"))
+        .sort((a, b) => {
+          const statA = fs.statSync(path.join(logsDir, a));
+          const statB = fs.statSync(path.join(logsDir, b));
+          return statB.mtime.getTime() - statA.mtime.getTime();
+        });
+
+      if (logFiles.length === 0) {
+        return { success: true, logs: [], message: "No log files found" };
+      }
+
+      const allLogs = [];
+      let logId = 1;
+
+      // Read the most recent log files first
+      for (const logFile of logFiles.slice(0, 3)) {
+        // Limit to 3 most recent files
+        const filePath = path.join(logsDir, logFile);
+        console.log(`📖 Reading log file: ${logFile}`);
+
+        try {
+          const content = fs.readFileSync(filePath, "utf8");
+          const lines = content.split("\n").filter((line) => line.trim());
+
+          // Parse each line and extract log information
+          for (const line of lines) {
+            if (line.trim() && allLogs.length < maxLines) {
+              const parsedLog = parseSptLogLine(line, logFile);
+              if (parsedLog) {
+                parsedLog.id = logId++;
+                parsedLog.file = logFile;
+                allLogs.push(parsedLog);
+              }
+            }
+          }
+        } catch (fileError) {
+          console.error(`❌ Error reading log file ${logFile}:`, fileError);
+        }
+      }
+
+      console.log(`✅ Successfully parsed ${allLogs.length} log entries`);
+      return { success: true, logs: allLogs, totalFiles: logFiles.length };
+    } catch (error) {
+      console.error("❌ Failed to read SPT logs:", error);
+      return { success: false, error: error.message, logs: [] };
+    }
+  }
+);
+
+// Parse individual SPT log line
+function parseSptLogLine(line, fileName) {
+  try {
+    // Common SPT log patterns
+    const patterns = [
+      // Pattern 1: [timestamp] level: message
+      /^\[([^\]]+)\]\s+(\w+):\s+(.+)$/,
+      // Pattern 2: timestamp level: message
+      /^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(\w+):\s+(.+)$/,
+      // Pattern 3: [timestamp] [level] message
+      /^\[([^\]]+)\]\s+\[(\w+)\]\s+(.+)$/,
+      // Pattern 4: timestamp [level] message
+      /^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+(.+)$/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = line.match(pattern);
+      if (match) {
+        const [, timestamp, level, message] = match;
+
+        // Determine source based on message content
+        let source = "SPT-Server";
+        if (
+          message.toLowerCase().includes("database") ||
+          message.toLowerCase().includes("db")
+        ) {
+          source = "SPT-Database";
+        } else if (
+          message.toLowerCase().includes("profile") ||
+          message.toLowerCase().includes("player")
+        ) {
+          source = "SPT-Profile";
+        } else if (
+          message.toLowerCase().includes("client") ||
+          message.toLowerCase().includes("connect") ||
+          message.toLowerCase().includes("network")
+        ) {
+          source = "SPT-Network";
+        } else if (
+          message.toLowerCase().includes("addon") ||
+          message.toLowerCase().includes("mod")
+        ) {
+          source = "SPT-Addon";
+        } else if (
+          message.toLowerCase().includes("memory") ||
+          message.toLowerCase().includes("cpu") ||
+          message.toLowerCase().includes("disk")
+        ) {
+          source = "SPT-System";
+        } else if (
+          message.toLowerCase().includes("game") ||
+          message.toLowerCase().includes("session")
+        ) {
+          source = "SPT-Game";
+        } else if (
+          message.toLowerCase().includes("auth") ||
+          message.toLowerCase().includes("security")
+        ) {
+          source = "SPT-Security";
+        }
+
+        return {
+          timestamp: timestamp.trim(),
+          level: level.trim().toUpperCase(),
+          message: message.trim(),
+          source,
+          rawLine: line.trim(),
+        };
+      }
+    }
+
+    // If no pattern matches, create a generic log entry
+    return {
+      timestamp: new Date().toLocaleString(),
+      level: "INFO",
+      message: line.trim(),
+      source: "SPT-Server",
+      rawLine: line.trim(),
+    };
+  } catch (error) {
+    console.error("❌ Error parsing log line:", error, line);
+    return null;
+  }
+}
