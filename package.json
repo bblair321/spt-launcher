@@ -42,9 +42,10 @@
   "build": {
     "appId": "com.sptlauncher.app",
     "productName": "SPT Launcher",
+    "icon": "public/icon.png",
     "directories": {
       "output": "dist-electron",
-      "buildResources": "build"
+      "buildResources": "public"
     },
     "publish": {
       "provider": "github",

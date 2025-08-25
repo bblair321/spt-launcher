@@ -57,7 +57,7 @@ function createWindow() {
       enableRemoteModule: false,
       preload: path.join(__dirname, "preload.js"),
     },
-    icon: path.join(__dirname, "../public/icon.ico"),
+    icon: path.join(__dirname, "..", "public", "icon.png"),
     titleBarStyle: "hidden",
     frame: false,
     resizable: true,
