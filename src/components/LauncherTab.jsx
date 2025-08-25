@@ -254,30 +254,32 @@ function LauncherTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           SPT Launcher
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 px-2">
           Launch and manage your SPT-AKI installation
         </p>
       </div>
 
       {/* Status Card */}
-      <StatusCard
-        title="Status"
-        status={status}
-        isRunning={isLauncherRunning}
-        onRefresh={checkLauncherStatus}
-      />
+      <div className="px-2 sm:px-0">
+        <StatusCard
+          title="Status"
+          status={status}
+          isRunning={isLauncherRunning}
+          onRefresh={checkLauncherStatus}
+        />
+      </div>
 
       {/* Path Configuration */}
-      <div className="grid grid-cols-1 gap-6">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Play className="w-5 h-5" />
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 px-2 sm:px-0">
+        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h3 className="text-base sm:text-lg font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+            <Play className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>SPT Launcher Executable</span>
           </h3>
 
@@ -290,7 +292,7 @@ function LauncherTab() {
               label="Launcher Path"
             />
 
-            <div className="flex space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
               <button
                 onClick={launchSPT}
                 disabled={!launcherPath || isLauncherRunning}
@@ -313,15 +315,15 @@ function LauncherTab() {
       </div>
 
       {/* Fika Configuration */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Server className="w-5 h-5" />
+      <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm px-2 sm:px-0">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-4">
+          <h3 className="text-base sm:text-lg font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+            <Server className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Fika Co-op Configuration</span>
           </h3>
           <button
             onClick={() => setShowFikaSettings(!showFikaSettings)}
-            className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors self-start sm:self-auto"
           >
             {showFikaSettings ? "Hide" : "Configure"}
           </button>
@@ -335,7 +337,7 @@ function LauncherTab() {
                 id="enableFika"
                 checked={fikaConfig.enableFika}
                 onChange={(e) => handleFikaToggle(e.target.checked)}
-                className="rounded border-gray-300"
+                className="rounded border-gray-300 w-4 h-4"
               />
               <label
                 htmlFor="enableFika"
@@ -347,49 +349,51 @@ function LauncherTab() {
 
             {fikaConfig.enableFika && (
               <>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
-                    Server Address
-                  </label>
-                  <input
-                    type="text"
-                    value={fikaConfig.serverAddress}
-                    onChange={(e) =>
-                      setFikaConfig((prev) => ({
-                        ...prev,
-                        serverAddress: e.target.value,
-                      }))
-                    }
-                    placeholder="e.g., 192.168.1.100 or server.example.com"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  />
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
+                      Server Address
+                    </label>
+                    <input
+                      type="text"
+                      value={fikaConfig.serverAddress}
+                      onChange={(e) =>
+                        setFikaConfig((prev) => ({
+                          ...prev,
+                          serverAddress: e.target.value,
+                        }))
+                      }
+                      placeholder="e.g., 192.168.1.100 or server.example.com"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
-                    Server Port
-                  </label>
-                  <input
-                    type="number"
-                    value={fikaConfig.serverPort}
-                    onChange={(e) =>
-                      setFikaConfig((prev) => ({
-                        ...prev,
-                        serverPort: e.target.value,
-                      }))
-                    }
-                    placeholder="6969"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
+                      Server Port
+                    </label>
+                    <input
+                      type="number"
+                      value={fikaConfig.serverPort}
+                      onChange={(e) =>
+                        setFikaConfig((prev) => ({
+                          ...prev,
+                          serverPort: e.target.value,
+                        }))
+                      }
+                      placeholder="6969"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    />
+                  </div>
                 </div>
               </>
             )}
 
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
               <button
                 onClick={saveFikaConfig}
                 disabled={configStatus === "saving"}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center space-x-2"
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center space-x-2"
               >
                 <Save className="w-4 h-4" />
                 <span>{getButtonText(configStatus, "Save Configuration")}</span>
@@ -397,7 +401,7 @@ function LauncherTab() {
 
               <button
                 onClick={loadFikaConfig}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors flex items-center justify-center space-x-2"
               >
                 <span>Reload</span>
               </button>

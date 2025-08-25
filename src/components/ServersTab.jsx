@@ -426,22 +426,22 @@ function ServersTab() {
   }, [consoleOutput, autoScroll]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           Server Management
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 px-2">
           Configure and manage your SPT-AKI servers
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Server Form */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Settings className="w-5 h-5" />
+        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+            <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>{isEditing ? "Edit Server" : "Add New Server"}</span>
           </h2>
 
@@ -466,40 +466,40 @@ function ServersTab() {
               <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                 Server Type
               </label>
-              <div className="flex space-x-2">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="serverType"
-                    value="local"
-                    checked={formData.serverType === "local"}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        serverType: e.target.value,
-                      }))
-                    }
-                    className="text-blue-600"
-                  />
-                  <span>Local Server</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="serverType"
-                    value="remote"
-                    checked={formData.serverType === "remote"}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        serverType: e.target.value,
-                      }))
-                    }
-                    className="text-blue-600"
-                  />
-                  <span>Remote Server (Fika)</span>
-                </label>
-              </div>
+                          <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="serverType"
+                  value="local"
+                  checked={formData.serverType === "local"}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      serverType: e.target.value,
+                    }))
+                  }
+                  className="text-blue-600 w-4 h-4"
+                />
+                <span>Local Server</span>
+              </label>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  name="serverType"
+                  value="remote"
+                  checked={formData.serverType === "remote"}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      serverType: e.target.value,
+                    }))
+                  }
+                  className="text-blue-600 w-4 h-4"
+                />
+                <span>Remote Server (Fika)</span>
+              </label>
+            </div>
             </div>
 
             {formData.serverType === "local" ? (

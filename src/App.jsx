@@ -132,14 +132,14 @@ function App() {
 
           {/* Sticky Tab Navigation */}
           <div className="sticky top-12 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-300">
-            <div className="flex space-x-1 px-4 py-2">
+            <div className="flex flex-wrap gap-1 px-2 sm:px-4 py-2 overflow-x-auto">
               {tabConfig.map((tab) => {
                 const Icon = ICON_MAP[tab.icon];
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all ${
+                    className={`flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 rounded-lg transition-all whitespace-nowrap text-sm sm:text-base ${
                       activeTab === tab.id
                         ? "bg-blue-600 text-white shadow-sm"
                         : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
@@ -147,7 +147,7 @@ function App() {
                     title={tab.name}
                   >
                     <Icon className="w-4 h-4" />
-                    <span className="font-medium">{tab.name}</span>
+                    <span className="font-medium hidden sm:inline">{tab.name}</span>
                   </button>
                 );
               })}
@@ -156,7 +156,7 @@ function App() {
 
           {/* Main Content with top margin to account for fixed header */}
           <div className="flex-1 overflow-hidden mt-12 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-            <div className="h-full p-6">
+            <div className="h-full p-3 sm:p-4 md:p-6">
               <ActiveComponent />
             </div>
           </div>

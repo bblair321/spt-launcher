@@ -278,12 +278,12 @@ function SettingsTab() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           Settings
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 px-2">
           Configure your SPT Launcher preferences
         </p>
         {updateStatus.currentVersion && (
@@ -295,7 +295,7 @@ function SettingsTab() {
         )}
       </div>
 
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto px-2 sm:px-0">
         {/* Application Settings Section */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm space-y-6">
           <h2 className="text-xl font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">

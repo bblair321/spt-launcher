@@ -396,44 +396,44 @@ function DevToolsTab() {
   if (activeTool === "config") return renderConfigEditor();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           Tools
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 px-2">
           Advanced tools for developers and power users
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Terminal className="w-5 h-5" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 px-2 sm:px-0">
+        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+            <Terminal className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Process Monitor</span>
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
             Monitor running SPT processes and system resources
           </p>
           <button
             onClick={() => setActiveTool("process")}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             Open Process Monitor
           </button>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Wrench className="w-5 h-5" />
+        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+            <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
             <span>Configuration Editor</span>
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
             Edit SPT configuration files directly
           </p>
           <button
             onClick={() => setActiveTool("config")}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
             Open Config Editor
           </button>
