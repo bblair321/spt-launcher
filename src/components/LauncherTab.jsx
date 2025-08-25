@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { Play, Square, Server, Save } from "lucide-react";
 
 // Custom hooks
@@ -47,19 +47,21 @@ function LauncherTab() {
 
   useProcessMonitor(launcherProcess?.pid, isLauncherRunning, handleProcessStop);
 
+  // Memoized SPT directory to prevent recalculation
+  const sptDirectory = useMemo(() => {
+    return parseSptDirectory(launcherPath);
+  }, [launcherPath]);
+
   // Load Fika configuration on mount
   useEffect(() => {
     loadFikaConfig();
-  }, [launcherPath]);
+  }, [sptDirectory]);
 
-  const loadFikaConfig = async () => {
-    if (!window.electronAPI?.getSptConfig) return;
+  const loadFikaConfig = useCallback(async () => {
+    if (!window.electronAPI?.getSptConfig || !sptDirectory) return;
 
     try {
-      const sptDir = parseSptDirectory(launcherPath);
-      if (!sptDir) return;
-
-      const result = await window.electronAPI.getSptConfig(sptDir);
+      const result = await window.electronAPI.getSptConfig(sptDirectory);
       if (result.success && result.config) {
         const config = result.config;
         setFikaConfig({
@@ -74,10 +76,12 @@ function LauncherTab() {
     } catch (error) {
       console.error("Failed to load Fika config:", error);
     }
-  };
+  }, [sptDirectory]);
 
-  const saveFikaConfig = async () => {
-    if (!window.electronAPI?.updateSptConfig) return;
+  const saveFikaConfig = useCallback(async () => {
+    if (!window.electronAPI?.updateSptConfig || !sptDirectory) {
+      throw new Error("SPT directory not found");
+    }
 
     try {
       setConfigStatus("saving");
@@ -88,101 +92,56 @@ function LauncherTab() {
         enableFika: fikaConfig.enableFika,
       };
 
-      const sptDir = parseSptDirectory(launcherPath);
-      if (!sptDir) {
-        throw new Error("SPT directory not found");
-      }
-
       const result = await window.electronAPI.updateSptConfig(
         configData,
-        sptDir
+        sptDirectory
       );
 
       if (result.success) {
-        setConfigStatus("success");
-
-        // Auto-restart if Fika mode is enabled and launcher is running
-        if (configData.enableFika && isLauncherRunning) {
-          await restartLauncherForConfig();
-        } else {
-          setTimeout(() => setConfigStatus("idle"), 2000);
-        }
+        setConfigStatus("saved");
+        setTimeout(() => setConfigStatus("idle"), 2000);
       } else {
-        console.error("❌ Backend returned error:", result.error);
-        setConfigStatus("error");
-        setTimeout(() => setConfigStatus("idle"), 3000);
+        throw new Error(result.error || "Failed to save configuration");
       }
     } catch (error) {
-      console.error("❌ Exception occurred:", error);
       setConfigStatus("error");
-      setTimeout(() => setConfigStatus("idle"), 3000);
+      throw error;
     }
-  };
+  }, [fikaConfig, sptDirectory]);
 
-  const restartLauncherForConfig = async () => {
-    try {
-      setConfigStatus("restarting");
-      console.log(
-        "🔄 Fika mode enabled - restarting launcher to apply new configuration..."
-      );
+  // Memoized Fika configuration handlers
+  const handleFikaToggle = useCallback((enabled) => {
+    setFikaConfig((prev) => ({ ...prev, enableFika: enabled }));
+  }, []);
 
-      await stopLauncher();
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      await launchSPT();
+  const handleFikaConfigChange = useCallback((field, value) => {
+    setFikaConfig((prev) => ({ ...prev, [field]: value }));
+  }, []);
 
-      setConfigStatus("success");
-      setTimeout(() => setConfigStatus("idle"), 2000);
-    } catch (restartError) {
-      console.error("❌ Failed to restart launcher:", restartError);
-      setConfigStatus("error");
-      setTimeout(() => setConfigStatus("idle"), 3000);
-    }
-  };
+  // Memoized button states and text
+  const buttonStates = useMemo(() => {
+    const isDisabled = !launcherPath.trim();
+    const buttonText = getButtonText(status, isLauncherRunning);
+    const buttonIcon = isLauncherRunning ? Square : Play;
 
-  const handleFikaToggle = async (newValue) => {
-    setFikaConfig((prev) => ({ ...prev, enableFika: newValue }));
+    return { isDisabled, buttonText, buttonIcon };
+  }, [launcherPath, status, isLauncherRunning]);
 
-    // Auto-save when Fika is disabled to revert to default settings
-    if (!newValue) {
-      try {
-        setConfigStatus("saving");
+  // Memoized status display
+  const statusDisplay = useMemo(() => {
+    const statusIcon = getStatusIcon(status, isLauncherRunning);
+    const statusText = getStatusText(status, isLauncherRunning);
 
-        const configData = {
-          serverAddress: fikaConfig.serverAddress,
-          serverPort: fikaConfig.serverPort,
-          enableFika: false,
-        };
+    return { statusIcon, statusText };
+  }, [status, isLauncherRunning]);
 
-        const sptDir = parseSptDirectory(launcherPath);
-        if (!sptDir) return;
+  // Memoized form validation
+  const isFormValid = useMemo(() => {
+    if (!fikaConfig.enableFika) return true;
+    return fikaConfig.serverAddress.trim() && fikaConfig.serverPort.trim();
+  }, [fikaConfig]);
 
-        const result = await window.electronAPI.updateSptConfig(
-          configData,
-          sptDir
-        );
-
-        if (result.success) {
-          setConfigStatus("success");
-
-          // Auto-restart if launcher is running
-          if (isLauncherRunning) {
-            await restartLauncherForConfig();
-          } else {
-            setTimeout(() => setConfigStatus("idle"), 2000);
-          }
-        } else {
-          setConfigStatus("error");
-          setTimeout(() => setConfigStatus("idle"), 2000);
-        }
-      } catch (error) {
-        console.error("❌ Auto-save failed:", error);
-        setConfigStatus("error");
-        setTimeout(() => setConfigStatus("idle"), 2000);
-      }
-    }
-  };
-
-  const selectLauncherPath = async () => {
+  const selectLauncherPath = useCallback(async () => {
     if (!window.electronAPI) return;
 
     try {
@@ -193,9 +152,9 @@ function LauncherTab() {
     } catch (error) {
       console.error("Failed to select launcher path:", error);
     }
-  };
+  }, []);
 
-  const launchSPT = async () => {
+  const launchSPT = useCallback(async () => {
     if (!launcherPath) {
       setStatus("error");
       return;
@@ -218,9 +177,9 @@ function LauncherTab() {
       console.error("Failed to launch SPT:", error);
       setStatus("error");
     }
-  };
+  }, [launcherPath]);
 
-  const stopLauncher = async () => {
+  const stopLauncher = useCallback(async () => {
     if (!launcherProcess?.pid) return;
 
     try {
@@ -232,9 +191,9 @@ function LauncherTab() {
     setIsLauncherRunning(false);
     setLauncherProcess(null);
     setStatus("stopped");
-  };
+  }, [launcherProcess?.pid]);
 
-  const checkLauncherStatus = async () => {
+  const checkLauncherStatus = useCallback(async () => {
     if (!launcherProcess?.pid) return;
 
     try {
@@ -251,7 +210,21 @@ function LauncherTab() {
     } catch (error) {
       console.error("Failed to check launcher status:", error);
     }
-  };
+  }, [launcherProcess?.pid]);
+
+  // Memoized button text for save button
+  const saveButtonText = useMemo(() => {
+    switch (configStatus) {
+      case "saving":
+        return "Saving...";
+      case "saved":
+        return "Saved!";
+      case "error":
+        return "Error";
+      default:
+        return "Save Configuration";
+    }
+  }, [configStatus]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -295,7 +268,7 @@ function LauncherTab() {
             <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
               <button
                 onClick={launchSPT}
-                disabled={!launcherPath || isLauncherRunning}
+                disabled={buttonStates.isDisabled}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
               >
                 <Play className="w-4 h-4" />
@@ -358,10 +331,7 @@ function LauncherTab() {
                       type="text"
                       value={fikaConfig.serverAddress}
                       onChange={(e) =>
-                        setFikaConfig((prev) => ({
-                          ...prev,
-                          serverAddress: e.target.value,
-                        }))
+                        handleFikaConfigChange("serverAddress", e.target.value)
                       }
                       placeholder="e.g., 192.168.1.100 or server.example.com"
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -376,10 +346,7 @@ function LauncherTab() {
                       type="number"
                       value={fikaConfig.serverPort}
                       onChange={(e) =>
-                        setFikaConfig((prev) => ({
-                          ...prev,
-                          serverPort: e.target.value,
-                        }))
+                        handleFikaConfigChange("serverPort", e.target.value)
                       }
                       placeholder="6969"
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -396,7 +363,7 @@ function LauncherTab() {
                 className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center space-x-2"
               >
                 <Save className="w-4 h-4" />
-                <span>{getButtonText(configStatus, "Save Configuration")}</span>
+                <span>{saveButtonText}</span>
               </button>
 
               <button
@@ -412,7 +379,7 @@ function LauncherTab() {
                 Configuration Location:
               </p>
               <p className="font-mono text-xs text-gray-700 dark:text-gray-300">
-                {configPath || getConfigPath(parseSptDirectory(launcherPath))}
+                {configPath || getConfigPath(sptDirectory)}
               </p>
               <p className="mt-2 text-gray-600 dark:text-gray-400">
                 This configuration will be applied to your SPT launcher's
@@ -427,4 +394,4 @@ function LauncherTab() {
   );
 }
 
-export default LauncherTab;
+export default memo(LauncherTab);

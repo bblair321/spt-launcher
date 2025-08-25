@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { Wrench, Terminal, Database, RefreshCw, Monitor } from "lucide-react";
 import { useToastContext } from "../contexts/ToastContext";
 
@@ -9,11 +9,21 @@ function DevToolsTab() {
   const [configData, setConfigData] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
+  // Memoized tool selection handler
+  const handleToolSelect = useCallback((tool) => {
+    setActiveTool(tool);
+  }, []);
+
+  // Memoized tool reset handler
+  const handleToolReset = useCallback(() => {
+    setActiveTool(null);
+  }, []);
+
   // Function to fetch real process data
-  const fetchProcesses = async () => {
+  const fetchProcesses = useCallback(async () => {
     if (!window.electronAPI?.getRunningProcesses) {
       // Fallback to mock data if API not available
-      setProcesses([
+      const mockProcesses = [
         {
           id: 1,
           name: "SPT-AKI Server",
@@ -41,7 +51,8 @@ function DevToolsTab() {
           status: "running",
           uptime: "45m",
         },
-      ]);
+      ];
+      setProcesses(mockProcesses);
       showInfo(
         "Mock Data",
         "Using demonstration data - Electron API not available"
@@ -98,129 +109,168 @@ function DevToolsTab() {
             pid: proc.pid,
             cpu: `${(Math.random() * 2 + 0.5).toFixed(1)}%`, // Mock CPU for now
             memory: memory,
-            status: proc.tracked ? "tracked" : "running",
+            status: proc.status || "running",
             uptime: uptime,
-            tracked: proc.tracked || false,
           };
         });
         setProcesses(formattedProcesses);
-        showSuccess(
-          "Processes Updated",
-          `Found ${formattedProcesses.length} SPT-related processes`
-        );
+      } else {
+        // Handle case where result.processes is not an array
+        if (Array.isArray(result.processes)) {
+          setProcesses(result.processes);
+        } else {
+          console.warn("Unexpected processes format:", result);
+          setProcesses([]);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch processes:", error);
       showError(
-        "Process Detection Failed",
-        "Could not detect system processes. Showing demonstration data."
+        "Failed to Load Processes",
+        "Unable to retrieve running processes. Please try again.",
+        () => fetchProcesses(),
+        error.toString(),
+        "Retry"
       );
-      // Fallback to mock data
-      setProcesses([
-        {
-          id: 1,
-          name: "SPT-AKI Server",
-          pid: 1234,
-          cpu: "2.3%",
-          memory: "156 MB",
-          status: "running",
-          uptime: "2h 15m",
-          tracked: false,
-        },
-        {
-          id: 2,
-          name: "SPT-AKI Client",
-          pid: 5678,
-          cpu: "1.8%",
-          memory: "89 MB",
-          status: "running",
-          uptime: "1h 45m",
-          tracked: false,
-        },
-        {
-          id: 3,
-          name: "Fika Co-op",
-          pid: 9012,
-          cpu: "0.5%",
-          memory: "23 MB",
-          status: "running",
-          uptime: "45m",
-          tracked: false,
-        },
-      ]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showError, showInfo]);
 
-  // Load processes on component mount
-  useEffect(() => {
-    fetchProcesses();
-  }, []);
-
-  // Load config data
-  useEffect(() => {
-    // Simulate config data
-    setConfigData({
-      server: { port: 6969, host: "127.0.0.1", maxPlayers: 100 },
-      database: { type: "sqlite", path: "./user/profiles/profiles.db" },
-      game: { version: "3.7.1", mods: ["SPT Realism", "Fika Co-op"] },
-    });
-  }, []);
-
-  const handleStopProcess = async (processId) => {
-    if (!window.electronAPI) {
-      console.error("Electron API not available");
-      return;
-    }
-
-    // Find the actual process object to get the real PID
-    const process = processes.find((p) => p.id === processId);
-    if (!process) {
-      showError("Process Not Found", `Process with ID ${processId} not found`);
-      return;
-    }
-
-    const actualPid = process.pid;
-    const processName = process.name;
-
-    // Safety check is no longer needed since launcher processes are hidden
-    // All visible processes are safe to manage
-
-    try {
-      // Stop the process
-      const result = await window.electronAPI.stopProcess(actualPid);
-      if (result.success) {
-        // Remove the stopped process from the list
-        setProcesses((prev) => prev.filter((p) => p.id !== processId));
-        showSuccess(
-          "Process Stopped",
-          `Successfully stopped ${processName} (PID: ${actualPid})`
-        );
-        console.log(
-          `Process ${processName} (PID: ${actualPid}) stopped successfully`
-        );
-      } else {
+  // Memoized process stop handler
+  const handleProcessStop = useCallback(
+    async (pid) => {
+      if (!window.electronAPI?.stopProcess) {
         showError(
-          "Process Stop Failed",
-          `Failed to stop ${processName} (PID: ${actualPid}): ${result.error}`
+          "API Not Available",
+          "Process management API is not available in this environment."
         );
-        console.error(
-          `Failed to stop process ${processName} (PID: ${actualPid}):`,
-          result.error
+        return;
+      }
+
+      try {
+        const result = await window.electronAPI.stopProcess(pid);
+        if (result.success) {
+          showSuccess("Process Stopped", `Successfully stopped process ${pid}`);
+          // Refresh the process list
+          fetchProcesses();
+        } else {
+          throw new Error(result.error || "Failed to stop process");
+        }
+      } catch (error) {
+        console.error("Failed to stop process:", error);
+        showError(
+          "Failed to Stop Process",
+          `Unable to stop process ${pid}. Please try again.`,
+          () => handleProcessStop(pid),
+          error.toString(),
+          "Retry"
         );
       }
-    } catch (error) {
+    },
+    [fetchProcesses, showError, showSuccess]
+  );
+
+  // Memoized configuration loading
+  const loadConfig = useCallback(async () => {
+    if (!window.electronAPI?.getSptConfig) {
       showError(
-        "Process Stop Failed",
-        `Error stopping ${processName} (PID: ${actualPid}): ${error.message}`
+        "API Not Available",
+        "Configuration API is not available in this environment."
       );
-      console.error(
-        `Error stopping process ${processName} (PID: ${actualPid}):`,
-        error
-      );
+      return;
     }
-  };
+
+    try {
+      setIsLoading(true);
+      const result = await window.electronAPI.getSptConfig();
+      if (result.success && result.config) {
+        setConfigData(result.config);
+        showSuccess(
+          "Configuration Loaded",
+          "Successfully loaded SPT configuration"
+        );
+      } else {
+        throw new Error(result.error || "Failed to load configuration");
+      }
+    } catch (error) {
+      console.error("Failed to load configuration:", error);
+      showError(
+        "Failed to Load Configuration",
+        "Unable to load SPT configuration. Please try again.",
+        () => loadConfig(),
+        error.toString(),
+        "Retry"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showError, showSuccess]);
+
+  // Memoized configuration saving
+  const saveConfig = useCallback(
+    async (config) => {
+      if (!window.electronAPI?.updateSptConfig) {
+        showError(
+          "API Not Available",
+          "Configuration API is not available in this environment."
+        );
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const result = await window.electronAPI.updateSptConfig(config);
+        if (result.success) {
+          showSuccess(
+            "Configuration Saved",
+            "Successfully saved SPT configuration"
+          );
+          setConfigData(config);
+        } else {
+          throw new Error(result.error || "Failed to save configuration");
+        }
+      } catch (error) {
+        console.error("Failed to save configuration:", error);
+        showError(
+          "Failed to Save Configuration",
+          "Unable to save SPT configuration. Please try again.",
+          () => saveConfig(config),
+          error.toString(),
+          "Retry"
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [showError, showSuccess]
+  );
+
+  // Load processes on mount
+  useEffect(() => {
+    fetchProcesses();
+  }, [fetchProcesses]);
+
+  // Memoized tool cards to prevent unnecessary re-renders
+  const toolCards = useMemo(
+    () => [
+      {
+        id: "process",
+        title: "Process Monitor",
+        description: "Monitor running SPT processes and system resources",
+        icon: Terminal,
+        onClick: () => handleToolSelect("process"),
+      },
+      {
+        id: "config",
+        title: "Configuration Editor",
+        description: "Edit SPT configuration files directly",
+        icon: Database,
+        onClick: () => handleToolSelect("config"),
+      },
+    ],
+    [handleToolSelect]
+  );
 
   const renderProcessMonitor = () => (
     <div className="space-y-4">
@@ -274,7 +324,7 @@ function DevToolsTab() {
           <span>Scan System</span>
         </button>
         <button
-          onClick={() => setActiveTool(null)}
+          onClick={handleToolReset}
           className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-sm hover:bg-gray-300 dark:hover:bg-gray-600"
         >
           Back to Tools
@@ -335,7 +385,7 @@ function DevToolsTab() {
                   </div>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleStopProcess(process.id)}
+                      onClick={() => handleProcessStop(process.pid)}
                       className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
                       title={`Stop ${process.name} (PID: ${process.pid})`}
                     >
@@ -358,7 +408,7 @@ function DevToolsTab() {
           Configuration Editor
         </h3>
         <button
-          onClick={() => setActiveTool(null)}
+          onClick={handleToolReset}
           className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-sm hover:bg-gray-300 dark:hover:bg-gray-600"
         >
           Back to Tools
@@ -407,40 +457,29 @@ function DevToolsTab() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 px-2 sm:px-0">
-        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Terminal className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>Process Monitor</span>
-          </h2>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
-            Monitor running SPT processes and system resources
-          </p>
-          <button
-            onClick={() => setActiveTool("process")}
-            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+        {toolCards.map((tool) => (
+          <div
+            key={tool.id}
+            className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm"
           >
-            Open Process Monitor
-          </button>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
-            <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span>Configuration Editor</span>
-          </h2>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
-            Edit SPT configuration files directly
-          </p>
-          <button
-            onClick={() => setActiveTool("config")}
-            className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Open Config Editor
-          </button>
-        </div>
+            <h2 className="text-lg sm:text-xl font-semibold mb-4 flex items-center space-x-2 text-gray-900 dark:text-gray-100">
+              <tool.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span>{tool.title}</span>
+            </h2>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
+              {tool.description}
+            </p>
+            <button
+              onClick={tool.onClick}
+              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Open {tool.title}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-export default DevToolsTab;
+export default memo(DevToolsTab);

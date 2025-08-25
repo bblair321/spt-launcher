@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback, memo } from "react";
 import {
   Play,
   Server,
@@ -29,7 +29,7 @@ import SearchTab from "./components/SearchTab";
 import ToastContainer from "./components/ui/ToastContainer";
 import ErrorBoundary from "./components/ErrorBoundary";
 
-// Icon mapping
+// Icon mapping - memoized to prevent recreation
 const ICON_MAP = {
   Play,
   Server,
@@ -39,6 +39,14 @@ const ICON_MAP = {
   Wrench,
 };
 
+// Memoized tab components to prevent unnecessary re-renders
+const MemoizedLauncherTab = memo(LauncherTab);
+const MemoizedServersTab = memo(ServersTab);
+const MemoizedAddonsTab = memo(AddonsTab);
+const MemoizedSettingsTab = memo(SettingsTab);
+const MemoizedDevToolsTab = memo(DevToolsTab);
+const MemoizedSearchTab = memo(SearchTab);
+
 function App() {
   const { theme, resolvedTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("launcher");
@@ -47,17 +55,18 @@ function App() {
   // Memoized tab configuration with components
   const tabConfig = useMemo(
     () => [
-      { ...TABS[0], component: LauncherTab },
-      { ...TABS[1], component: ServersTab },
-      { ...TABS[2], component: AddonsTab },
-      { ...TABS[3], component: SettingsTab },
-      { ...TABS[4], component: DevToolsTab },
-      { ...TABS[5], component: SearchTab },
+      { ...TABS[0], component: MemoizedLauncherTab },
+      { ...TABS[1], component: MemoizedServersTab },
+      { ...TABS[2], component: MemoizedAddonsTab },
+      { ...TABS[3], component: MemoizedSettingsTab },
+      { ...TABS[4], component: MemoizedDevToolsTab },
+      { ...TABS[5], component: MemoizedSearchTab },
     ],
     []
   );
 
-  const handleWindowControl = (action) => {
+  // Memoized window control handler
+  const handleWindowControl = useCallback((action) => {
     if (!window.electronAPI) return;
 
     switch (action) {
@@ -66,7 +75,7 @@ function App() {
         break;
       case "maximize":
         window.electronAPI.maximize();
-        setIsMaximized(!isMaximized);
+        setIsMaximized((prev) => !prev);
         break;
       case "close":
         window.electronAPI.close();
@@ -74,12 +83,42 @@ function App() {
       default:
         break;
     }
-  };
+  }, []);
 
+  // Memoized tab change handler
+  const handleTabChange = useCallback((tabId) => {
+    setActiveTab(tabId);
+  }, []);
+
+  // Memoized active component
   const ActiveComponent = useMemo(() => {
     const tab = tabConfig.find((tab) => tab.id === activeTab);
-    return tab?.component || LauncherTab;
+    return tab?.component || MemoizedLauncherTab;
   }, [activeTab, tabConfig]);
+
+  // Memoized tab buttons to prevent unnecessary re-renders
+  const tabButtons = useMemo(() => {
+    return tabConfig.map((tab) => {
+      const Icon = ICON_MAP[tab.icon];
+      const isActive = activeTab === tab.id;
+
+      return (
+        <button
+          key={tab.id}
+          onClick={() => handleTabChange(tab.id)}
+          className={`flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 rounded-lg transition-all whitespace-nowrap text-sm sm:text-base ${
+            isActive
+              ? "bg-blue-600 text-white shadow-sm"
+              : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
+          }`}
+          title={tab.name}
+        >
+          <Icon className="w-4 h-4" />
+          <span className="font-medium hidden sm:inline">{tab.name}</span>
+        </button>
+      );
+    });
+  }, [tabConfig, activeTab, handleTabChange]);
 
   return (
     <ErrorBoundary>
@@ -133,24 +172,7 @@ function App() {
           {/* Sticky Tab Navigation */}
           <div className="sticky top-12 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-colors duration-300">
             <div className="flex flex-wrap gap-1 px-2 sm:px-4 py-2 overflow-x-auto">
-              {tabConfig.map((tab) => {
-                const Icon = ICON_MAP[tab.icon];
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 rounded-lg transition-all whitespace-nowrap text-sm sm:text-base ${
-                      activeTab === tab.id
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100"
-                    }`}
-                    title={tab.name}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="font-medium hidden sm:inline">{tab.name}</span>
-                  </button>
-                );
-              })}
+              {tabButtons}
             </div>
           </div>
 
@@ -169,4 +191,4 @@ function App() {
   );
 }
 
-export default App;
+export default memo(App);

@@ -9,12 +9,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:analyze": "vite build --mode analyze",
     "preview": "vite preview",
     "electron": "wait-on tcp:5173 && cross-env IS_DEV=true electron .",
     "electron:dev": "concurrently \"npm run dev\" \"npm run electron\"",
     "electron:build": "npm run build && electron-builder",
     "dist": "npm run build && electron-builder --publish=never",
-    "dist:win": "npm run build && electron-builder --win --publish=never"
+    "dist:win": "npm run build && electron-builder --win --publish=never",
+    "analyze": "npm run build:analyze && npx vite-bundle-analyzer dist/stats.html",
+    "perf": "npm run build && lighthouse dist/index.html --output=html --output-path=./lighthouse-report.html",
+    "bundle-size": "npm run build && npx vite-bundle-analyzer dist"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
