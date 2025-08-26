@@ -47,8 +47,6 @@ export const COMMON_SPT_PATHS = [
 export const TABS = [
   { id: "launcher", name: "Launcher", icon: "Play" },
   { id: "servers", name: "Servers", icon: "Server" },
-  { id: "addons", name: "Addons", icon: "Puzzle" },
   { id: "settings", name: "Settings", icon: "Settings" },
   { id: "devtools", name: "Tools", icon: "Wrench" },
-  { id: "search", name: "Search", icon: "Search" },
 ];

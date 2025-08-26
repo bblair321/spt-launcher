@@ -23,10 +23,8 @@ spt-launcher-electron/
 │   │   │   └── LoadingSpinner.jsx
 │   │   ├── LauncherTab.jsx
 │   │   ├── ServersTab.jsx
-│   │   ├── AddonsTab.jsx
 │   │   ├── SettingsTab.jsx
 │   │   ├── DevToolsTab.jsx
-│   │   ├── SearchTab.jsx
 │   │   ├── MessageBoard.jsx
 │   │   └── ErrorBoundary.jsx
 │   ├── hooks/               # Custom React hooks

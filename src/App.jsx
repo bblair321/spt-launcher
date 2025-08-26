@@ -2,9 +2,7 @@ import React, { useState, useMemo, useCallback, memo } from "react";
 import {
   Play,
   Server,
-  Puzzle,
   Settings,
-  Search,
   Wrench,
   X,
   Minimize,
@@ -20,10 +18,8 @@ import { TABS } from "./constants";
 // Tab Components
 import LauncherTab from "./components/LauncherTab";
 import ServersTab from "./components/ServersTab";
-import AddonsTab from "./components/AddonsTab";
 import SettingsTab from "./components/SettingsTab";
 import DevToolsTab from "./components/DevToolsTab";
-import SearchTab from "./components/SearchTab";
 
 // UI Components
 import ToastContainer from "./components/ui/ToastContainer";
@@ -33,19 +29,15 @@ import ErrorBoundary from "./components/ErrorBoundary";
 const ICON_MAP = {
   Play,
   Server,
-  Puzzle,
   Settings,
-  Search,
   Wrench,
 };
 
 // Memoized tab components to prevent unnecessary re-renders
 const MemoizedLauncherTab = memo(LauncherTab);
 const MemoizedServersTab = memo(ServersTab);
-const MemoizedAddonsTab = memo(AddonsTab);
 const MemoizedSettingsTab = memo(SettingsTab);
 const MemoizedDevToolsTab = memo(DevToolsTab);
-const MemoizedSearchTab = memo(SearchTab);
 
 function App() {
   const { theme, resolvedTheme } = useTheme();
@@ -57,10 +49,8 @@ function App() {
     () => [
       { ...TABS[0], component: MemoizedLauncherTab },
       { ...TABS[1], component: MemoizedServersTab },
-      { ...TABS[2], component: MemoizedAddonsTab },
-      { ...TABS[3], component: MemoizedSettingsTab },
-      { ...TABS[4], component: MemoizedDevToolsTab },
-      { ...TABS[5], component: MemoizedSearchTab },
+      { ...TABS[2], component: MemoizedSettingsTab },
+      { ...TABS[3], component: MemoizedDevToolsTab },
     ],
     []
   );
