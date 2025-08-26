@@ -150,29 +150,44 @@ function SearchTab() {
   };
 
   // Handle view addon details
-  const handleView = async (addonId, addonName) => {
+  const handleView = async (addonId, addonName, result) => {
     try {
-      // Always open the SPT-AKI Hub files page for all mods
-      const hubUrl = "https://hub.sp-tarkov.com/files/";
-      showInfo("Opening SPT-AKI Hub", `Opening ${addonName} on SPT-AKI Hub...`);
+      let modUrl = "https://hub.sp-tarkov.com/files/";
+
+      // Try to construct the specific mod URL
+      if (result && result.downloadUrl && result.downloadUrl !== "#") {
+        // Use the mod's specific download URL if available
+        modUrl = result.downloadUrl;
+      } else if (result && result.name) {
+        // Construct URL from mod name (fallback)
+        const modSlug = result.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        modUrl = `https://hub.sp-tarkov.com/files/search?search=${encodeURIComponent(
+          result.name
+        )}`;
+      }
+
+      showInfo("Opening Mod Page", `Opening ${addonName} on SPT-AKI Hub...`);
 
       if (window.electronAPI?.openExternal) {
-        window.electronAPI.openExternal(hubUrl);
+        window.electronAPI.openExternal(modUrl);
         showSuccess(
-          "Hub Opened",
+          "Mod Page Opened",
           `${addonName} opened on SPT-AKI Hub in your browser`
         );
       } else {
         // Fallback for web environment
-        window.open(hubUrl, "_blank");
+        window.open(modUrl, "_blank");
         showSuccess(
-          "Hub Opened",
+          "Mod Page Opened",
           `${addonName} opened on SPT-AKI Hub in a new tab`
         );
       }
     } catch (error) {
       console.error("View addon failed:", error);
-      showError("View Failed", `Failed to open SPT-AKI Hub`, {
+      showError("View Failed", `Failed to open mod page`, {
         errorDetails: error.message,
       });
     }
@@ -574,7 +589,7 @@ function SearchTab() {
             </button>
           ) : (
             <button
-              onClick={() => handleView(result.id, result.name)}
+              onClick={() => handleView(result.id, result.name, result)}
               className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors flex items-center space-x-2"
             >
               <ExternalLink className="w-4 h-4" />
