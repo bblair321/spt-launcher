@@ -82,25 +82,3 @@ export function usePerformanceMonitor(componentName, enabled = true) {
     isEnabled: enabled,
   };
 }
-
-/**
- * Higher-order component for performance monitoring
- * @param {React.Component} Component - Component to wrap
- * @param {string} displayName - Display name for the component
- * @returns {React.Component} Wrapped component with performance monitoring
- */
-export function withPerformanceMonitoring(Component, displayName) {
-  const WrappedComponent = (props) => {
-    const performance = usePerformanceMonitor(
-      displayName || Component.displayName || Component.name
-    );
-
-    return <Component {...props} performance={performance} />;
-  };
-
-  WrappedComponent.displayName = `withPerformanceMonitoring(${
-    displayName || Component.displayName || Component.name
-  })`;
-
-  return WrappedComponent;
-}
