@@ -63,7 +63,7 @@ function DevToolsTab() {
     try {
       setIsLoading(true);
       const result = await window.electronAPI.getRunningProcesses();
-      if (result.success && result.processes) {
+      if (result && result.processes) {
         // Transform the API response to match our UI format
         const formattedProcesses = result.processes.map((proc, index) => {
           // Calculate uptime if we have startTime
@@ -150,12 +150,12 @@ function DevToolsTab() {
 
       try {
         const result = await window.electronAPI.stopProcess(pid);
-        if (result.success) {
+        if (result) {
           showSuccess("Process Stopped", `Successfully stopped process ${pid}`);
           // Refresh the process list
           fetchProcesses();
         } else {
-          throw new Error(result.error || "Failed to stop process");
+          throw new Error(result?.error || "Failed to stop process");
         }
       } catch (error) {
         console.error("Failed to stop process:", error);
@@ -184,14 +184,14 @@ function DevToolsTab() {
     try {
       setIsLoading(true);
       const result = await window.electronAPI.getSptConfig();
-      if (result.success && result.config) {
+      if (result && result.config) {
         setConfigData(result.config);
         showSuccess(
           "Configuration Loaded",
           "Successfully loaded SPT configuration"
         );
       } else {
-        throw new Error(result.error || "Failed to load configuration");
+        throw new Error(result?.error || "Failed to load configuration");
       }
     } catch (error) {
       console.error("Failed to load configuration:", error);
@@ -221,14 +221,14 @@ function DevToolsTab() {
       try {
         setIsLoading(true);
         const result = await window.electronAPI.updateSptConfig(config);
-        if (result.success) {
+        if (result) {
           showSuccess(
             "Configuration Saved",
             "Successfully saved SPT configuration"
           );
           setConfigData(config);
         } else {
-          throw new Error(result.error || "Failed to save configuration");
+          throw new Error(result?.error || "Failed to save configuration");
         }
       } catch (error) {
         console.error("Failed to save configuration:", error);
@@ -415,29 +415,16 @@ function DevToolsTab() {
         </button>
       </div>
 
-      <div className="space-y-4">
-        {Object.entries(configData).map(([section, data]) => (
-          <div
-            key={section}
-            className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
-          >
-            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3 capitalize">
-              {section} Settings
-            </h4>
-            <div className="space-y-2">
-              {Object.entries(data).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">
-                    {key}:
-                  </span>
-                  <span className="text-sm font-mono text-gray-900 dark:text-gray-100">
-                    {String(value)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+      <div className="text-center py-16">
+        <Database className="w-24 h-24 mx-auto mb-6 text-gray-400 dark:text-gray-500" />
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+          Coming Soon
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+          The Configuration Editor is currently under development. This tool
+          will allow you to edit SPT configuration files directly from the
+          launcher interface.
+        </p>
       </div>
     </div>
   );

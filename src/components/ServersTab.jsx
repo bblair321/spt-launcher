@@ -15,8 +15,15 @@ import {
   safeElectronCall,
   isElectronFunctionAvailable,
 } from "../utils/electronUtils";
+import { useConsole } from "../contexts/ConsoleContext";
 
 function ServersTab() {
+  const {
+    globalConsoleOutput,
+    setGlobalConsoleOutput,
+    addConsoleOutput: contextAddConsoleOutput,
+    clearConsoleOutput,
+  } = useConsole();
   const [servers, setServers] = useState([]);
   const [selectedServer, setSelectedServer] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -31,10 +38,10 @@ function ServersTab() {
     remotePort: "6969",
   });
   const [runningServers, setRunningServers] = useState(new Map());
-  const [consoleOutput, setConsoleOutput] = useState([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const consoleRef = React.useRef(null);
   const lastOutputRef = React.useRef(0);
+  const runningServersRef = React.useRef(new Map());
 
   // Load saved servers from localStorage
   useEffect(() => {
@@ -56,10 +63,10 @@ function ServersTab() {
       "Failed to select server path"
     );
 
-    if (result.success && result) {
-      setFormData((prev) => ({ ...prev, path: result }));
-    } else if (result.isElectronError) {
+    if (result.isElectronError) {
       console.warn("Running in browser mode - file selection not available");
+    } else if (result) {
+      setFormData((prev) => ({ ...prev, path: result }));
     }
   };
 
@@ -144,12 +151,8 @@ function ServersTab() {
   };
 
   const addConsoleOutput = (message, type = "info") => {
-    const timestamp = new Date().toLocaleTimeString();
-    setConsoleOutput((prev) => {
-      const newOutput = [...prev, { timestamp, message, type }];
-      lastOutputRef.current = Date.now();
-      return newOutput;
-    });
+    contextAddConsoleOutput(message, type);
+    lastOutputRef.current = Date.now();
   };
 
   const scrollToBottom = () => {
@@ -241,7 +244,16 @@ function ServersTab() {
         "Failed to launch Tarkov"
       );
 
-      if (result.success) {
+      if (result.isElectronError) {
+        addConsoleOutput(
+          `⚠ Tarkov launcher not available. Please launch Tarkov manually.`,
+          "warning"
+        );
+        addConsoleOutput(
+          `📋 Server connection info: ${server.remoteAddress}:${server.remotePort}`,
+          "info"
+        );
+      } else if (result) {
         addConsoleOutput(`✓ Tarkov launched successfully!`, "success");
         addConsoleOutput(
           `📋 Server connection info copied to clipboard:`,
@@ -274,15 +286,6 @@ function ServersTab() {
             );
           }
         }
-      } else if (result.isElectronError) {
-        addConsoleOutput(
-          `⚠ Tarkov launcher not available. Please launch Tarkov manually.`,
-          "warning"
-        );
-        addConsoleOutput(
-          `📋 Server connection info: ${server.remoteAddress}:${server.remotePort}`,
-          "info"
-        );
       } else {
         addConsoleOutput(`✗ Failed to launch Tarkov: ${result.error}`, "error");
       }
@@ -302,7 +305,7 @@ function ServersTab() {
     if (!server.path) return;
 
     try {
-      setConsoleOutput([]); // Clear console when starting new process
+      clearConsoleOutput(); // Clear console when starting new process
       setAutoScroll(true); // Force auto-scroll on when launching
       addConsoleOutput(
         `Launching Server: ${server.name} (${server.path})`,
@@ -316,18 +319,19 @@ function ServersTab() {
         "Failed to launch server"
       );
 
-      if (result.success && result.code === 0 && result.pid) {
+      if (result && result.code === 0 && result.pid) {
         // Track running server
-        setRunningServers(
-          (prev) =>
-            new Map(
-              prev.set(server.id, {
-                ...server,
-                process: result,
-                startTime: Date.now(),
-              })
-            )
-        );
+        setRunningServers((prev) => {
+          const newMap = new Map(
+            prev.set(server.id, {
+              ...server,
+              process: result,
+              startTime: Date.now(),
+            })
+          );
+          runningServersRef.current = newMap;
+          return newMap;
+        });
 
         addConsoleOutput(
           `✓ Server "${server.name}" started successfully`,
@@ -370,18 +374,30 @@ function ServersTab() {
     setRunningServers((prev) => {
       const newMap = new Map(prev);
       newMap.delete(serverId);
+      runningServersRef.current = newMap;
       return newMap;
     });
   };
 
-  // Listen for real-time process output from main process
+  // Listen for global process output events from App component
   useEffect(() => {
-    const handleProcessOutput = (event, data) => {
-      const { pid, type, data: output } = data;
+    const handleGlobalProcessOutput = (event) => {
+      const {
+        pid,
+        type,
+        data: output,
+        timestamp,
+        message,
+        outputType,
+      } = event.detail;
 
       // Find which server this output belongs to
       let serverName = "Unknown";
-      for (const [serverId, server] of runningServers) {
+      // Access the current runningServers from ref to avoid stale closure issues
+      const currentRunningServers = Array.from(
+        runningServersRef.current.entries()
+      );
+      for (const [serverId, server] of currentRunningServers) {
         if (server.process?.pid === pid) {
           serverName = server.name;
           break;
@@ -391,42 +407,46 @@ function ServersTab() {
       // Show all server output (important for users), filter only very short/empty lines
       const trimmedOutput = output.trim();
       if (trimmedOutput.length > 1) {
-        addConsoleOutput(
-          `[${serverName}] ${trimmedOutput}`,
-          type === "stderr" ? "error" : "info"
-        );
+        // Add to global console output with server name prefix
+        const newOutput = {
+          timestamp: timestamp || new Date().toLocaleTimeString(),
+          message: `[${serverName}] ${trimmedOutput}`,
+          type: outputType || (type === "stderr" ? "error" : "info"),
+        };
+
+        setGlobalConsoleOutput((prev) => [...prev, newOutput]);
       }
     };
 
-    // Listen for process output events
-    if (isElectronFunctionAvailable("onProcessOutput")) {
-      try {
-        window.electronAPI.onProcessOutput(handleProcessOutput);
-      } catch (error) {
-        console.warn("Failed to register process output listener:", error);
-      }
-    }
+    // Listen for the global custom event
+    window.addEventListener("spt-process-output", handleGlobalProcessOutput);
+    console.log("ServersTab listening to global process output events");
 
     return () => {
-      if (isElectronFunctionAvailable("removeProcessOutputListener")) {
-        try {
-          window.electronAPI.removeProcessOutputListener(handleProcessOutput);
-        } catch (error) {
-          console.warn("Failed to remove process output listener:", error);
-        }
-      }
+      window.removeEventListener(
+        "spt-process-output",
+        handleGlobalProcessOutput
+      );
+      console.log(
+        "ServersTab stopped listening to global process output events"
+      );
     };
+  }, []); // Empty dependency array - only run once on mount
+
+  // Keep the ref in sync with the state
+  useEffect(() => {
+    runningServersRef.current = runningServers;
   }, [runningServers]);
 
   // Auto-scroll when console output changes
   useEffect(() => {
-    if (consoleOutput.length > 0 && autoScroll) {
+    if (globalConsoleOutput.length > 0 && autoScroll) {
       const timer = setTimeout(() => {
         scrollToBottom();
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [consoleOutput, autoScroll]);
+  }, [globalConsoleOutput, autoScroll]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -785,9 +805,9 @@ function ServersTab() {
           <h3 className="text-lg font-semibold flex items-center space-x-2 text-gray-900 dark:text-gray-100">
             <Settings className="w-5 h-5" />
             <span>Server Console Output</span>
-            {consoleOutput.length > 0 && (
+            {globalConsoleOutput.length > 0 && (
               <span className="text-sm text-gray-500 font-normal">
-                ({consoleOutput.length} lines)
+                ({globalConsoleOutput.length} lines)
               </span>
             )}
             <div className="flex items-center space-x-2 ml-2">
@@ -828,7 +848,7 @@ function ServersTab() {
               Scroll to Bottom
             </button>
             <button
-              onClick={() => setConsoleOutput([])}
+              onClick={clearConsoleOutput}
               className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
               title="Clear console"
             >
@@ -842,13 +862,13 @@ function ServersTab() {
           onScroll={handleScroll}
           className="bg-gray-900 text-green-400 p-4 rounded-md font-mono text-sm h-64 overflow-y-auto"
         >
-          {consoleOutput.length === 0 ? (
+          {globalConsoleOutput.length === 0 ? (
             <div className="text-gray-500 dark:text-gray-400 text-center py-8">
               <p>No server output yet</p>
               <p className="text-xs">Launch a server to see console output</p>
             </div>
           ) : (
-            consoleOutput.map((output, index) => (
+            globalConsoleOutput.map((output, index) => (
               <div
                 key={index}
                 className={`mb-1 ${

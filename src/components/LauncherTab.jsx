@@ -70,7 +70,9 @@ function LauncherTab() {
       "Failed to load Fika configuration"
     );
 
-    if (result.success && result.config) {
+    if (result.isElectronError) {
+      console.warn("Running in browser mode - Fika config not available");
+    } else if (result && result.config) {
       const config = result.config;
       setFikaConfig({
         serverAddress: config.serverAddress || "",
@@ -80,8 +82,6 @@ function LauncherTab() {
       if (result.configPath) {
         setConfigPath(result.configPath);
       }
-    } else if (result.isElectronError) {
-      console.warn("Running in browser mode - Fika config not available");
     }
   }, [sptDirectory]);
 
@@ -104,19 +104,17 @@ function LauncherTab() {
       "Failed to save Fika configuration"
     );
 
-    if (result.success) {
+    if (result.isElectronError) {
+      console.warn("Running in browser mode - config save not available");
+      // In browser mode, simulate success
+      setConfigStatus("saved");
+      setTimeout(() => setConfigStatus("idle"), 2000);
+    } else if (result) {
       setConfigStatus("saved");
       setTimeout(() => setConfigStatus("idle"), 2000);
     } else {
       setConfigStatus("error");
-      if (result.isElectronError) {
-        console.warn("Running in browser mode - config save not available");
-        // In browser mode, simulate success
-        setConfigStatus("saved");
-        setTimeout(() => setConfigStatus("idle"), 2000);
-      } else {
-        throw new Error(result.error || "Failed to save configuration");
-      }
+      throw new Error(result?.error || "Failed to save configuration");
     }
   }, [fikaConfig, sptDirectory]);
 
@@ -159,10 +157,10 @@ function LauncherTab() {
       "Failed to select launcher path"
     );
 
-    if (result.success && result) {
-      setLauncherPath(result);
-    } else if (result.isElectronError) {
+    if (result.isElectronError) {
       console.warn("Running in browser mode - file selection not available");
+    } else if (result) {
+      setLauncherPath(result);
     }
   }, []);
 
@@ -180,13 +178,13 @@ function LauncherTab() {
       "Failed to launch SPT"
     );
 
-    if (result.success && result.code === 0 && result.pid) {
+    if (result.isElectronError) {
+      console.warn("Running in browser mode - process launch not available");
+      setStatus("error");
+    } else if (result && result.code === 0 && result.pid) {
       setIsLauncherRunning(true);
       setStatus("success");
       setLauncherProcess(result);
-    } else if (result.isElectronError) {
-      console.warn("Running in browser mode - process launch not available");
-      setStatus("error");
     } else {
       console.error("Failed to launch SPT - invalid result:", result);
       setStatus("error");
@@ -216,7 +214,11 @@ function LauncherTab() {
       "Failed to check launcher status"
     );
 
-    if (result.success && Array.isArray(result)) {
+    if (result.isElectronError) {
+      console.warn(
+        "Running in browser mode - process monitoring not available"
+      );
+    } else if (result && Array.isArray(result)) {
       const isStillRunning = result.some((p) => p.pid === launcherProcess.pid);
 
       if (!isStillRunning) {
@@ -224,10 +226,6 @@ function LauncherTab() {
         setLauncherProcess(null);
         setStatus("stopped");
       }
-    } else if (result.isElectronError) {
-      console.warn(
-        "Running in browser mode - process monitoring not available"
-      );
     }
   }, [launcherProcess?.pid]);
 
