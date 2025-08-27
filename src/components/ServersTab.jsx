@@ -23,6 +23,9 @@ function ServersTab() {
     setGlobalConsoleOutput,
     addConsoleOutput: contextAddConsoleOutput,
     clearConsoleOutput,
+    runningServers,
+    addRunningServer,
+    removeRunningServer,
   } = useConsole();
   const [servers, setServers] = useState([]);
   const [selectedServer, setSelectedServer] = useState(null);
@@ -37,7 +40,6 @@ function ServersTab() {
     remoteAddress: "",
     remotePort: "6969",
   });
-  const [runningServers, setRunningServers] = useState(new Map());
   const [autoScroll, setAutoScroll] = useState(true);
   const consoleRef = React.useRef(null);
   const lastOutputRef = React.useRef(0);
@@ -319,19 +321,15 @@ function ServersTab() {
         "Failed to launch server"
       );
 
-      if (result && result.code === 0 && result.pid) {
-        // Track running server
-        setRunningServers((prev) => {
-          const newMap = new Map(
-            prev.set(server.id, {
-              ...server,
-              process: result,
-              startTime: Date.now(),
-            })
-          );
-          runningServersRef.current = newMap;
-          return newMap;
-        });
+             if (result && result.code === 0 && result.pid) {
+         // Track running server
+         const serverData = {
+           ...server,
+           process: result,
+           startTime: Date.now(),
+         };
+         addRunningServer(server.id, serverData);
+         runningServersRef.current = new Map(runningServers).set(server.id, serverData);
 
         addConsoleOutput(
           `✓ Server "${server.name}" started successfully`,
@@ -370,13 +368,9 @@ function ServersTab() {
       addConsoleOutput(`✗ Failed to stop server: ${error.message}`, "error");
     }
 
-    // Remove from running servers
-    setRunningServers((prev) => {
-      const newMap = new Map(prev);
-      newMap.delete(serverId);
-      runningServersRef.current = newMap;
-      return newMap;
-    });
+         // Remove from running servers
+     removeRunningServer(serverId);
+     runningServersRef.current = new Map(runningServers).delete(serverId);
   };
 
   // Listen for global process output events from App component
@@ -433,7 +427,7 @@ function ServersTab() {
     };
   }, []); // Empty dependency array - only run once on mount
 
-  // Keep the ref in sync with the state
+  // Keep the ref in sync with the global state
   useEffect(() => {
     runningServersRef.current = runningServers;
   }, [runningServers]);
