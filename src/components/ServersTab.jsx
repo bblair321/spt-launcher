@@ -11,6 +11,10 @@ import {
   Copy,
   FileText,
 } from "lucide-react";
+import {
+  safeElectronCall,
+  isElectronFunctionAvailable,
+} from "../utils/electronUtils";
 
 function ServersTab() {
   const [servers, setServers] = useState([]);
@@ -46,15 +50,16 @@ function ServersTab() {
   }, [servers]);
 
   const selectServerPath = async () => {
-    if (window.electronAPI) {
-      try {
-        const path = await window.electronAPI.selectFile();
-        if (path) {
-          setFormData((prev) => ({ ...prev, path }));
-        }
-      } catch (error) {
-        console.error("Failed to select server path:", error);
-      }
+    const result = await safeElectronCall(
+      "selectFile",
+      () => window.electronAPI.selectFile(),
+      "Failed to select server path"
+    );
+
+    if (result.success && result) {
+      setFormData((prev) => ({ ...prev, path: result }));
+    } else if (result.isElectronError) {
+      console.warn("Running in browser mode - file selection not available");
     }
   };
 
@@ -230,55 +235,46 @@ function ServersTab() {
       addConsoleOutput(`✓ Server is reachable! Launching Tarkov...`, "success");
 
       // Launch Tarkov with SPT-AKI client
-      if (window.electronAPI && window.electronAPI.launchTarkov) {
-        // addConsoleOutput(`🔍 Debug: SPT path being sent: ${sptPath}`, "info"); // This line is removed
-        // addConsoleOutput(`🔍 Debug: SPT path type: ${typeof sptPath}`, "info"); // This line is removed
-        // addConsoleOutput( // This line is removed
-        //   `🔍 Debug: SPT path length: ${sptPath ? sptPath.length : 0}`,
-        //   "info"
-        // );
+      const result = await safeElectronCall(
+        "launchTarkov",
+        () => window.electronAPI.launchTarkov(),
+        "Failed to launch Tarkov"
+      );
 
-        const result = await window.electronAPI.launchTarkov(); // Removed sptPath argument
-        if (result.success) {
-          addConsoleOutput(`✓ Tarkov launched successfully!`, "success");
-          addConsoleOutput(
-            `📋 Server connection info copied to clipboard:`,
-            "info"
-          );
-          addConsoleOutput(
-            `   Address: ${server.remoteAddress}:${server.remotePort}`,
-            "info"
-          );
-          addConsoleOutput(`   Use this info when prompted in Tarkov`, "info");
+      if (result.success) {
+        addConsoleOutput(`✓ Tarkov launched successfully!`, "success");
+        addConsoleOutput(
+          `📋 Server connection info copied to clipboard:`,
+          "info"
+        );
+        addConsoleOutput(
+          `   Address: ${server.remoteAddress}:${server.remotePort}`,
+          "info"
+        );
+        addConsoleOutput(`   Use this info when prompted in Tarkov`, "info");
 
-          // Copy connection info to clipboard
-          if (navigator.clipboard) {
-            try {
-              await navigator.clipboard.writeText(
-                `${server.remoteAddress}:${server.remotePort}`
-              );
-              addConsoleOutput(
-                `✓ Connection info copied to clipboard!`,
-                "success"
-              );
-              addConsoleOutput(
-                `📋 Paste this in Tarkov when connecting: ${server.remoteAddress}:${server.remotePort}`,
-                "info"
-              );
-            } catch (error) {
-              addConsoleOutput(
-                `⚠ Could not copy to clipboard: ${error.message}`,
-                "error"
-              );
-            }
+        // Copy connection info to clipboard
+        if (navigator.clipboard) {
+          try {
+            await navigator.clipboard.writeText(
+              `${server.remoteAddress}:${server.remotePort}`
+            );
+            addConsoleOutput(
+              `✓ Connection info copied to clipboard!`,
+              "success"
+            );
+            addConsoleOutput(
+              `📋 Paste this in Tarkov when connecting: ${server.remoteAddress}:${server.remotePort}`,
+              "info"
+            );
+          } catch (error) {
+            addConsoleOutput(
+              `⚠ Could not copy to clipboard: ${error.message}`,
+              "error"
+            );
           }
-        } else {
-          addConsoleOutput(
-            `✗ Failed to launch Tarkov: ${result.error}`,
-            "error"
-          );
         }
-      } else {
+      } else if (result.isElectronError) {
         addConsoleOutput(
           `⚠ Tarkov launcher not available. Please launch Tarkov manually.`,
           "warning"
@@ -287,6 +283,8 @@ function ServersTab() {
           `📋 Server connection info: ${server.remoteAddress}:${server.remotePort}`,
           "info"
         );
+      } else {
+        addConsoleOutput(`✗ Failed to launch Tarkov: ${result.error}`, "error");
       }
     } catch (error) {
       console.error("Quick connect failed:", error);
@@ -312,9 +310,13 @@ function ServersTab() {
       );
       addConsoleOutput(`Waiting for server output...`, "info");
 
-      const result = await window.electronAPI.launchProcess(server.path);
+      const result = await safeElectronCall(
+        "launchProcess",
+        () => window.electronAPI.launchProcess(server.path),
+        "Failed to launch server"
+      );
 
-      if (result.code === 0 && result.pid) {
+      if (result.success && result.code === 0 && result.pid) {
         // Track running server
         setRunningServers(
           (prev) =>
@@ -350,7 +352,11 @@ function ServersTab() {
 
     try {
       addConsoleOutput(`Stopping Server "${runningServer.name}"...`, "info");
-      await window.electronAPI.stopProcess(runningServer.process.pid);
+      await safeElectronCall(
+        "stopProcess",
+        () => window.electronAPI.stopProcess(runningServer.process.pid),
+        "Failed to stop server"
+      );
       addConsoleOutput(
         `✓ Server "${runningServer.name}" stopped successfully`,
         "success"
@@ -393,7 +399,7 @@ function ServersTab() {
     };
 
     // Listen for process output events
-    if (window.electronAPI && window.electronAPI.onProcessOutput) {
+    if (isElectronFunctionAvailable("onProcessOutput")) {
       try {
         window.electronAPI.onProcessOutput(handleProcessOutput);
       } catch (error) {
@@ -402,10 +408,7 @@ function ServersTab() {
     }
 
     return () => {
-      if (
-        window.electronAPI &&
-        window.electronAPI.removeProcessOutputListener
-      ) {
+      if (isElectronFunctionAvailable("removeProcessOutputListener")) {
         try {
           window.electronAPI.removeProcessOutputListener(handleProcessOutput);
         } catch (error) {
@@ -466,40 +469,40 @@ function ServersTab() {
               <label className="block text-sm font-medium mb-2 text-gray-900 dark:text-gray-100">
                 Server Type
               </label>
-                          <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
-              <label className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name="serverType"
-                  value="local"
-                  checked={formData.serverType === "local"}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      serverType: e.target.value,
-                    }))
-                  }
-                  className="text-blue-600 w-4 h-4"
-                />
-                <span>Local Server</span>
-              </label>
-              <label className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name="serverType"
-                  value="remote"
-                  checked={formData.serverType === "remote"}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      serverType: e.target.value,
-                    }))
-                  }
-                  className="text-blue-600 w-4 h-4"
-                />
-                <span>Remote Server (Fika)</span>
-              </label>
-            </div>
+              <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="serverType"
+                    value="local"
+                    checked={formData.serverType === "local"}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        serverType: e.target.value,
+                      }))
+                    }
+                    className="text-blue-600 w-4 h-4"
+                  />
+                  <span>Local Server</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    name="serverType"
+                    value="remote"
+                    checked={formData.serverType === "remote"}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        serverType: e.target.value,
+                      }))
+                    }
+                    className="text-blue-600 w-4 h-4"
+                  />
+                  <span>Remote Server (Fika)</span>
+                </label>
+              </div>
             </div>
 
             {formData.serverType === "local" ? (

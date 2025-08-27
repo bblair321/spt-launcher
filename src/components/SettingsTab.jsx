@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Settings, Save, RefreshCw, Sun, Moon, Monitor } from "lucide-react";
-import { useTheme } from "../hooks/useTheme";
+import { useTheme } from "../contexts/ThemeContext";
 import { useToastContext } from "../contexts/ToastContext";
 
 function SettingsTab() {

@@ -9,7 +9,7 @@ import {
   Square,
   Maximize,
 } from "lucide-react";
-import { useTheme } from "./hooks/useTheme";
+import { useTheme } from "./contexts/ThemeContext";
 import { ToastProvider } from "./contexts/ToastContext";
 
 // Constants

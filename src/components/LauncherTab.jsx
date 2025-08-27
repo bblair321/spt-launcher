@@ -16,6 +16,10 @@ import {
   getStatusText,
   getButtonText,
 } from "../utils/statusUtils";
+import {
+  safeElectronCall,
+  isElectronFunctionAvailable,
+} from "../utils/electronUtils";
 
 // UI Components
 import StatusCard from "./ui/StatusCard";
@@ -58,54 +62,61 @@ function LauncherTab() {
   }, [sptDirectory]);
 
   const loadFikaConfig = useCallback(async () => {
-    if (!window.electronAPI?.getSptConfig || !sptDirectory) return;
+    if (!sptDirectory) return;
 
-    try {
-      const result = await window.electronAPI.getSptConfig(sptDirectory);
-      if (result.success && result.config) {
-        const config = result.config;
-        setFikaConfig({
-          serverAddress: config.serverAddress || "",
-          serverPort: config.serverPort || "6969",
-          enableFika: config.enableFika || false,
-        });
-        if (result.configPath) {
-          setConfigPath(result.configPath);
-        }
+    const result = await safeElectronCall(
+      "getSptConfig",
+      () => window.electronAPI.getSptConfig(sptDirectory),
+      "Failed to load Fika configuration"
+    );
+
+    if (result.success && result.config) {
+      const config = result.config;
+      setFikaConfig({
+        serverAddress: config.serverAddress || "",
+        serverPort: config.serverPort || "6969",
+        enableFika: config.enableFika || false,
+      });
+      if (result.configPath) {
+        setConfigPath(result.configPath);
       }
-    } catch (error) {
-      console.error("Failed to load Fika config:", error);
+    } else if (result.isElectronError) {
+      console.warn("Running in browser mode - Fika config not available");
     }
   }, [sptDirectory]);
 
   const saveFikaConfig = useCallback(async () => {
-    if (!window.electronAPI?.updateSptConfig || !sptDirectory) {
+    if (!sptDirectory) {
       throw new Error("SPT directory not found");
     }
 
-    try {
-      setConfigStatus("saving");
+    setConfigStatus("saving");
 
-      const configData = {
-        serverAddress: fikaConfig.serverAddress,
-        serverPort: fikaConfig.serverPort,
-        enableFika: fikaConfig.enableFika,
-      };
+    const configData = {
+      serverAddress: fikaConfig.serverAddress,
+      serverPort: fikaConfig.serverPort,
+      enableFika: fikaConfig.enableFika,
+    };
 
-      const result = await window.electronAPI.updateSptConfig(
-        configData,
-        sptDirectory
-      );
+    const result = await safeElectronCall(
+      "updateSptConfig",
+      () => window.electronAPI.updateSptConfig(configData, sptDirectory),
+      "Failed to save Fika configuration"
+    );
 
-      if (result.success) {
+    if (result.success) {
+      setConfigStatus("saved");
+      setTimeout(() => setConfigStatus("idle"), 2000);
+    } else {
+      setConfigStatus("error");
+      if (result.isElectronError) {
+        console.warn("Running in browser mode - config save not available");
+        // In browser mode, simulate success
         setConfigStatus("saved");
         setTimeout(() => setConfigStatus("idle"), 2000);
       } else {
         throw new Error(result.error || "Failed to save configuration");
       }
-    } catch (error) {
-      setConfigStatus("error");
-      throw error;
     }
   }, [fikaConfig, sptDirectory]);
 
@@ -142,15 +153,16 @@ function LauncherTab() {
   }, [fikaConfig]);
 
   const selectLauncherPath = useCallback(async () => {
-    if (!window.electronAPI) return;
+    const result = await safeElectronCall(
+      "selectFile",
+      () => window.electronAPI.selectFile(),
+      "Failed to select launcher path"
+    );
 
-    try {
-      const path = await window.electronAPI.selectFile();
-      if (path) {
-        setLauncherPath(path);
-      }
-    } catch (error) {
-      console.error("Failed to select launcher path:", error);
+    if (result.success && result) {
+      setLauncherPath(result);
+    } else if (result.isElectronError) {
+      console.warn("Running in browser mode - file selection not available");
     }
   }, []);
 
@@ -160,21 +172,23 @@ function LauncherTab() {
       return;
     }
 
-    try {
-      setStatus("launching");
+    setStatus("launching");
 
-      const result = await window.electronAPI.launchProcess(launcherPath);
+    const result = await safeElectronCall(
+      "launchProcess",
+      () => window.electronAPI.launchProcess(launcherPath),
+      "Failed to launch SPT"
+    );
 
-      if (result.code === 0 && result.pid) {
-        setIsLauncherRunning(true);
-        setStatus("success");
-        setLauncherProcess(result);
-      } else {
-        console.error("Failed to launch SPT - invalid result:", result);
-        setStatus("error");
-      }
-    } catch (error) {
-      console.error("Failed to launch SPT:", error);
+    if (result.success && result.code === 0 && result.pid) {
+      setIsLauncherRunning(true);
+      setStatus("success");
+      setLauncherProcess(result);
+    } else if (result.isElectronError) {
+      console.warn("Running in browser mode - process launch not available");
+      setStatus("error");
+    } else {
+      console.error("Failed to launch SPT - invalid result:", result);
       setStatus("error");
     }
   }, [launcherPath]);
@@ -182,11 +196,11 @@ function LauncherTab() {
   const stopLauncher = useCallback(async () => {
     if (!launcherProcess?.pid) return;
 
-    try {
-      await window.electronAPI.stopProcess(launcherProcess.pid);
-    } catch (error) {
-      console.error("Failed to stop SPT Launcher:", error);
-    }
+    await safeElectronCall(
+      "stopProcess",
+      () => window.electronAPI.stopProcess(launcherProcess.pid),
+      "Failed to stop SPT Launcher"
+    );
 
     setIsLauncherRunning(false);
     setLauncherProcess(null);
@@ -196,19 +210,24 @@ function LauncherTab() {
   const checkLauncherStatus = useCallback(async () => {
     if (!launcherProcess?.pid) return;
 
-    try {
-      const processes = await window.electronAPI.getRunningProcesses();
-      const isStillRunning = processes.some(
-        (p) => p.pid === launcherProcess.pid
-      );
+    const result = await safeElectronCall(
+      "getRunningProcesses",
+      () => window.electronAPI.getRunningProcesses(),
+      "Failed to check launcher status"
+    );
+
+    if (result.success && Array.isArray(result)) {
+      const isStillRunning = result.some((p) => p.pid === launcherProcess.pid);
 
       if (!isStillRunning) {
         setIsLauncherRunning(false);
         setLauncherProcess(null);
         setStatus("stopped");
       }
-    } catch (error) {
-      console.error("Failed to check launcher status:", error);
+    } else if (result.isElectronError) {
+      console.warn(
+        "Running in browser mode - process monitoring not available"
+      );
     }
   }, [launcherProcess?.pid]);
 
