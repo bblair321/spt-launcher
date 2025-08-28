@@ -67,7 +67,7 @@ function SettingsTab() {
     if (window.electronAPI) {
       const eventHandlers = {
         "update-status": (event, data) => {
-          console.log("Update status event:", data);
+          // Update status event received
           if (data.status === "checking") {
             setUpdateStatus((prev) => ({
               ...prev,
@@ -84,7 +84,6 @@ function SettingsTab() {
           }
         },
         "update-available": (event, data) => {
-          console.log("Update available event:", data);
           setUpdateStatus((prev) => ({
             ...prev,
             checking: false,
@@ -99,7 +98,6 @@ function SettingsTab() {
           );
         },
         "update-error": (event, error) => {
-          console.log("Update error event:", error);
           setUpdateStatus((prev) => ({
             ...prev,
             checking: false,
@@ -107,7 +105,6 @@ function SettingsTab() {
           }));
         },
         "update-download-progress": (event, data) => {
-          console.log("Download progress event:", data);
           setUpdateStatus((prev) => ({
             ...prev,
             downloading: true,
@@ -118,7 +115,6 @@ function SettingsTab() {
           }));
         },
         "update-downloaded": (event, data) => {
-          console.log("Update downloaded event:", data);
           setUpdateStatus((prev) => ({
             ...prev,
             downloading: false,
@@ -161,7 +157,7 @@ function SettingsTab() {
   const saveSettings = () => {
     try {
       localStorage.setItem("appSettings", JSON.stringify(settings));
-      console.log("Settings saved successfully:", settings);
+      // Settings saved successfully
       showSuccess(
         "Settings Saved",
         "Your preferences have been saved successfully!"
@@ -184,9 +180,7 @@ function SettingsTab() {
     setUpdateStatus((prev) => ({ ...prev, checking: true, error: null }));
 
     try {
-      console.log("=== SETTINGS TAB: Starting update check ===");
       const result = await window.electronAPI.checkForUpdates();
-      console.log("=== SETTINGS TAB: Update check result ===", result);
 
       if (result?.success === false) {
         setUpdateStatus((prev) => ({
@@ -207,7 +201,7 @@ function SettingsTab() {
         );
       }
     } catch (error) {
-      console.error("=== SETTINGS TAB: Update check error ===", error);
+      console.error("Update check failed:", error);
       setUpdateStatus((prev) => ({
         ...prev,
         checking: false,
@@ -217,7 +211,6 @@ function SettingsTab() {
   };
 
   const handleDownloadUpdate = async () => {
-    console.log("=== SETTINGS TAB: Download update button clicked ===");
     try {
       setUpdateStatus((prev) => ({
         ...prev,
@@ -227,7 +220,6 @@ function SettingsTab() {
       }));
 
       const downloadResult = await window.electronAPI.downloadUpdate();
-      console.log("=== SETTINGS TAB: Download result ===", downloadResult);
 
       if (!downloadResult.success) {
         setUpdateStatus((prev) => ({
@@ -237,7 +229,7 @@ function SettingsTab() {
         }));
       }
     } catch (error) {
-      console.error("=== SETTINGS TAB: Download error ===", error);
+      console.error("Download failed:", error);
       setUpdateStatus((prev) => ({
         ...prev,
         error: error.message || "Error downloading update",
@@ -249,7 +241,6 @@ function SettingsTab() {
   // Auto-install handler for when download completes
   const handleAutoInstall = async () => {
     if (settings.autoInstallUpdates && updateStatus.downloadCompleted) {
-      console.log("=== SETTINGS TAB: Auto-installing update ===");
       try {
         await window.electronAPI.installUpdate();
       } catch (error) {

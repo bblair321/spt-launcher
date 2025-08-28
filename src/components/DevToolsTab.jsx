@@ -63,7 +63,7 @@ function DevToolsTab() {
     try {
       setIsLoading(true);
       const result = await window.electronAPI.getRunningProcesses();
-      if (result && result.processes) {
+      if (result && result.success && Array.isArray(result.processes)) {
         // Transform the API response to match our UI format
         const formattedProcesses = result.processes.map((proc, index) => {
           // Calculate uptime if we have startTime
@@ -114,14 +114,12 @@ function DevToolsTab() {
           };
         });
         setProcesses(formattedProcesses);
+      } else if (result && Array.isArray(result.processes)) {
+        // Fallback for backward compatibility
+        setProcesses(result.processes);
       } else {
-        // Handle case where result.processes is not an array
-        if (Array.isArray(result.processes)) {
-          setProcesses(result.processes);
-        } else {
-          console.warn("Unexpected processes format:", result);
-          setProcesses([]);
-        }
+        console.warn("Unexpected processes format");
+        setProcesses([]);
       }
     } catch (error) {
       console.error("Failed to fetch processes:", error);

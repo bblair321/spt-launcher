@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from "react";
+import React, { useEffect, useCallback, useMemo, memo } from "react";
 import { Play, Square, Server, Save } from "lucide-react";
 
 // Custom hooks
-import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useProcessMonitor } from "../hooks/useProcessMonitor";
+import { useLauncher } from "../contexts/LauncherContext";
 
 // Utilities
 import {
@@ -26,29 +26,30 @@ import StatusCard from "./ui/StatusCard";
 import PathInput from "./ui/PathInput";
 
 function LauncherTab() {
-  // State management
-  const [launcherPath, setLauncherPath] = useLocalStorage("launcherPath", "");
-  const [isLauncherRunning, setIsLauncherRunning] = useState(false);
-  const [launcherProcess, setLauncherProcess] = useState(null);
-  const [status, setStatus] = useState("idle");
+  // Get launcher state from context (persists across tab switches)
+  const {
+    launcherPath,
+    setLauncherPath,
+    isLauncherRunning,
+    setIsLauncherRunning,
+    launcherProcess,
+    setLauncherProcess,
+    status,
+    setStatus,
+    fikaConfig,
+    setFikaConfig,
+    configStatus,
+    setConfigStatus,
+    showFikaSettings,
+    setShowFikaSettings,
+    configPath,
+    setConfigPath,
+    handleProcessStop,
+  } = useLauncher();
 
-  // Fika configuration state
-  const [fikaConfig, setFikaConfig] = useState({
-    serverAddress: "",
-    serverPort: "6969",
-    enableFika: false,
-  });
-  const [configStatus, setConfigStatus] = useState("idle");
-  const [showFikaSettings, setShowFikaSettings] = useState(false);
-  const [configPath, setConfigPath] = useState("");
+  // Context now handles localStorage persistence automatically
 
-  // Process monitoring
-  const handleProcessStop = useCallback(() => {
-    setIsLauncherRunning(false);
-    setLauncherProcess(null);
-    setStatus("stopped");
-  }, []);
-
+  // Process monitoring - uses context callback
   useProcessMonitor(launcherProcess?.pid, isLauncherRunning, handleProcessStop);
 
   // Memoized SPT directory to prevent recalculation
@@ -182,9 +183,13 @@ function LauncherTab() {
       console.warn("Running in browser mode - process launch not available");
       setStatus("error");
     } else if (result && result.code === 0 && result.pid) {
-      setIsLauncherRunning(true);
-      setStatus("success");
-      setLauncherProcess(result);
+      // Add a small delay to ensure the process is properly registered in the system
+      // before starting the process monitoring
+      setTimeout(() => {
+        setIsLauncherRunning(true);
+        setStatus("success");
+        setLauncherProcess(result);
+      }, 500); // 500ms delay
     } else {
       console.error("Failed to launch SPT - invalid result:", result);
       setStatus("error");
@@ -218,7 +223,29 @@ function LauncherTab() {
       console.warn(
         "Running in browser mode - process monitoring not available"
       );
+    } else if (result && result.success && Array.isArray(result.processes)) {
+      const isStillRunning = result.processes.some(
+        (p) => p.pid === launcherProcess.pid
+      );
+
+      if (!isStillRunning) {
+        setIsLauncherRunning(false);
+        setLauncherProcess(null);
+        setStatus("stopped");
+      }
+    } else if (result && Array.isArray(result.processes)) {
+      // Fallback for backward compatibility
+      const isStillRunning = result.processes.some(
+        (p) => p.pid === launcherProcess.pid
+      );
+
+      if (!isStillRunning) {
+        setIsLauncherRunning(false);
+        setLauncherProcess(null);
+        setStatus("stopped");
+      }
     } else if (result && Array.isArray(result)) {
+      // Additional fallback for direct array response
       const isStillRunning = result.some((p) => p.pid === launcherProcess.pid);
 
       if (!isStillRunning) {
@@ -226,6 +253,10 @@ function LauncherTab() {
         setLauncherProcess(null);
         setStatus("stopped");
       }
+    } else {
+      console.warn(
+        "Invalid process list format received in launcher status check"
+      );
     }
   }, [launcherProcess?.pid]);
 

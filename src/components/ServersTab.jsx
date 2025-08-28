@@ -321,15 +321,18 @@ function ServersTab() {
         "Failed to launch server"
       );
 
-             if (result && result.code === 0 && result.pid) {
-         // Track running server
-         const serverData = {
-           ...server,
-           process: result,
-           startTime: Date.now(),
-         };
-         addRunningServer(server.id, serverData);
-         runningServersRef.current = new Map(runningServers).set(server.id, serverData);
+      if (result && result.code === 0 && result.pid) {
+        // Track running server
+        const serverData = {
+          ...server,
+          process: result,
+          startTime: Date.now(),
+        };
+        addRunningServer(server.id, serverData);
+        runningServersRef.current = new Map(runningServers).set(
+          server.id,
+          serverData
+        );
 
         addConsoleOutput(
           `✓ Server "${server.name}" started successfully`,
@@ -368,9 +371,9 @@ function ServersTab() {
       addConsoleOutput(`✗ Failed to stop server: ${error.message}`, "error");
     }
 
-         // Remove from running servers
-     removeRunningServer(serverId);
-     runningServersRef.current = new Map(runningServers).delete(serverId);
+    // Remove from running servers
+    removeRunningServer(serverId);
+    runningServersRef.current = new Map(runningServers).delete(serverId);
   };
 
   // Listen for global process output events from App component
@@ -414,15 +417,11 @@ function ServersTab() {
 
     // Listen for the global custom event
     window.addEventListener("spt-process-output", handleGlobalProcessOutput);
-    console.log("ServersTab listening to global process output events");
 
     return () => {
       window.removeEventListener(
         "spt-process-output",
         handleGlobalProcessOutput
-      );
-      console.log(
-        "ServersTab stopped listening to global process output events"
       );
     };
   }, []); // Empty dependency array - only run once on mount
