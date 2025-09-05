@@ -44,18 +44,31 @@ function ServersTab() {
   const consoleRef = React.useRef(null);
   const lastOutputRef = React.useRef(0);
   const runningServersRef = React.useRef(new Map());
+  const hasLoadedServers = React.useRef(false);
 
-  // Load saved servers from localStorage
+  // Load saved servers from localStorage only once
   useEffect(() => {
-    const savedServers = localStorage.getItem("sptServers");
-    if (savedServers) {
-      setServers(JSON.parse(savedServers));
+    if (!hasLoadedServers.current) {
+      const savedServers = localStorage.getItem("sptServers");
+      if (savedServers) {
+        try {
+          const parsedServers = JSON.parse(savedServers);
+          if (Array.isArray(parsedServers)) {
+            setServers(parsedServers);
+          }
+        } catch (error) {
+          console.error("Failed to parse saved servers:", error);
+        }
+      }
+      hasLoadedServers.current = true;
     }
   }, []);
 
   // Save servers to localStorage whenever servers change
   useEffect(() => {
-    localStorage.setItem("sptServers", JSON.stringify(servers));
+    if (hasLoadedServers.current) {
+      localStorage.setItem("sptServers", JSON.stringify(servers));
+    }
   }, [servers]);
 
   const selectServerPath = async () => {
@@ -122,11 +135,11 @@ function ServersTab() {
   const editServer = (server) => {
     setSelectedServer(server);
     setFormData({
-      name: server.name,
-      path: server.path,
-      port: server.port,
-      autoStart: server.autoStart,
-      description: server.description,
+      name: server.name || "",
+      path: server.path || "",
+      port: server.port || "6969",
+      autoStart: server.autoStart || false,
+      description: server.description || "",
       serverType: server.serverType || "local",
       remoteAddress: server.remoteAddress || "",
       remotePort: server.remotePort || "6969",
@@ -660,6 +673,9 @@ function ServersTab() {
                       port: "6969",
                       autoStart: false,
                       description: "",
+                      serverType: "local",
+                      remoteAddress: "",
+                      remotePort: "6969",
                     });
                   }}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"

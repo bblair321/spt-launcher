@@ -19,21 +19,21 @@ function SettingsTab() {
 
   const [updateStatus, setUpdateStatus] = useState({
     checking: false,
-    lastChecked: null,
+    lastChecked: "",
     updateAvailable: false,
-    error: null,
+    error: "",
     downloading: false,
     downloadProgress: 0,
     downloadSpeed: 0,
     downloaded: 0,
     total: 0,
     downloadCompleted: false,
-    newVersion: null,
-    releaseNotes: null,
+    newVersion: "",
+    releaseNotes: "",
     installing: false,
     installProgress: 0,
     installCompleted: false,
-    currentVersion: null,
+    currentVersion: "",
   });
 
   // Load saved settings from localStorage
@@ -42,7 +42,16 @@ function SettingsTab() {
     if (savedSettings) {
       try {
         const parsedSettings = JSON.parse(savedSettings);
-        setSettings(parsedSettings);
+        // Ensure all settings have default values to prevent undefined values
+        setSettings({
+          autoStart: parsedSettings.autoStart ?? false,
+          minimizeToTray: parsedSettings.minimizeToTray ?? true,
+          checkForUpdates: parsedSettings.checkForUpdates ?? true,
+          autoDownloadUpdates: parsedSettings.autoDownloadUpdates ?? true,
+          silentUpdates: parsedSettings.silentUpdates ?? false,
+          autoInstallUpdates: parsedSettings.autoInstallUpdates ?? true,
+          backgroundChecks: parsedSettings.backgroundChecks ?? true,
+        });
       } catch (error) {
         console.error("Failed to parse saved settings:", error);
       }
@@ -55,7 +64,10 @@ function SettingsTab() {
       try {
         if (window.electronAPI?.getAppVersion) {
           const version = await window.electronAPI.getAppVersion();
-          setUpdateStatus((prev) => ({ ...prev, currentVersion: version }));
+          setUpdateStatus((prev) => ({
+            ...prev,
+            currentVersion: version || "",
+          }));
         }
       } catch (error) {
         console.error("Failed to get app version:", error);
@@ -72,14 +84,14 @@ function SettingsTab() {
             setUpdateStatus((prev) => ({
               ...prev,
               checking: true,
-              error: null,
+              error: "",
             }));
           } else if (data.status === "no-update") {
             setUpdateStatus((prev) => ({
               ...prev,
               checking: false,
               updateAvailable: false,
-              error: null,
+              error: "",
             }));
           }
         },
@@ -88,7 +100,7 @@ function SettingsTab() {
             ...prev,
             checking: false,
             updateAvailable: true,
-            error: null,
+            error: "",
             newVersion: data.version,
             releaseNotes: data.releaseNotes,
           }));
@@ -177,7 +189,7 @@ function SettingsTab() {
       return;
     }
 
-    setUpdateStatus((prev) => ({ ...prev, checking: true, error: null }));
+    setUpdateStatus((prev) => ({ ...prev, checking: true, error: "" }));
 
     try {
       const result = await window.electronAPI.checkForUpdates();
@@ -215,7 +227,7 @@ function SettingsTab() {
       setUpdateStatus((prev) => ({
         ...prev,
         downloading: true,
-        error: null,
+        error: "",
         downloadProgress: 0,
       }));
 

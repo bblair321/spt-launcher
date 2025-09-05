@@ -26,6 +26,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSptConfig: (sptDir) => ipcRenderer.invoke("get-spt-config", sptDir),
   updateSptConfig: (configData, sptDir) =>
     ipcRenderer.invoke("update-spt-config", configData, sptDir),
+  getSptConfigPath: (sptDir) =>
+    ipcRenderer.invoke("get-spt-config-path", sptDir),
+  listSptConfigs: (sptDir) => ipcRenderer.invoke("list-spt-configs", sptDir),
+  readSptConfig: (configPath) =>
+    ipcRenderer.invoke("read-spt-config", configPath),
+  saveSptConfig: (configData, configPath) =>
+    ipcRenderer.invoke("save-spt-config", configData, configPath),
+  backupSptConfig: (sptDir) => ipcRenderer.invoke("backup-spt-config", sptDir),
+  restoreSptConfig: (backupPath, sptDir) =>
+    ipcRenderer.invoke("restore-spt-config", backupPath, sptDir),
+  listConfigBackups: (sptDir) =>
+    ipcRenderer.invoke("list-config-backups", sptDir),
   getRunningProcesses: () => ipcRenderer.invoke("get-running-processes"),
 
   // Update events

@@ -194,10 +194,34 @@ function findSptInstallation(userPath = null) {
   return null;
 }
 
+// Utility function to recursively copy a folder
+async function copyFolderRecursive(source, destination) {
+  if (!fs.existsSync(destination)) {
+    fs.mkdirSync(destination, { recursive: true });
+  }
+
+  const items = fs.readdirSync(source);
+
+  for (const item of items) {
+    const sourcePath = path.join(source, item);
+    const destPath = path.join(destination, item);
+
+    const stat = fs.statSync(sourcePath);
+
+    if (stat.isDirectory()) {
+      await copyFolderRecursive(sourcePath, destPath);
+    } else {
+      fs.copyFileSync(sourcePath, destPath);
+    }
+  }
+}
+
 // Utility function to find SPT config path
 function findSptConfigPath(sptInstallPath = null) {
   if (sptInstallPath) {
     const potentialPaths = [
+      path.join(sptInstallPath, "SPT_Data", "Server", "config.json"),
+      path.join(sptInstallPath, "SPT_Data", "Server", "server.json"),
       path.join(sptInstallPath, "user", "launcher", "config.json"),
       path.join(sptInstallPath, "config.json"),
     ];
@@ -212,9 +236,23 @@ function findSptConfigPath(sptInstallPath = null) {
   // Auto-detection
   for (const basePath of SPT_POSSIBLE_PATHS) {
     if (fs.existsSync(basePath)) {
-      const configPath = path.join(basePath, "config.json");
-      if (fs.existsSync(configPath)) {
-        return configPath;
+      const configPaths = [
+        path.join(basePath, "SPT_Data", "Server", "config.json"),
+        path.join(basePath, "SPT_Data", "Server", "server.json"),
+        path.join(basePath, "config.json"),
+      ];
+
+      for (const configPath of configPaths) {
+        console.log(
+          "🔍 Auto-checking:",
+          configPath,
+          "exists:",
+          fs.existsSync(configPath)
+        );
+        if (fs.existsSync(configPath)) {
+          console.log("✅ Auto-found config at:", configPath);
+          return configPath;
+        }
       }
     }
   }
@@ -799,6 +837,403 @@ ipcMain.handle("get-spt-config-path", async (event, sptInstallPath = null) => {
     return {
       success: false,
       error: `Failed to get config path: ${error.message}`,
+    };
+  }
+});
+
+// Save a specific SPT configuration file
+ipcMain.handle("save-spt-config", async (event, configData, configPath) => {
+  try {
+    if (!configPath) {
+      return { success: false, error: "No config path provided" };
+    }
+
+    // Write the new config
+    fs.writeFileSync(configPath, JSON.stringify(configData, null, 2), "utf8");
+
+    return {
+      success: true,
+      message: `Configuration saved to ${path.basename(configPath)}`,
+      configPath,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to save config file: ${error.message}`,
+    };
+  }
+});
+
+// Read a specific SPT configuration file
+ipcMain.handle("read-spt-config", async (event, configPath) => {
+  try {
+    if (!configPath || !fs.existsSync(configPath)) {
+      return { success: false, error: "Configuration file not found" };
+    }
+
+    const content = fs.readFileSync(configPath, "utf8");
+    const config = JSON.parse(content);
+
+    return {
+      success: true,
+      config,
+      configPath,
+      fileName: path.basename(configPath),
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to read config file: ${error.message}`,
+    };
+  }
+});
+
+// List SPT configuration files
+ipcMain.handle("list-spt-configs", async (event, sptInstallPath = null) => {
+  try {
+    if (!sptInstallPath) {
+      return { success: false, error: "No SPT installation path provided" };
+    }
+
+    const configFiles = [];
+    const searchPaths = [
+      path.join(sptInstallPath, "SPT_Data", "Server", "database"),
+      path.join(sptInstallPath, "SPT_Data", "Server", "configs"),
+      path.join(sptInstallPath, "SPT_Data", "Server"),
+      path.join(sptInstallPath, "user", "launcher"),
+      path.join(sptInstallPath, "user", "configs"),
+      path.join(sptInstallPath, "configs"),
+      sptInstallPath, // Root directory
+    ];
+
+    for (const searchPath of searchPaths) {
+      if (fs.existsSync(searchPath)) {
+        try {
+          const files = fs.readdirSync(searchPath);
+
+          for (const file of files) {
+            if (file.endsWith(".json")) {
+              const filePath = path.join(searchPath, file);
+              const stats = fs.statSync(filePath);
+              configFiles.push({
+                name: file,
+                path: filePath,
+                size: stats.size,
+                modified: stats.mtime,
+                relativePath: path.relative(sptInstallPath, filePath),
+                directory: path.basename(searchPath),
+              });
+            }
+          }
+        } catch (readError) {
+          // Skip directories that can't be read
+          continue;
+        }
+      }
+    }
+
+    // If no configs found, create the SPT_Data/Server directory
+    if (configFiles.length === 0) {
+      const serverConfigPath = path.join(sptInstallPath, "SPT_Data", "Server");
+      try {
+        fs.mkdirSync(serverConfigPath, { recursive: true });
+        return {
+          success: true,
+          configs: [],
+          serverPath: serverConfigPath,
+          message:
+            "No configuration files found. SPT_Data/Server directory created for new configs.",
+        };
+      } catch (createError) {
+        return {
+          success: true,
+          configs: [],
+          message: "No configuration files found in common SPT directories.",
+        };
+      }
+    }
+
+    return {
+      success: true,
+      configs: configFiles,
+      serverPath: path.join(sptInstallPath, "SPT_Data", "Server"),
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to list SPT configs: ${error.message}`,
+    };
+  }
+});
+
+// Configuration backup functionality
+ipcMain.handle("backup-spt-config", async (event, sptInstallPath = null) => {
+  try {
+    console.log("🔍 Backup Debug: sptInstallPath:", sptInstallPath);
+
+    if (!sptInstallPath || !fs.existsSync(sptInstallPath)) {
+      return { success: false, error: "SPT installation directory not found" };
+    }
+
+    // If the path points to an executable file, get the directory instead
+    let actualSptPath = sptInstallPath;
+    if (fs.statSync(sptInstallPath).isFile()) {
+      actualSptPath = path.dirname(sptInstallPath);
+      console.log(
+        "🔍 Detected executable file, using directory:",
+        actualSptPath
+      );
+    }
+
+    // Create backups folder in SPT_Data/Server directory
+    const serverDir = path.join(actualSptPath, "SPT_Data", "Server");
+    if (!fs.existsSync(serverDir)) {
+      return { success: false, error: "SPT_Data/Server directory not found" };
+    }
+
+    const backupDir = path.join(serverDir, "backups");
+
+    // Create backup directory if it doesn't exist
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    // Copy configs folder from SPT_Data/Server to backups
+    const configsSource = path.join(serverDir, "configs");
+    const configsDest = path.join(backupDir, "configs");
+    if (fs.existsSync(configsSource)) {
+      // Remove existing backup if it exists
+      if (fs.existsSync(configsDest)) {
+        fs.rmSync(configsDest, { recursive: true, force: true });
+      }
+      await copyFolderRecursive(configsSource, configsDest);
+    }
+
+    // Copy database folder from SPT_Data/Server to backups
+    const databaseSource = path.join(serverDir, "database");
+    const databaseDest = path.join(backupDir, "database");
+    if (fs.existsSync(databaseSource)) {
+      // Remove existing backup if it exists
+      if (fs.existsSync(databaseDest)) {
+        fs.rmSync(databaseDest, { recursive: true, force: true });
+      }
+      await copyFolderRecursive(databaseSource, databaseDest);
+    }
+
+    // Also backup the main config.json if it exists
+    const mainConfigSource = path.join(serverDir, "config.json");
+    if (fs.existsSync(mainConfigSource)) {
+      fs.copyFileSync(mainConfigSource, path.join(backupDir, "config.json"));
+    }
+
+    return {
+      success: true,
+      backupPath: backupDir,
+      message: `Full backup created at ${backupDir}`,
+    };
+  } catch (error) {
+    console.error("Backup error:", error);
+    return {
+      success: false,
+      error: `Failed to backup SPT: ${error.message}`,
+    };
+  }
+});
+
+// Configuration restore functionality
+ipcMain.handle(
+  "restore-spt-config",
+  async (event, backupPath, sptInstallPath = null) => {
+    try {
+      if (!fs.existsSync(backupPath)) {
+        return { success: false, error: "Backup folder not found" };
+      }
+
+      if (!sptInstallPath || !fs.existsSync(sptInstallPath)) {
+        return {
+          success: false,
+          error: "SPT installation directory not found",
+        };
+      }
+
+      // If the path points to an executable file, get the directory instead
+      let actualSptPath = sptInstallPath;
+      if (fs.statSync(sptInstallPath).isFile()) {
+        actualSptPath = path.dirname(sptInstallPath);
+      }
+
+      // Create a safety backup of current state before restoring
+      const safetyBackupDir = path.join(
+        actualSptPath,
+        "SPT_Data",
+        "Server",
+        "backups",
+        "safety-backup-" + Date.now()
+      );
+      fs.mkdirSync(safetyBackupDir, { recursive: true });
+
+      // Get the SPT_Data/Server directory
+      const serverDir = path.join(actualSptPath, "SPT_Data", "Server");
+
+      // Backup current configs folder if it exists
+      const currentConfigs = path.join(serverDir, "configs");
+      if (fs.existsSync(currentConfigs)) {
+        await copyFolderRecursive(
+          currentConfigs,
+          path.join(safetyBackupDir, "configs")
+        );
+      }
+
+      // Backup current database folder if it exists
+      const currentDatabase = path.join(serverDir, "database");
+      if (fs.existsSync(currentDatabase)) {
+        await copyFolderRecursive(
+          currentDatabase,
+          path.join(safetyBackupDir, "database")
+        );
+      }
+
+      // Backup current config.json if it exists
+      const currentConfig = path.join(serverDir, "config.json");
+      if (fs.existsSync(currentConfig)) {
+        fs.copyFileSync(
+          currentConfig,
+          path.join(safetyBackupDir, "config.json")
+        );
+      }
+
+      // Restore from backup (backupPath is now the backupDir)
+      const backupConfigs = path.join(backupPath, "configs");
+      const backupDatabase = path.join(backupPath, "database");
+      const backupConfig = path.join(backupPath, "config.json");
+
+      // Restore configs folder
+      if (fs.existsSync(backupConfigs)) {
+        const restoreConfigs = path.join(serverDir, "configs");
+        if (fs.existsSync(restoreConfigs)) {
+          fs.rmSync(restoreConfigs, { recursive: true, force: true });
+        }
+        await copyFolderRecursive(backupConfigs, restoreConfigs);
+      }
+
+      // Restore database folder
+      if (fs.existsSync(backupDatabase)) {
+        const restoreDatabase = path.join(serverDir, "database");
+        if (fs.existsSync(restoreDatabase)) {
+          fs.rmSync(restoreDatabase, { recursive: true, force: true });
+        }
+        await copyFolderRecursive(backupDatabase, restoreDatabase);
+      }
+
+      // Restore main config.json
+      if (fs.existsSync(backupConfig)) {
+        fs.copyFileSync(backupConfig, path.join(serverDir, "config.json"));
+      }
+
+      return {
+        success: true,
+        message: `Full backup restored from ${backupPath}. Safety backup created at ${safetyBackupDir}`,
+      };
+    } catch (error) {
+      console.error("Restore error:", error);
+      return {
+        success: false,
+        error: `Failed to restore SPT backup: ${error.message}`,
+      };
+    }
+  }
+);
+
+// List available backups
+ipcMain.handle("list-config-backups", async (event, sptInstallPath = null) => {
+  try {
+    if (!sptInstallPath || !fs.existsSync(sptInstallPath)) {
+      return { success: false, error: "SPT installation directory not found" };
+    }
+
+    // If the path points to an executable file, get the directory instead
+    let actualSptPath = sptInstallPath;
+    if (fs.statSync(sptInstallPath).isFile()) {
+      actualSptPath = path.dirname(sptInstallPath);
+    }
+
+    const backupDir = path.join(actualSptPath, "SPT_Data", "Server", "backups");
+
+    if (!fs.existsSync(backupDir)) {
+      return { success: true, backups: [] };
+    }
+
+    // Check if configs and database folders exist in backups
+    const configsBackup = path.join(backupDir, "configs");
+    const databaseBackup = path.join(backupDir, "database");
+    const configBackup = path.join(backupDir, "config.json");
+
+    const hasConfigs = fs.existsSync(configsBackup);
+    const hasDatabase = fs.existsSync(databaseBackup);
+    const hasConfig = fs.existsSync(configBackup);
+
+    if (!hasConfigs && !hasDatabase && !hasConfig) {
+      return { success: true, backups: [] };
+    }
+
+    // Calculate total size of the backup
+    let totalSize = 0;
+    try {
+      const calculateSize = (dir) => {
+        if (fs.existsSync(dir)) {
+          const items = fs.readdirSync(dir);
+          for (const item of items) {
+            const itemPath = path.join(dir, item);
+            const itemStats = fs.statSync(itemPath);
+            if (itemStats.isDirectory()) {
+              calculateSize(itemPath);
+            } else {
+              totalSize += itemStats.size;
+            }
+          }
+        }
+      };
+      calculateSize(backupDir);
+    } catch (error) {
+      console.error("Error calculating backup size:", error);
+    }
+
+    // Get the most recent modification time
+    let mostRecentTime = new Date(0);
+    if (hasConfigs) {
+      const configsStats = fs.statSync(configsBackup);
+      if (configsStats.mtime > mostRecentTime)
+        mostRecentTime = configsStats.mtime;
+    }
+    if (hasDatabase) {
+      const databaseStats = fs.statSync(databaseBackup);
+      if (databaseStats.mtime > mostRecentTime)
+        mostRecentTime = databaseStats.mtime;
+    }
+    if (hasConfig) {
+      const configStats = fs.statSync(configBackup);
+      if (configStats.mtime > mostRecentTime)
+        mostRecentTime = configStats.mtime;
+    }
+
+    const backupFolders = [
+      {
+        name: "Current Backup",
+        path: backupDir,
+        size: totalSize,
+        created: mostRecentTime,
+        modified: mostRecentTime,
+      },
+    ];
+
+    return {
+      success: true,
+      backups: backupFolders,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to list config backups: ${error.message}`,
     };
   }
 });
