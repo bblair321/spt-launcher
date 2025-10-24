@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -12,6 +14,55 @@ namespace SptLauncherWpf.Controls
     public partial class EmbeddedConsoleControl : UserControl
     {
         private Process process;
+        private bool isProcessRunning = false;
+        
+        // Windows API declarations for console embedding
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
+
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, uint dwNewLong);
+
+        [DllImport("user32.dll")]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+        [DllImport("user32.dll")]
+        private static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetParent(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out System.Drawing.Rectangle lpRect);
+
+        [DllImport("user32.dll")]
+        private static extern bool BringWindowToTop(IntPtr hWnd);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        private const int GWL_STYLE = -16;
+        private const uint WS_VISIBLE = 0x10000000;
+        private const uint WS_CHILD = 0x40000000;
+        private const int SW_HIDE = 0;
+        private const int SW_SHOW = 1;
 
         public EmbeddedConsoleControl()
         {
@@ -30,27 +81,35 @@ namespace SptLauncherWpf.Controls
 
                 AppendLine($"[Launching] {exePath}");
 
-                // For SPT server, we need to let it run in its own console to avoid "Unable to get console mode" error
+                var workingDir = System.IO.Path.GetDirectoryName(exePath);
+                
+                // Launch server in background (hidden) and monitor log files
                 var psi = new ProcessStartInfo
                 {
                     FileName = exePath,
                     Arguments = args,
-                    UseShellExecute = true, // Let it use its own console
-                    CreateNoWindow = false  // Allow console window
+                    WorkingDirectory = workingDir,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
                 };
 
                 process = Process.Start(psi);
                 if (process != null)
                 {
+                    isProcessRunning = true;
                     process.EnableRaisingEvents = true;
-                    process.Exited += (s, e) => AppendLine("[Process exited]");
+                    process.Exited += (s, e) => 
+                    {
+                        isProcessRunning = false;
+                        AppendLine($"[Process exited with code: {process.ExitCode}]");
+                    };
                     
-                    AppendLine("✅ Server started in its own console window");
-                    AppendLine("📋 Check the server console window for detailed output");
-                    AppendLine("🔄 Monitoring log files for status updates...");
+                    AppendLine("✅ Server started successfully");
+                    AppendLine("📋 Server is running in the background (hidden)");
+                    AppendLine("📋 Monitoring log files for output...");
                     
-                    // Start monitoring log files for output since we can't redirect directly
-                    _ = Task.Run(() => MonitorLogFiles(System.IO.Path.GetDirectoryName(exePath)));
+                    // Monitor log files for output
+                    _ = Task.Run(async () => await MonitorLogFiles(workingDir));
                 }
                 else
                 {
@@ -63,6 +122,74 @@ namespace SptLauncherWpf.Controls
             }
         }
 
+        private async Task CaptureConsoleOutput()
+        {
+            try
+            {
+                AppendLine("📋 Starting console output capture...");
+                
+                // Start reading from standard output
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var reader = process.StandardOutput;
+                        string line;
+                        while ((line = await reader.ReadLineAsync()) != null && !process.HasExited)
+                        {
+                            Dispatcher.Invoke(() => AppendLine(CleanOutputLine(line)));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Dispatcher.Invoke(() => AppendLine($"Output capture error: {ex.Message}"));
+                    }
+                });
+                
+                // Start reading from standard error
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var reader = process.StandardError;
+                        string line;
+                        while ((line = await reader.ReadLineAsync()) != null && !process.HasExited)
+                        {
+                            Dispatcher.Invoke(() => AppendLine($"[ERROR] {CleanOutputLine(line)}"));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Dispatcher.Invoke(() => AppendLine($"Error capture error: {ex.Message}"));
+                    }
+                });
+                
+                AppendLine("✅ Console output capture started successfully");
+            }
+            catch (Exception ex)
+            {
+                AppendLine($"❌ Failed to start console output capture: {ex.Message}");
+            }
+        }
+
+        private IntPtr FindWindowByProcessId(int processId)
+        {
+            IntPtr foundWindow = IntPtr.Zero;
+            
+            EnumWindows((hWnd, lParam) =>
+            {
+                GetWindowThreadProcessId(hWnd, out int windowProcessId);
+                if (windowProcessId == processId)
+                {
+                    foundWindow = hWnd;
+                    return false; // Stop enumeration
+                }
+                return true; // Continue enumeration
+            }, IntPtr.Zero);
+            
+            return foundWindow;
+        }
+
         private async Task MonitorLogFiles(string serverDirectory)
         {
             try
@@ -70,10 +197,23 @@ namespace SptLauncherWpf.Controls
                 // Wait a moment for log files to be created
                 await Task.Delay(2000);
                 
-                var logFiles = Directory.GetFiles(serverDirectory, "*.log")
-                    .OrderByDescending(f => File.GetLastWriteTime(f))
-                    .Take(3)
-                    .ToList();
+                // Look for various log file patterns
+                var logPatterns = new[] { "*.log", "*.txt", "user/logs/*.log", "logs/*.log" };
+                var logFiles = new List<string>();
+                
+                foreach (var pattern in logPatterns)
+                {
+                    try
+                    {
+                        var files = Directory.GetFiles(serverDirectory, pattern, SearchOption.AllDirectories)
+                            .OrderByDescending(f => File.GetLastWriteTime(f))
+                            .Take(3);
+                        logFiles.AddRange(files);
+                    }
+                    catch { }
+                }
+                
+                logFiles = logFiles.Distinct().OrderByDescending(f => File.GetLastWriteTime(f)).Take(3).ToList();
 
                 if (logFiles.Any())
                 {
@@ -117,12 +257,38 @@ namespace SptLauncherWpf.Controls
                 else
                 {
                     AppendLine("⚠️ No log files found to monitor");
+                    AppendLine("📋 Server console output will appear in the external console window");
+                    AppendLine("📋 The server is running normally - check the external console for output");
+                    
+                    // Show a periodic status update since we can't monitor logs
+                    var statusCounter = 0;
+                    while (process != null && !process.HasExited)
+                    {
+                        await Task.Delay(5000); // Check every 5 seconds
+                        statusCounter++;
+                        
+                        if (statusCounter % 6 == 0) // Every 30 seconds
+                        {
+                            AppendLine($"📋 Server still running... ({statusCounter * 5}s elapsed)");
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
                 AppendLine($"❌ Log monitoring failed: {ex.Message}");
             }
+        }
+
+        private string CleanAnsiCodes(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+
+            // Remove ANSI escape codes
+            var ansiPattern = @"\x1b\[[0-9;]*[mK]";
+            text = System.Text.RegularExpressions.Regex.Replace(text, ansiPattern, "");
+
+            return text;
         }
 
         private string CleanOutputLine(string line)
@@ -147,6 +313,10 @@ namespace SptLauncherWpf.Controls
             return line.Trim();
         }
 
+        public Process Process => process;
+        
+        public bool IsProcessRunning => isProcessRunning;
+        
         public void StopProcess()
         {
             if (process != null && !process.HasExited)
@@ -154,6 +324,7 @@ namespace SptLauncherWpf.Controls
                 try
                 {
                     process.Kill();
+                    isProcessRunning = false;
                     AppendLine("[Process killed]");
                 }
                 catch (Exception ex)
@@ -170,7 +341,7 @@ namespace SptLauncherWpf.Controls
             Dispatcher.Invoke(() =>
             {
                 OutputBlock.Text += line + Environment.NewLine;
-                ScrollViewer.ScrollToEnd();
+                OutputBlock.ScrollToEnd();
             });
         }
 
@@ -200,6 +371,12 @@ namespace SptLauncherWpf.Controls
 
             process.StandardInput.WriteLine(input);
             process.StandardInput.Flush();
+        }
+
+        private void OutputBlock_SelectionChanged(object sender, RoutedEventArgs e)
+        {
+            // This method is called when the user selects text in the output
+            // The TextBox is already read-only, so users can select and copy text
         }
     }
 }

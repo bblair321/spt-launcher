@@ -9,15 +9,19 @@
         </Grid.RowDefinitions>
 
         <!-- Console output -->
-        <ScrollViewer x:Name="ScrollViewer" VerticalScrollBarVisibility="Auto">
-            <TextBlock x:Name="OutputBlock"
-                       FontFamily="Consolas"
-                       FontSize="13"
-                       Foreground="#0f0"
-                       TextWrapping="Wrap"
-                       Margin="5"
-                       Text=""/>
-        </ScrollViewer>
+        <TextBox x:Name="OutputBlock"
+                 FontFamily="Consolas"
+                 FontSize="13"
+                 Foreground="#0f0"
+                 Background="#111"
+                 BorderThickness="0"
+                 IsReadOnly="True"
+                 TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"
+                 Margin="5"
+                 Text=""
+                 SelectionChanged="OutputBlock_SelectionChanged"/>
 
         <!-- Input area -->
         <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="5">

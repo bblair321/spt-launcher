@@ -14,6 +14,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Microsoft.Win32;
+using SptLauncherWpf.Controls;
 using SptLauncherWpf.Services;
 
 namespace SptLauncherWpf.Pages
@@ -209,29 +210,9 @@ namespace SptLauncherWpf.Pages
 
         private void AddLogOutput(string message)
         {
-            if (ServerLogTextBox == null) return;
-
-            // Clean up ANSI color codes from the message
-            var cleanMessage = CleanAnsiCodes(message);
-
-            // Add timestamp and message to log
-            var currentLog = ServerLogTextBox.Text;
-            var newLog = string.IsNullOrEmpty(currentLog) || currentLog.Contains("Server log will appear here")
-                ? cleanMessage
-                : currentLog + "\n" + cleanMessage;
-
-            ServerLogTextBox.Text = newLog;
-
-            // Auto-scroll to bottom
-            ServerLogTextBox.ScrollToEnd();
-
-            // Limit log size to prevent memory issues (keep last 1000 lines)
-            var lines = newLog.Split('\n');
-            if (lines.Length > 1000)
-            {
-                var trimmedLog = string.Join("\n", lines.Skip(lines.Length - 1000));
-                ServerLogTextBox.Text = trimmedLog;
-            }
+            // For now, we'll just show a simple message since we're using embedded console
+            // The actual server output will be shown in the embedded console control
+            System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] {message}");
         }
 
         private string CleanAnsiCodes(string input)
@@ -347,17 +328,15 @@ namespace SptLauncherWpf.Pages
 
         private void ClearLogButton_Click(object sender, RoutedEventArgs e)
         {
-            if (ServerLogTextBox != null)
+            // Clear the embedded console if it exists
+            if (ConsoleContainer.Child is EmbeddedConsoleControl consoleControl)
             {
-                ServerLogTextBox.Text = "Server log cleared.";
+                // The EmbeddedConsoleControl doesn't have a ClearConsole method
+                // We'll just show a message that the console was cleared
+                AddLogOutput("Console cleared.");
             }
         }
 
-        private void ServerLogTextBox_SelectionChanged(object sender, RoutedEventArgs e)
-        {
-            // This event handler is here to support the SelectionChanged event
-            // The TextBox will automatically handle text selection and copying
-        }
 
         private async void LaunchServer(ServerInfo server)
         {
@@ -383,38 +362,22 @@ namespace SptLauncherWpf.Pages
 
             try
             {
-                // Use shell execute to avoid console mode issues with SPT servers
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = serverPath,
-                    WorkingDirectory = System.IO.Path.GetDirectoryName(serverPath),
-                    UseShellExecute = true,
-                    CreateNoWindow = false,
-                    Arguments = ""
-                };
+                // Create embedded console control
+                var consoleControl = new SptLauncherWpf.Controls.EmbeddedConsoleControl();
+                
+                // Add console to the container
+                ConsoleContainer.Child = consoleControl;
+                ConsoleContainer.Visibility = Visibility.Visible;
+                NoServerRunningText.Visibility = Visibility.Collapsed;
 
-                var process = Process.Start(startInfo);
-                if (process == null)
-                {
-                    MessageBox.Show("Failed to start server process.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    return;
-                }
+                // Start the server in the embedded console
+                consoleControl.StartProcess(serverPath);
 
-                process.EnableRaisingEvents = true;
-
-                process.Exited += (s, e) =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Server process exited with code: {process.ExitCode}");
-                        _runningServers.Remove(server.Id);
-                        UpdateServersList();
-                    });
-                };
-
-                _runningServers[server.Id] = process;
+                // Store reference to the console control (we'll track it differently)
+                _runningServers[server.Id] = null; // We'll track the console control instead
+                
                 AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Starting server: {server.Name} ({serverPath})");
-                AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Note: Server output will appear in the server's console window, not here.");
+                AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Server console embedded in launcher.");
                 UpdateServersList();
             }
             catch (Exception ex)

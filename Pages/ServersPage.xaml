@@ -248,32 +248,35 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <!-- Server Log Section -->
+                        <!-- Server Console Section -->
                         <StackPanel Margin="0,16,0,0">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <Ellipse Width="16" Height="16" Fill="#10B981" Margin="0,0,8,0"/>
-                                <TextBlock Text="Server Log" FontSize="16" FontWeight="SemiBold" 
+                                <TextBlock Text="Server Console" FontSize="16" FontWeight="SemiBold" 
                                            Foreground="#111827" VerticalAlignment="Center"/>
-                                <Button Name="ClearLogButton" Content="Clear Log" 
+                                <Button Name="ClearLogButton" Content="Clear Console" 
                                         Style="{StaticResource ModernButtonStyle}" 
                                         Background="#6B7280" Padding="8,4" Margin="16,0,0,0"
                                         FontSize="12" Click="ClearLogButton_Click"/>
                             </StackPanel>
 
                             <Border Style="{StaticResource ModernCardStyle}" 
-                                    Padding="12" Height="120">
-                                <TextBox Name="ServerLogTextBox" 
-                                         FontFamily="Consolas, Courier New, monospace"
-                                         FontSize="12"
-                                         Foreground="#374151"
-                                         Background="Transparent"
-                                         BorderThickness="0"
-                                         IsReadOnly="True"
-                                         TextWrapping="Wrap"
-                                         VerticalScrollBarVisibility="Auto"
-                                         HorizontalScrollBarVisibility="Auto"
-                                         Text="Server log will appear here when a server is launched..."
-                                         SelectionChanged="ServerLogTextBox_SelectionChanged"/>
+                                    Padding="12" Height="300">
+                                <Grid>
+                                    <TextBlock Name="NoServerRunningText" 
+                                               Text="No server is currently running. Launch a server to see its console output here."
+                                               FontSize="14"
+                                               Foreground="#6B7280"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"/>
+                                    <Border Name="ConsoleContainer" 
+                                            Background="Black" 
+                                            CornerRadius="4"
+                                            Visibility="Collapsed">
+                                        <!-- Embedded console will be added here programmatically -->
+                                    </Border>
+                                </Grid>
                             </Border>
                         </StackPanel>
                     </StackPanel>
