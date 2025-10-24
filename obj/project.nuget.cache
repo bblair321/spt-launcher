@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "fa78m8ucpcOjl9S8XEilPGe2zg9L/xc+cYk5ocuYpy0XecVkUrZSFGyaRlqIFfRvNAClKuIF3KVoY0VdPZktBQ==",
+  "dgSpecHash": "HYP1BcXeGVU7q/G5nUVTqf7U+s/xrLR2+8YatWGKSeYBP5jytTEEVvoZxUp2DF8lJAQ3AtVe309inmBH741eXw==",
   "success": true,
-  "projectFilePath": "C:\\Users\\bblai\\dev\\personal-projects\\spt-launcher-electron\\SptLauncherWpf.csproj",
+  "projectFilePath": "C:\\Users\\bblai\\dev\\personal-projects\\spt-launcher-wpf\\SptLauncherWpf.csproj",
   "expectedPackageFiles": [],
   "logs": []
 }

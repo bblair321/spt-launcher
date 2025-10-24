@@ -94,22 +94,183 @@ namespace SptLauncherWpf.Pages
 
         private void UpdateServersList()
         {
-            // Update the servers list - this will be handled by the XAML binding
+            if (ServersListPanel == null) return;
+
+            // Clear existing server UI elements
+            ServersListPanel.Children.Clear();
+
+            // Add each server as a UI element
+            foreach (var server in _servers)
+            {
+                var serverCard = CreateServerCard(server);
+                ServersListPanel.Children.Add(serverCard);
+            }
         }
 
-        private void AddServerButton_Click(object sender, RoutedEventArgs e)
+        private Border CreateServerCard(ServerInfo server)
         {
+            var card = new Border
+            {
+                Style = (Style)FindResource("ModernCardStyle"),
+                Margin = new Thickness(0, 0, 0, 12),
+                Padding = new Thickness(16)
+            };
+
+            var stackPanel = new StackPanel();
+
+            // Server name and type
+            var headerPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+
+            var nameText = new TextBlock
+            {
+                Text = server.Name,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 16,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x11, 0x18, 0x27)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var typeText = new TextBlock
+            {
+                Text = $"({server.ServerType.ToUpper()})",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+
+            headerPanel.Children.Add(nameText);
+            headerPanel.Children.Add(typeText);
+
+            // Server details
+            var detailsText = new TextBlock
+            {
+                Text = $"Path: {server.Path}\nPort: {server.Port}",
+                FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80)),
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+
+            // Action buttons
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal
+            };
+
+            var launchButton = new Button
+            {
+                Content = "Launch",
+                Style = (Style)FindResource("ModernButtonStyle"),
+                Background = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)),
+                Margin = new Thickness(0, 0, 8, 0),
+                Padding = new Thickness(12, 6, 12, 6),
+                FontSize = 12
+            };
+            launchButton.Click += (s, e) => LaunchServer(server);
+
+            var deleteButton = new Button
+            {
+                Content = "Delete",
+                Style = (Style)FindResource("ModernButtonStyle"),
+                Background = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44)),
+                Padding = new Thickness(12, 6, 12, 6),
+                FontSize = 12
+            };
+            deleteButton.Click += (s, e) => DeleteServer(server);
+
+            buttonPanel.Children.Add(launchButton);
+            buttonPanel.Children.Add(deleteButton);
+
+            stackPanel.Children.Add(headerPanel);
+            stackPanel.Children.Add(detailsText);
+            stackPanel.Children.Add(buttonPanel);
+
+            card.Child = stackPanel;
+            return card;
+        }
+
+        private void DeleteServer(ServerInfo server)
+        {
+            var result = MessageBox.Show($"Are you sure you want to delete '{server.Name}'?", 
+                "Delete Server", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            
+            if (result == MessageBoxResult.Yes)
+            {
+                _servers.Remove(server);
+                SaveServers();
+                UpdateServersList();
+            }
+        }
+
+        private void AddLogOutput(string message)
+        {
+            if (ServerLogTextBox == null) return;
+
+            // Clean up ANSI color codes from the message
+            var cleanMessage = CleanAnsiCodes(message);
+
+            // Add timestamp and message to log
+            var currentLog = ServerLogTextBox.Text;
+            var newLog = string.IsNullOrEmpty(currentLog) || currentLog.Contains("Server log will appear here")
+                ? cleanMessage
+                : currentLog + "\n" + cleanMessage;
+
+            ServerLogTextBox.Text = newLog;
+
+            // Auto-scroll to bottom
+            ServerLogTextBox.ScrollToEnd();
+
+            // Limit log size to prevent memory issues (keep last 1000 lines)
+            var lines = newLog.Split('\n');
+            if (lines.Length > 1000)
+            {
+                var trimmedLog = string.Join("\n", lines.Skip(lines.Length - 1000));
+                ServerLogTextBox.Text = trimmedLog;
+            }
+        }
+
+        private string CleanAnsiCodes(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+
+            // Remove ANSI escape sequences (color codes, cursor movements, etc.)
+            var ansiPattern = @"\x1B\[[0-9;]*[mK]";
+            var cleaned = System.Text.RegularExpressions.Regex.Replace(input, ansiPattern, "");
+            
+            // Also remove other common escape sequences
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\x1B\[[0-9;]*[A-Za-z]", "");
+            
+            return cleaned.Trim();
+        }
+
+        private void SaveServerButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Read current form values
+            var serverName = ServerNameTextBox?.Text ?? "New Server";
+            var serverPath = ServerPathTextBox?.Text ?? "";
+            var serverType = LocalServerRadio?.IsChecked == true ? "local" : "remote";
+            var serverPort = PortTextBox?.Text ?? "6969";
+            var remoteAddress = RemoteAddressTextBox?.Text ?? "";
+            var remotePort = RemotePortTextBox?.Text ?? "6969";
+            var description = DescriptionTextBox?.Text ?? "";
+            var autoStart = AutoStartCheckBox?.IsChecked == true;
+
             _editingServer = new ServerInfo
             {
                 Id = Guid.NewGuid().ToString(),
-                Name = "New Server",
-                ServerType = "local",
-                Path = "",
-                RemoteAddress = "",
-                RemotePort = "6969",
-                Port = "6969",
-                Description = "",
-                AutoStart = false,
+                Name = serverName,
+                ServerType = serverType,
+                Path = serverPath,
+                RemoteAddress = remoteAddress,
+                RemotePort = remotePort,
+                Port = serverPort,
+                Description = description,
+                AutoStart = autoStart,
                 CreatedAt = DateTime.Now
             };
 
@@ -128,10 +289,6 @@ namespace SptLauncherWpf.Pages
             // Delete server functionality - will be implemented with proper UI controls
         }
 
-        private void SaveServerButton_Click(object sender, RoutedEventArgs e)
-        {
-            // Save server functionality - will be implemented with proper UI controls
-        }
 
         private void CancelServerButton_Click(object sender, RoutedEventArgs e)
         {
@@ -140,7 +297,27 @@ namespace SptLauncherWpf.Pages
 
         private void BrowseServerButton_Click(object sender, RoutedEventArgs e)
         {
-            // Browse server functionality - will be implemented with proper UI controls
+            var openFileDialog = new OpenFileDialog
+            {
+                Title = "Select SPT-AKI Server Executable",
+                Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+            };
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                // Update the server path text box
+                if (ServerPathTextBox != null)
+                {
+                    ServerPathTextBox.Text = openFileDialog.FileName;
+                }
+                
+                // Update the current editing server's path if we have one
+                if (_editingServer != null)
+                {
+                    _editingServer.Path = openFileDialog.FileName;
+                }
+            }
         }
 
         private void LaunchServerButton_Click(object sender, RoutedEventArgs e)
@@ -168,6 +345,20 @@ namespace SptLauncherWpf.Pages
             // Cancel edit functionality - will be implemented with proper UI controls
         }
 
+        private void ClearLogButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (ServerLogTextBox != null)
+            {
+                ServerLogTextBox.Text = "Server log cleared.";
+            }
+        }
+
+        private void ServerLogTextBox_SelectionChanged(object sender, RoutedEventArgs e)
+        {
+            // This event handler is here to support the SelectionChanged event
+            // The TextBox will automatically handle text selection and copying
+        }
+
         private async void LaunchServer(ServerInfo server)
         {
             if (_runningServers.ContainsKey(server.Id))
@@ -176,21 +367,29 @@ namespace SptLauncherWpf.Pages
                 return;
             }
 
-            if (string.IsNullOrEmpty(server.Path) || !File.Exists(server.Path))
+            // Get the server path - either from the server object or from the form
+            string serverPath = server.Path;
+            if (string.IsNullOrEmpty(serverPath) && ServerPathTextBox != null)
             {
-                MessageBox.Show("Server executable not found.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                serverPath = ServerPathTextBox.Text;
+            }
+
+            if (string.IsNullOrEmpty(serverPath) || !File.Exists(serverPath))
+            {
+                MessageBox.Show($"Server executable not found at: {serverPath}\n\nPlease use the Browse button to select the correct server executable.", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
             try
             {
+                // Use shell execute to avoid console mode issues with SPT servers
                 var startInfo = new ProcessStartInfo
                 {
-                    FileName = server.Path,
-                    WorkingDirectory = System.IO.Path.GetDirectoryName(server.Path),
+                    FileName = serverPath,
+                    WorkingDirectory = System.IO.Path.GetDirectoryName(serverPath),
                     UseShellExecute = true,
                     CreateNoWindow = false,
-                    WindowStyle = ProcessWindowStyle.Minimized,
                     Arguments = ""
                 };
 
@@ -202,16 +401,20 @@ namespace SptLauncherWpf.Pages
                 }
 
                 process.EnableRaisingEvents = true;
+
                 process.Exited += (s, e) =>
                 {
                     Dispatcher.Invoke(() =>
                     {
+                        AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Server process exited with code: {process.ExitCode}");
                         _runningServers.Remove(server.Id);
                         UpdateServersList();
                     });
                 };
 
                 _runningServers[server.Id] = process;
+                AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Starting server: {server.Name} ({serverPath})");
+                AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Note: Server output will appear in the server's console window, not here.");
                 UpdateServersList();
             }
             catch (Exception ex)

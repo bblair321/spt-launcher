@@ -1,0 +1,14 @@
+[
+  {
+    "Id": "39f6ad5a-bfc3-42b7-b62c-ed7be705707f",
+    "Name": "My SPT Server",
+    "ServerType": "local",
+    "Path": "D:\\SPT\\SPT\\SPT.Server.exe",
+    "RemoteAddress": "192.168.1.100",
+    "RemotePort": "6969",
+    "Port": "6969",
+    "Description": "",
+    "AutoStart": false,
+    "CreatedAt": "2025-10-23T19:59:52.2241388-07:00"
+  }
+]

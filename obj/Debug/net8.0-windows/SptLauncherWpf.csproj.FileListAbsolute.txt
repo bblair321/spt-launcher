@@ -29,7 +29,6 @@ C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows\S
 C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows\ref\SptLauncherWpf.dll
 C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows\Controls\EmbeddedConsoleControl.baml
 C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows\Controls\EmbeddedConsoleControl.g.cs
-C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
 C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows\SptLauncherWpf_MarkupCompile.lref
 C:\Users\bblai\dev\personal-projects\spt-launcher-electron\bin\Debug\net8.0-windows\SptLauncherWpf.exe
 C:\Users\bblai\dev\personal-projects\spt-launcher-electron\bin\Debug\net8.0-windows\SptLauncherWpf.deps.json
@@ -65,3 +64,4 @@ C:\Users\bblai\dev\personal-projects\spt-launcher-electron\obj\Debug\net8.0-wind
 C:\Users\bblai\dev\personal-projects\spt-launcher-electron\obj\Debug\net8.0-windows\ref\SptLauncherWpf.dll
 C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows\App.baml
 C:\Users\bblai\dev\personal-projects\spt-launcher-electron\obj\Debug\net8.0-windows\App.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows\SptLauncherWpf.sourcelink.json
