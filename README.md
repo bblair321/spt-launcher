@@ -17,7 +17,6 @@ A modern Windows Presentation Foundation (WPF) launcher for SPT-AKI with Fika Co
 - Windows 10/11
 - .NET 8.0 Runtime
 - SPT-AKI installation
-- Fika Co-op (optional)
 
 ## Installation
 
@@ -32,25 +31,6 @@ A modern Windows Presentation Foundation (WPF) launcher for SPT-AKI with Fika Co
 - Visual Studio 2022 or later
 - .NET 8.0 SDK
 
-### Steps
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/bblair321/spt-launcher.git
-   cd spt-launcher
-   ```
-
-2. Open the solution in Visual Studio or build from command line:
-
-   ```bash
-   dotnet build
-   ```
-
-3. Run the application:
-   ```bash
-   dotnet run
-   ```
 
 ## Usage
 
@@ -111,24 +91,6 @@ The launcher stores its configuration in:
 - Check network connectivity
 - Ensure firewall allows the connection
 
-## Development
-
-### Project Structure
-
-```
-spt-launcher-electron/
-├── App.xaml                 # Application resources and styles
-├── MainWindow.xaml          # Main window layout
-├── Pages/                   # Individual page components
-│   ├── LauncherPage.xaml    # SPT-AKI launcher interface
-│   ├── ServersPage.xaml     # Server management
-│   ├── ModsPage.xaml        # Mod management
-│   ├── SettingsPage.xaml    # Application settings
-│   └── DevToolsPage.xaml    # Developer tools
-├── Controls/                # Custom controls
-├── Services/                # Business logic services
-└── ViewModels/              # MVVM view models
-```
 
 ### Contributing
 
