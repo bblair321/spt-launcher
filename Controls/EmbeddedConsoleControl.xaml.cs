@@ -334,6 +334,14 @@ namespace SptLauncherWpf.Controls
             }
         }
 
+        public void ClearConsole()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                OutputBlock.Text = "";
+            });
+        }
+
         private void AppendLine(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return;

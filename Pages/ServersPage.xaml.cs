@@ -174,6 +174,17 @@ namespace SptLauncherWpf.Pages
             };
             launchButton.Click += (s, e) => LaunchServer(server);
 
+            var stopButton = new Button
+            {
+                Content = "Stop",
+                Style = (Style)FindResource("ModernButtonStyle"),
+                Background = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)),
+                Margin = new Thickness(0, 0, 8, 0),
+                Padding = new Thickness(12, 6, 12, 6),
+                FontSize = 12
+            };
+            stopButton.Click += (s, e) => StopServer(server);
+
             var deleteButton = new Button
             {
                 Content = "Delete",
@@ -185,6 +196,7 @@ namespace SptLauncherWpf.Pages
             deleteButton.Click += (s, e) => DeleteServer(server);
 
             buttonPanel.Children.Add(launchButton);
+            buttonPanel.Children.Add(stopButton);
             buttonPanel.Children.Add(deleteButton);
 
             stackPanel.Children.Add(headerPanel);
@@ -306,9 +318,38 @@ namespace SptLauncherWpf.Pages
             // Launch server functionality - will be implemented with proper UI controls
         }
 
-        private void StopServerButton_Click(object sender, RoutedEventArgs e)
+        private void StopServer(ServerInfo server)
         {
-            // Stop server functionality - will be implemented with proper UI controls
+            if (!_runningServers.ContainsKey(server.Id))
+            {
+                MessageBox.Show("Server is not currently running.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                // Get the console control and stop the process
+                if (ConsoleContainer.Child is EmbeddedConsoleControl consoleControl)
+                {
+                    consoleControl.StopProcess();
+                    AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Stopping server: {server.Name}");
+                }
+
+                // Remove from running servers
+                _runningServers.Remove(server.Id);
+                
+                // Hide console and show placeholder
+                ConsoleContainer.Child = null;
+                ConsoleContainer.Visibility = Visibility.Collapsed;
+                NoServerRunningText.Visibility = Visibility.Visible;
+                
+                UpdateServersList();
+                AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Server stopped: {server.Name}");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to stop server: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void QuickConnectButton_Click(object sender, RoutedEventArgs e)
@@ -331,8 +372,7 @@ namespace SptLauncherWpf.Pages
             // Clear the embedded console if it exists
             if (ConsoleContainer.Child is EmbeddedConsoleControl consoleControl)
             {
-                // The EmbeddedConsoleControl doesn't have a ClearConsole method
-                // We'll just show a message that the console was cleared
+                consoleControl.ClearConsole();
                 AddLogOutput("Console cleared.");
             }
         }
@@ -388,23 +428,6 @@ namespace SptLauncherWpf.Pages
             }
         }
 
-        private async Task StopServer(ServerInfo server)
-        {
-            if (_runningServers.TryGetValue(server.Id, out var process))
-            {
-                try
-                {
-                    process.Kill();
-                    await process.WaitForExitAsync();
-                    _runningServers.Remove(server.Id);
-                    UpdateServersList();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Failed to stop server: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
 
         private async void QuickConnectToServer(ServerInfo server)
         {
