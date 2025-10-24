@@ -12,10 +12,10 @@ namespace SptLauncherWpf.Pages
 {
     public partial class LauncherPage : Page
     {
-        private Process? _launcherProcess;
-        private Process? _serverProcess;
-        private bool _isLauncherRunning = false;
-        private int _launcherPid = 0;
+        private static Process? _launcherProcess;
+        private static Process? _serverProcess;
+        private static bool _isLauncherRunning = false;
+        private static int _launcherPid = 0;
         private bool _showFikaSettings = false;
         private string _configPath = "";
 
@@ -23,6 +23,7 @@ namespace SptLauncherWpf.Pages
         {
             InitializeComponent();
             LoadSettings();
+            RestoreLauncherState(); // Restore state from static variables
             UpdateLauncherUI();
         }
 
@@ -33,6 +34,26 @@ namespace SptLauncherWpf.Pages
             
             // Load Fika configuration
             LoadFikaConfig();
+        }
+
+        private void RestoreLauncherState()
+        {
+            // Restore UI state from static variables when switching tabs
+            if (_isLauncherRunning)
+            {
+                if (_launcherPid > 0)
+                {
+                    StatusText.Text = $"Launcher started (PID: {_launcherPid})";
+                }
+                else if (_serverProcess != null && !_serverProcess.HasExited)
+                {
+                    StatusText.Text = $"SPT Server running (Launcher PID: {_launcherPid}, Server PID: {_serverProcess.Id})";
+                }
+                else
+                {
+                    StatusText.Text = "Server running";
+                }
+            }
         }
 
         private void SaveSettings()
@@ -358,10 +379,15 @@ namespace SptLauncherWpf.Pages
         private void EnableFikaCheckBox_Changed(object sender, RoutedEventArgs e)
         {
             // Check if controls are initialized before accessing them
-            if (FikaConfigPanel == null)
+            if (FikaConfigPanel == null || SaveConfigButton == null || ReloadConfigButton == null)
                 return;
                 
-            FikaConfigPanel.Visibility = EnableFikaCheckBox.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            bool isFikaEnabled = EnableFikaCheckBox.IsChecked == true;
+            FikaConfigPanel.Visibility = isFikaEnabled ? Visibility.Visible : Visibility.Collapsed;
+            
+            // Also hide the save/reload buttons when Fika is disabled
+            SaveConfigButton.Visibility = isFikaEnabled ? Visibility.Visible : Visibility.Collapsed;
+            ReloadConfigButton.Visibility = isFikaEnabled ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void SaveConfigButton_Click(object sender, RoutedEventArgs e)
