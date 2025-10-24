@@ -344,11 +344,18 @@ namespace SptLauncherWpf.Pages
 
             try
             {
-                // Get the console control and stop the process
+                // Get the stored process and stop it
+                var process = _runningServers[server.Id];
+                if (process != null && !process.HasExited)
+                {
+                    process.Kill();
+                    AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Stopping server: {server.Name}");
+                }
+                
+                // Also stop the console control if it exists
                 if (ConsoleContainer.Child is EmbeddedConsoleControl consoleControl)
                 {
                     consoleControl.StopProcess();
-                    AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Stopping server: {server.Name}");
                 }
 
                 // Remove from running servers
@@ -449,8 +456,8 @@ namespace SptLauncherWpf.Pages
                 };
                 outputTimer.Start();
 
-                // Store reference to the console control (we'll track it differently)
-                _runningServers[server.Id] = null; // We'll track the console control instead
+                // Store reference to the console control's process
+                _runningServers[server.Id] = consoleControl.Process;
                 
                 AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Starting server: {server.Name} ({serverPath})");
                 AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Server console embedded in launcher.");
