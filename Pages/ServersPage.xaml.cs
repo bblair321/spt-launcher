@@ -46,12 +46,28 @@ namespace SptLauncherWpf.Pages
         private ObservableCollection<ServerInfo> _servers = new();
         private ServerInfo? _editingServer = null;
         private Dictionary<string, Process> _runningServers = new();
+        
+        // Static reference to preserve console output across tab switches
+        private static string _staticConsoleOutput = "";
+        private static bool _staticServerRunning = false;
 
         public ServersPage()
         {
             InitializeComponent();
             LoadServers();
             UpdateServersList();
+            
+            // Restore console state if server was running from previous tab switch
+            if (_staticServerRunning && !string.IsNullOrEmpty(_staticConsoleOutput))
+            {
+                // Create a new console control and populate it with the saved output
+                var consoleControl = new SptLauncherWpf.Controls.EmbeddedConsoleControl();
+                consoleControl.SetOutput(_staticConsoleOutput);
+                
+                ConsoleContainer.Child = consoleControl;
+                ConsoleContainer.Visibility = Visibility.Visible;
+                NoServerRunningText.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void LoadServers()
@@ -338,6 +354,10 @@ namespace SptLauncherWpf.Pages
                 // Remove from running servers
                 _runningServers.Remove(server.Id);
                 
+                // Clear static console state
+                _staticServerRunning = false;
+                _staticConsoleOutput = "";
+                
                 // Hide console and show placeholder
                 ConsoleContainer.Child = null;
                 ConsoleContainer.Visibility = Visibility.Collapsed;
@@ -409,9 +429,25 @@ namespace SptLauncherWpf.Pages
                 ConsoleContainer.Child = consoleControl;
                 ConsoleContainer.Visibility = Visibility.Visible;
                 NoServerRunningText.Visibility = Visibility.Collapsed;
+                
+                // Set up output monitoring to preserve console content across tab switches
+                _staticServerRunning = true;
+                _staticConsoleOutput = "";
 
                 // Start the server in the embedded console
                 consoleControl.StartProcess(serverPath);
+
+                // Set up a timer to periodically save console output
+                var outputTimer = new System.Windows.Threading.DispatcherTimer();
+                outputTimer.Interval = TimeSpan.FromSeconds(1);
+                outputTimer.Tick += (s, e) =>
+                {
+                    if (consoleControl != null)
+                    {
+                        _staticConsoleOutput = consoleControl.GetOutput();
+                    }
+                };
+                outputTimer.Start();
 
                 // Store reference to the console control (we'll track it differently)
                 _runningServers[server.Id] = null; // We'll track the console control instead

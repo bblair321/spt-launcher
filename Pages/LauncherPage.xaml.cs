@@ -84,15 +84,25 @@ namespace SptLauncherWpf.Pages
                 }
 
                 var configFile = Path.Combine(sptDirectory, "config.json");
+                var isFikaEnabled = EnableFikaCheckBox.IsChecked ?? false;
+                
+                // When Fika is disabled, reset to default values
                 var config = new
                 {
-                    enableFika = EnableFikaCheckBox.IsChecked ?? false,
-                    serverAddress = ServerAddressTextBox.Text,
-                    serverPort = ServerPortTextBox.Text
+                    enableFika = isFikaEnabled,
+                    serverAddress = isFikaEnabled ? ServerAddressTextBox.Text : "127.0.0.1",
+                    serverPort = isFikaEnabled ? ServerPortTextBox.Text : "6969"
                 };
 
                 var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
                 await File.WriteAllTextAsync(configFile, json);
+
+                // Update the UI to reflect the saved values
+                if (!isFikaEnabled)
+                {
+                    ServerAddressTextBox.Text = "127.0.0.1";
+                    ServerPortTextBox.Text = "6969";
+                }
 
                 MessageBox.Show("Fika configuration saved successfully!", "Success", 
                               MessageBoxButton.OK, MessageBoxImage.Information);

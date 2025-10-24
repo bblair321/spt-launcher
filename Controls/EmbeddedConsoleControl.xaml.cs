@@ -342,6 +342,20 @@ namespace SptLauncherWpf.Controls
             });
         }
 
+        public void SetOutput(string output)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                OutputBlock.Text = output;
+                OutputBlock.ScrollToEnd();
+            });
+        }
+
+        public string GetOutput()
+        {
+            return OutputBlock.Text;
+        }
+
         private void AppendLine(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return;
