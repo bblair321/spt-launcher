@@ -70,6 +70,11 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        private void ServersPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Page loaded - no debug needed
+        }
+
         private void LoadServers()
         {
             try
@@ -336,20 +341,25 @@ namespace SptLauncherWpf.Pages
 
         private void StopServer(ServerInfo server)
         {
-            if (!_runningServers.ContainsKey(server.Id))
+            // Check for running processes directly instead of relying on _runningServers dictionary
+            var runningProcesses = System.Diagnostics.Process.GetProcessesByName("SPT.Server");
+            
+            if (runningProcesses.Length == 0)
             {
-                MessageBox.Show("Server is not currently running.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show($"No SPT.Server processes are currently running.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             try
             {
-                // Get the stored process and stop it
-                var process = _runningServers[server.Id];
-                if (process != null && !process.HasExited)
+                // Stop all SPT.Server processes directly
+                foreach (var process in runningProcesses)
                 {
-                    process.Kill();
-                    AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Stopping server: {server.Name}");
+                    if (process != null && !process.HasExited)
+                    {
+                        process.Kill();
+                        AddLogOutput($"[{DateTime.Now:HH:mm:ss}] Stopping server: {server.Name} (PID: {process.Id})");
+                    }
                 }
                 
                 // Also stop the console control if it exists
@@ -358,7 +368,7 @@ namespace SptLauncherWpf.Pages
                     consoleControl.StopProcess();
                 }
 
-                // Remove from running servers
+                // Remove from running servers (if it exists)
                 _runningServers.Remove(server.Id);
                 
                 // Clear static console state

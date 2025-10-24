@@ -1,7 +1,9 @@
 <Page x:Class="SptLauncherWpf.Pages.LauncherPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Title="Launcher">
+      Title="Launcher"
+      Loaded="LauncherPage_Loaded"
+      Unloaded="LauncherPage_Unloaded">
     
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,16,0,0">

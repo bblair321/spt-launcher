@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace SptLauncherWpf.Controls
 {
@@ -15,6 +16,7 @@ namespace SptLauncherWpf.Controls
     {
         private Process process;
         private bool isProcessRunning = false;
+        private bool _userHasScrolled = false;
         
         // Windows API declarations for console embedding
         [DllImport("user32.dll")]
@@ -339,6 +341,7 @@ namespace SptLauncherWpf.Controls
             Dispatcher.Invoke(() =>
             {
                 OutputBlock.Text = "";
+                _userHasScrolled = false; // Reset scroll state when clearing
             });
         }
 
@@ -347,7 +350,8 @@ namespace SptLauncherWpf.Controls
             Dispatcher.Invoke(() =>
             {
                 OutputBlock.Text = output;
-                OutputBlock.ScrollToEnd();
+                _userHasScrolled = false; // Reset scroll state when setting output
+                OutputScrollViewer.ScrollToEnd();
             });
         }
 
@@ -363,7 +367,12 @@ namespace SptLauncherWpf.Controls
             Dispatcher.Invoke(() =>
             {
                 OutputBlock.Text += line + Environment.NewLine;
-                OutputBlock.ScrollToEnd();
+                
+                // Only auto-scroll if user hasn't manually scrolled up
+                if (!_userHasScrolled)
+                {
+                    OutputScrollViewer.ScrollToEnd();
+                }
             });
         }
 
@@ -399,6 +408,18 @@ namespace SptLauncherWpf.Controls
         {
             // This method is called when the user selects text in the output
             // The TextBox is already read-only, so users can select and copy text
+        }
+
+        private void OutputScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            // Check if user has scrolled up from the bottom
+            var scrollViewer = sender as ScrollViewer;
+            if (scrollViewer != null)
+            {
+                // If user is at the bottom (within 10 pixels), allow auto-scroll
+                // If user has scrolled up, disable auto-scroll
+                _userHasScrolled = scrollViewer.VerticalOffset < scrollViewer.ScrollableHeight - 10;
+            }
         }
     }
 }
