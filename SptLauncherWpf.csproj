@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyTitle>SPT Launcher</AssemblyTitle>
+    <AssemblyDescription>SPT-AKI Launcher with Fika Co-op Support - Modern WPF Version</AssemblyDescription>
+    <AssemblyVersion>3.0.0.0</AssemblyVersion>
+    <FileVersion>3.0.0.0</FileVersion>
+    <Product>SPT Launcher</Product>
+    <Company>SPT Launcher Team</Company>
+    <Copyright>Copyright © 2025 SPT Launcher Team</Copyright>
+  </PropertyGroup>
+
+
+
+</Project>
