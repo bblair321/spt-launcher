@@ -13,7 +13,9 @@ namespace SptLauncherWpf.Pages
     public partial class LauncherPage : Page
     {
         private Process? _launcherProcess;
+        private Process? _serverProcess;
         private bool _isLauncherRunning = false;
+        private int _launcherPid = 0;
         private bool _showFikaSettings = false;
         private string _configPath = "";
 
@@ -21,6 +23,7 @@ namespace SptLauncherWpf.Pages
         {
             InitializeComponent();
             LoadSettings();
+            UpdateLauncherUI();
         }
 
         private void LoadSettings()
@@ -166,9 +169,10 @@ namespace SptLauncherWpf.Pages
                 if (_launcherProcess != null)
                 {
                     _isLauncherRunning = true;
+                    _launcherPid = _launcherProcess.Id;
                     LaunchButton.IsEnabled = false;
                     StopButton.IsEnabled = true;
-                    StatusText.Text = $"Launcher started (PID: {_launcherProcess.Id})";
+                    StatusText.Text = $"Launcher started (PID: {_launcherPid})";
 
                     // Start monitoring the process
                     _ = Task.Run(() => MonitorProcess());
@@ -189,25 +193,29 @@ namespace SptLauncherWpf.Pages
 
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_launcherProcess != null && !_launcherProcess.HasExited)
+            try
             {
-                try
+                // Stop server process if running
+                if (_serverProcess != null && !_serverProcess.HasExited)
+                {
+                    _serverProcess.Kill();
+                    _serverProcess.WaitForExit(5000);
+                }
+                
+                // Stop launcher process if still running
+                if (_launcherProcess != null && !_launcherProcess.HasExited)
                 {
                     _launcherProcess.Kill();
                     _launcherProcess.WaitForExit(5000);
                 }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error stopping launcher: {ex.Message}", "Stop Error", 
-                                  MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error stopping processes: {ex.Message}", "Stop Error", 
+                              MessageBoxButton.OK, MessageBoxImage.Warning);
             }
 
-            _launcherProcess = null;
-            _isLauncherRunning = false;
-            LaunchButton.IsEnabled = true;
-            StopButton.IsEnabled = false;
-            StatusText.Text = "Ready";
+            ResetLauncherState();
         }
 
         private async Task MonitorProcess()
@@ -216,23 +224,105 @@ namespace SptLauncherWpf.Pages
 
             try
             {
+                // Wait for launcher to exit (it typically exits after starting the server)
                 await _launcherProcess.WaitForExitAsync();
+                
+                // Try to find the SPT server process
+                await Task.Delay(2000); // Give server time to start
+                var serverProcess = FindSptServerProcess();
+                
+                if (serverProcess != null)
+                {
+                    _serverProcess = serverProcess;
+                    Dispatcher.Invoke(() =>
+                    {
+                        StatusText.Text = $"SPT Server running (Launcher PID: {_launcherPid}, Server PID: {_serverProcess.Id})";
+                    });
+                    
+                    // Monitor the server process instead
+                    await MonitorServerProcess();
+                }
+                else
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        ResetLauncherState();
+                        StatusText.Text = "Launcher exited but server not found";
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    ResetLauncherState();
+                    MessageBox.Show($"Process monitoring error: {ex.Message}", "Monitor Error", 
+                                  MessageBoxButton.OK, MessageBoxImage.Warning);
+                });
+            }
+        }
+
+        private async Task MonitorServerProcess()
+        {
+            if (_serverProcess == null) return;
+
+            try
+            {
+                await _serverProcess.WaitForExitAsync();
                 
                 Dispatcher.Invoke(() =>
                 {
-                    _isLauncherRunning = false;
-                    LaunchButton.IsEnabled = true;
-                    StopButton.IsEnabled = false;
-                    StatusText.Text = "Launcher stopped";
+                    ResetLauncherState();
+                    StatusText.Text = "SPT Server stopped";
                 });
             }
             catch (Exception ex)
             {
                 Dispatcher.Invoke(() =>
                 {
-                    MessageBox.Show($"Process monitoring error: {ex.Message}", "Monitor Error", 
+                    ResetLauncherState();
+                    MessageBox.Show($"Server monitoring error: {ex.Message}", "Monitor Error", 
                                   MessageBoxButton.OK, MessageBoxImage.Warning);
                 });
+            }
+        }
+
+        private Process? FindSptServerProcess()
+        {
+            try
+            {
+                var processes = Process.GetProcessesByName("SPT.Server");
+                return processes.FirstOrDefault();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private void ResetLauncherState()
+        {
+            _isLauncherRunning = false;
+            _launcherProcess = null;
+            _serverProcess = null;
+            _launcherPid = 0;
+            LaunchButton.IsEnabled = true;
+            StopButton.IsEnabled = false;
+            StatusText.Text = "Ready";
+        }
+
+        private void UpdateLauncherUI()
+        {
+            if (_isLauncherRunning && ((_launcherProcess != null && !_launcherProcess.HasExited) || 
+                                      (_serverProcess != null && !_serverProcess.HasExited)))
+            {
+                LaunchButton.IsEnabled = false;
+                StopButton.IsEnabled = true;
+            }
+            else
+            {
+                LaunchButton.IsEnabled = true;
+                StopButton.IsEnabled = false;
             }
         }
 
