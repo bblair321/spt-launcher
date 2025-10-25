@@ -18,48 +18,140 @@
             </StackPanel>
 
             <!-- Process Monitor -->
-            <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                    CornerRadius="8" Padding="24">
+            <Border Style="{StaticResource ModernCardStyle}" Padding="32">
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="#2563EB" Margin="0,0,8,0"/>
-                        <TextBlock Text="SPT Process Monitor" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="#374151" VerticalAlignment="Center"/>
+                    <!-- Modern Header -->
+                    <StackPanel Margin="0,0,0,24">
+                        <TextBlock Text="SPT Process Monitor" FontSize="20" FontWeight="Bold" 
+                                   Foreground="#1F2937" VerticalAlignment="Center"/>
+                        <TextBlock Text="Real-time process monitoring and management" 
+                                   FontSize="14" Foreground="#6B7280" Margin="0,4,0,0"/>
                     </StackPanel>
 
-                    <StackPanel >
-                        <!-- Process List -->
-                        <StackPanel>
-                            <TextBlock Text="SPT-Related Processes" FontWeight="Medium" 
-                                       Foreground="#111827" Margin="0,0,0,8"/>
-                            <Border Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" 
-                                    CornerRadius="6" Height="200">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                    <ListView Name="ProcessListView" Height="180">
-                                        <ListView.View>
-                                            <GridView>
-                                                <GridViewColumn Header="PID" Width="60" DisplayMemberBinding="{Binding Id}"/>
-                                                <GridViewColumn Header="Name" Width="200" DisplayMemberBinding="{Binding ProcessName}"/>
-                                                <GridViewColumn Header="CPU" Width="80" DisplayMemberBinding="{Binding CPU}"/>
-                                                <GridViewColumn Header="Memory" Width="100" DisplayMemberBinding="{Binding Memory}"/>
-                                            </GridView>
-                                        </ListView.View>
-                                    </ListView>
-                                </ScrollViewer>
+                    <!-- Modern Process List -->
+                    <StackPanel Margin="0,0,0,24">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Border Background="#F3F4F6" CornerRadius="6" Padding="8,4" Margin="0,0,8,0">
+                                <TextBlock Text="ACTIVE PROCESSES" FontSize="12" FontWeight="Bold" 
+                                           Foreground="#6B7280" VerticalAlignment="Center"/>
                             </Border>
+                            <TextBlock Name="ProcessCountText" Text="0 processes" FontSize="12" 
+                                       Foreground="#9CA3AF" VerticalAlignment="Center"/>
                         </StackPanel>
+                        
+                        <!-- Modern ListView Container -->
+                        <Border Background="#FAFBFC" BorderBrush="#E5E7EB" BorderThickness="1" 
+                                CornerRadius="12" Height="280">
+                            <Grid>
+                                <!-- Modern ListView -->
+                                <ListView Name="ProcessListView" Background="Transparent" 
+                                          BorderThickness="0" Margin="0">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="PID" Width="80">
+                                                <GridViewColumn.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="PID" FontWeight="SemiBold" 
+                                                                   Foreground="#374151" FontSize="13"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.HeaderTemplate>
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#F3F4F6" CornerRadius="4" 
+                                                                Padding="8,4" Margin="4">
+                                                            <TextBlock Text="{Binding Id}" FontFamily="Consolas" 
+                                                                       FontSize="12" Foreground="#1F2937" 
+                                                                       HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                            <GridViewColumn Header="Process Name" Width="250">
+                                                <GridViewColumn.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="PROCESS NAME" FontWeight="SemiBold" 
+                                                                   Foreground="#374151" FontSize="13"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.HeaderTemplate>
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" Margin="8,4">
+                                                            <Ellipse Width="8" Height="8" Fill="#10B981" 
+                                                                     Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding ProcessName}" FontWeight="Medium" 
+                                                                       Foreground="#1F2937" FontSize="13" 
+                                                                       VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                            <GridViewColumn Header="CPU" Width="100">
+                                                <GridViewColumn.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="CPU" FontWeight="SemiBold" 
+                                                                   Foreground="#374151" FontSize="13"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.HeaderTemplate>
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#FEF3C7" CornerRadius="4" 
+                                                                Padding="8,4" Margin="4">
+                                                            <TextBlock Text="{Binding CPU}" FontFamily="Consolas" 
+                                                                       FontSize="12" Foreground="#92400E" 
+                                                                       HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                            <GridViewColumn Header="Memory" Width="120">
+                                                <GridViewColumn.HeaderTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="MEMORY" FontWeight="SemiBold" 
+                                                                   Foreground="#374151" FontSize="13"/>
+                                                    </DataTemplate>
+                                                </GridViewColumn.HeaderTemplate>
+                                                <GridViewColumn.CellTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="#DBEAFE" CornerRadius="4" 
+                                                                Padding="8,4" Margin="4">
+                                                            <TextBlock Text="{Binding Memory}" FontFamily="Consolas" 
+                                                                       FontSize="12" Foreground="#1E40AF" 
+                                                                       HorizontalAlignment="Center"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </GridViewColumn.CellTemplate>
+                                            </GridViewColumn>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+                                
+                                <!-- Empty State -->
+                                <StackPanel Name="EmptyStatePanel" HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center" Visibility="Visible">
+                                    <Border Width="64" Height="64" Background="#F3F4F6" CornerRadius="32" 
+                                            Margin="0,0,0,16">
+                                        <TextBlock Text="📊" FontSize="32" HorizontalAlignment="Center" 
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="No SPT processes running" FontSize="16" FontWeight="Medium" 
+                                               Foreground="#6B7280" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Start an SPT server to see processes here" FontSize="14" 
+                                               Foreground="#9CA3AF" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
 
-                        <!-- Process Actions -->
-                        <StackPanel Orientation="Horizontal" >
-                            <Button Name="RefreshProcessesButton" Content="Manual Refresh" 
-                                    Style="{StaticResource ModernButtonStyle}"
-                                    Background="#6B7280" Padding="16,8" FontSize="14" 
-                                    Click="RefreshProcessesButton_Click"/>
-                            <Button Name="KillProcessButton" Content="Kill Selected" 
-                                    Style="{StaticResource ModernButtonStyle}"
-                                    Background="#DC2626" Padding="16,8" FontSize="14" 
-                                    Click="KillProcessButton_Click"/>
-                        </StackPanel>
+                    <!-- Modern Action Buttons -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Name="RefreshProcessesButton" Content="🔄 Refresh" 
+                                Style="{StaticResource ModernButtonStyle}"
+                                Background="#6B7280" Padding="20,12" FontSize="14" FontWeight="SemiBold"
+                                Margin="0,0,12,0" Click="RefreshProcessesButton_Click"/>
+                        <Button Name="KillProcessButton" Content="🗑️ Kill Selected" 
+                                Style="{StaticResource ModernButtonStyle}"
+                                Background="#DC2626" Padding="20,12" FontSize="14" FontWeight="SemiBold"
+                                Click="KillProcessButton_Click"/>
                     </StackPanel>
                 </StackPanel>
             </Border>

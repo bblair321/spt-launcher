@@ -97,6 +97,20 @@ namespace SptLauncherWpf.Pages
                 // Update UI on UI thread
                 Dispatcher.Invoke(() =>
                 {
+                    // Update process count
+                    var processCountText = this.FindName("ProcessCountText") as TextBlock;
+                    if (processCountText != null)
+                    {
+                        processCountText.Text = $"{_processes.Count} process{(_processes.Count != 1 ? "es" : "")}";
+                    }
+                    
+                    // Show/hide empty state
+                    var emptyStatePanel = this.FindName("EmptyStatePanel") as StackPanel;
+                    if (emptyStatePanel != null)
+                    {
+                        emptyStatePanel.Visibility = _processes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                    }
+                    
                     // Force complete UI refresh
                     ProcessListView.ItemsSource = null;
                     ProcessListView.Items.Clear();
