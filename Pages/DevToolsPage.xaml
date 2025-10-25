@@ -52,11 +52,13 @@
                         <!-- Process Actions -->
                         <StackPanel Orientation="Horizontal" >
                             <Button Name="RefreshProcessesButton" Content="Manual Refresh" 
-                                    Background="#6B7280" Foreground="White" BorderThickness="0"
-                                    Padding="16,8" FontSize="14" Click="RefreshProcessesButton_Click"/>
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="#6B7280" Padding="16,8" FontSize="14" 
+                                    Click="RefreshProcessesButton_Click"/>
                             <Button Name="KillProcessButton" Content="Kill Selected" 
-                                    Background="#DC2626" Foreground="White" BorderThickness="0"
-                                    Padding="16,8" FontSize="14" Click="KillProcessButton_Click"/>
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="#DC2626" Padding="16,8" FontSize="14" 
+                                    Click="KillProcessButton_Click"/>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
