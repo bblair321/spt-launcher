@@ -267,10 +267,8 @@ namespace SptLauncherWpf.Pages
             // Read current form values
             var serverName = ServerNameTextBox?.Text ?? "New Server";
             var serverPath = ServerPathTextBox?.Text ?? "";
-            var serverType = LocalServerRadio?.IsChecked == true ? "local" : "remote";
+            var serverType = "local"; // Only local servers now
             var serverPort = PortTextBox?.Text ?? "6969";
-            var remoteAddress = RemoteAddressTextBox?.Text ?? "";
-            var remotePort = RemotePortTextBox?.Text ?? "6969";
             var description = DescriptionTextBox?.Text ?? "";
             var autoStart = AutoStartCheckBox?.IsChecked == true;
 
@@ -280,8 +278,8 @@ namespace SptLauncherWpf.Pages
                 Name = serverName,
                 ServerType = serverType,
                 Path = serverPath,
-                RemoteAddress = remoteAddress,
-                RemotePort = remotePort,
+                RemoteAddress = "", // No longer used
+                RemotePort = "", // No longer used
                 Port = serverPort,
                 Description = description,
                 AutoStart = autoStart,
@@ -482,37 +480,6 @@ namespace SptLauncherWpf.Pages
         }
 
 
-        private async void QuickConnectToServer(ServerInfo server)
-        {
-            if (server.ServerType != "remote")
-            {
-                MessageBox.Show("Quick connect is only available for remote servers", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            try
-            {
-                await TestRemoteServer(server);
-                MessageBox.Show($"Server connection info: {server.RemoteAddress}:{server.RemotePort}\nUse this info when prompted in Tarkov", "Server Info", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Quick connect failed: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private async Task TestRemoteServer(ServerInfo server)
-        {
-            try
-            {
-                // Simple connectivity test - you could implement actual server ping here
-                await Task.Delay(1000); // Simulate network test
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Connection test failed: {ex.Message}");
-            }
-        }
     }
 
     public class ServerInfo

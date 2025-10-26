@@ -59,44 +59,11 @@
                                                             <Grid>
                                                                 <Ellipse x:Name="OuterEllipse" Width="20" Height="20" 
                                                                          Stroke="#D1D5DB" StrokeThickness="2" 
-                                                                         Fill="White" Margin="-140,0,8,0" VerticalAlignment="Center"/>
+                                                                         Fill="White" Margin="-76,0,8,0" VerticalAlignment="Center"/>
                                                                 <Ellipse x:Name="InnerEllipse" Width="10" Height="10" 
-                                                                         Fill="#2563EB" Margin="-135,5,13,5" 
+                                                                         Fill="#2563EB" Margin="-71,5,13,5" 
                                                                          Visibility="Collapsed" VerticalAlignment="Center"/>
-                                                                <ContentPresenter Margin="100,0,0,0" 
-                                                                                  VerticalAlignment="Center"/>
-                                                            </Grid>
-                                                            <ControlTemplate.Triggers>
-                                                                <Trigger Property="IsChecked" Value="True">
-                                                                    <Setter TargetName="InnerEllipse" Property="Visibility" Value="Visible"/>
-                                                                    <Setter TargetName="OuterEllipse" Property="Stroke" Value="#2563EB"/>
-                                                                </Trigger>
-                                                                <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="OuterEllipse" Property="Stroke" Value="#9CA3AF"/>
-                                                                </Trigger>
-                                                            </ControlTemplate.Triggers>
-                                                        </ControlTemplate>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Style>
-                                        </RadioButton.Style>
-                                    </RadioButton>
-                                    <RadioButton Name="RemoteServerRadio" Content="Remote Server (Fika)" 
-                                                GroupName="ServerType" Checked="ServerType_Changed"
-                                                FontSize="14" Foreground="#374151" Padding="0,8">
-                                        <RadioButton.Style>
-                                            <Style TargetType="RadioButton">
-                                                <Setter Property="Template">
-                                                    <Setter.Value>
-                                                        <ControlTemplate TargetType="RadioButton">
-                                                            <Grid>
-                                                                <Ellipse x:Name="OuterEllipse" Width="20" Height="20" 
-                                                                         Stroke="#D1D5DB" StrokeThickness="2" 
-                                                                         Fill="White" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                                <Ellipse x:Name="InnerEllipse" Width="10" Height="10" 
-                                                                         Fill="#2563EB" Margin="5,5,13,5" 
-                                                                         Visibility="Collapsed" VerticalAlignment="Center"/>
-                                                                <ContentPresenter Margin="150,0,0,0" 
+                                                                <ContentPresenter Margin="32,0,0,0" 
                                                                                   VerticalAlignment="Center"/>
                                                             </Grid>
                                                             <ControlTemplate.Triggers>
@@ -138,32 +105,6 @@
                                 </Grid>
                             </StackPanel>
 
-                            <!-- Remote Server Fields -->
-                            <StackPanel Name="RemoteServerPanel" Visibility="Collapsed" Margin="0,0,0,16">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- Remote Address -->
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                        <TextBlock Text="Remote Server Address" FontWeight="Medium" 
-                                                   Foreground="#111827" Margin="0,0,0,8"/>
-                                        <TextBox Name="RemoteAddressTextBox" 
-                                                 Text="192.168.1.100" 
-                                                 Style="{StaticResource ModernTextBoxStyle}"/>
-                                    </StackPanel>
-
-                                    <!-- Remote Port -->
-                                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                        <TextBlock Text="Remote Server Port" FontWeight="Medium" 
-                                                   Foreground="#111827" Margin="0,0,0,8"/>
-                                        <TextBox Name="RemotePortTextBox" Text="6969" 
-                                                 Style="{StaticResource ModernTextBoxStyle}"/>
-                                    </StackPanel>
-                                </Grid>
-                            </StackPanel>
 
                             <!-- Port -->
                             <StackPanel Margin="0,0,0,16">
