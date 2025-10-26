@@ -17,132 +17,207 @@
 
             <!-- General Settings -->
             <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                    CornerRadius="8" Padding="24">
+                    CornerRadius="12" Padding="32" Margin="0,0,0,24">
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="#2563EB" Margin="0,0,8,0"/>
-                        <TextBlock Text="General Settings" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="#374151" VerticalAlignment="Center"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,24">
+                        <Border Background="#2563EB" CornerRadius="8" Padding="8" Margin="0,0,12,0">
+                            <TextBlock Text="⚙️" FontSize="16" Foreground="White"/>
+                        </Border>
+                        <StackPanel>
+                            <TextBlock Text="General Settings" FontSize="20" FontWeight="Bold" 
+                                       Foreground="#1F2937"/>
+                            <TextBlock Text="Configure basic application behavior" FontSize="14" 
+                                       Foreground="#6B7280" Margin="0,4,0,0"/>
+                        </StackPanel>
                     </StackPanel>
 
-                    <StackPanel >
+                    <StackPanel>
                         <!-- Auto-start with Windows -->
-                        <CheckBox Name="AutoStartCheckBox" Content="Start with Windows" 
-                                  FontWeight="Medium" Foreground="#111827"/>
+                        <Border Background="#F9FAFB" CornerRadius="8" Padding="16" Margin="0,0,0,20">
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox Name="AutoStartCheckBox" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <CheckBox.Style>
+                                        <Style TargetType="CheckBox">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="CheckBox">
+                                                        <Grid>
+                                                            <Border x:Name="CheckBoxBorder" Width="20" Height="20" 
+                                                                    CornerRadius="4" BorderBrush="#D1D5DB" 
+                                                                    BorderThickness="2" Background="White"/>
+                                                            <Path x:Name="CheckMark" Data="M 3 9 L 7 13 L 17 3" 
+                                                                  Stroke="#FFFFFF" StrokeThickness="2" 
+                                                                  Visibility="Collapsed" Margin="2"/>
+                                                        </Grid>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsChecked" Value="True">
+                                                                <Setter TargetName="CheckBoxBorder" Property="Background" Value="#2563EB"/>
+                                                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#2563EB"/>
+                                                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#9CA3AF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </CheckBox.Style>
+                                </CheckBox>
+                                <StackPanel>
+                                    <TextBlock Text="Start with Windows" FontWeight="SemiBold" 
+                                               Foreground="#1F2937" FontSize="16"/>
+                                    <TextBlock Text="Automatically launch SPT Launcher when Windows starts" 
+                                               Foreground="#6B7280" FontSize="14" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Minimize to tray -->
-                        <CheckBox Name="MinimizeToTrayCheckBox" Content="Minimize to system tray" 
-                                  FontWeight="Medium" Foreground="#111827"/>
+                        <Border Background="#F9FAFB" CornerRadius="8" Padding="16" Margin="0,0,0,20">
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox Name="MinimizeToTrayCheckBox" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <CheckBox.Style>
+                                        <Style TargetType="CheckBox">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="CheckBox">
+                                                        <Grid>
+                                                            <Border x:Name="CheckBoxBorder" Width="20" Height="20" 
+                                                                    CornerRadius="4" BorderBrush="#D1D5DB" 
+                                                                    BorderThickness="2" Background="White"/>
+                                                            <Path x:Name="CheckMark" Data="M 3 9 L 7 13 L 17 3" 
+                                                                  Stroke="#FFFFFF" StrokeThickness="2" 
+                                                                  Visibility="Collapsed" Margin="2"/>
+                                                        </Grid>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsChecked" Value="True">
+                                                                <Setter TargetName="CheckBoxBorder" Property="Background" Value="#2563EB"/>
+                                                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#2563EB"/>
+                                                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#9CA3AF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </CheckBox.Style>
+                                </CheckBox>
+                                <StackPanel>
+                                    <TextBlock Text="Minimize to System Tray" FontWeight="SemiBold" 
+                                               Foreground="#1F2937" FontSize="16"/>
+                                    <TextBlock Text="Hide window to system tray instead of taskbar when minimized" 
+                                               Foreground="#6B7280" FontSize="14" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Auto-update -->
-                        <CheckBox Name="AutoUpdateCheckBox" Content="Check for updates automatically" 
-                                  FontWeight="Medium" Foreground="#111827"/>
+                        <Border Background="#F9FAFB" CornerRadius="8" Padding="16" Margin="0,0,0,20">
+                            <StackPanel Orientation="Horizontal">
+                                <CheckBox Name="AutoUpdateCheckBox" VerticalAlignment="Center" Margin="0,0,12,0">
+                                    <CheckBox.Style>
+                                        <Style TargetType="CheckBox">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="CheckBox">
+                                                        <Grid>
+                                                            <Border x:Name="CheckBoxBorder" Width="20" Height="20" 
+                                                                    CornerRadius="4" BorderBrush="#D1D5DB" 
+                                                                    BorderThickness="2" Background="White"/>
+                                                            <Path x:Name="CheckMark" Data="M 3 9 L 7 13 L 17 3" 
+                                                                  Stroke="#FFFFFF" StrokeThickness="2" 
+                                                                  Visibility="Collapsed" Margin="2"/>
+                                                        </Grid>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsChecked" Value="True">
+                                                                <Setter TargetName="CheckBoxBorder" Property="Background" Value="#2563EB"/>
+                                                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#2563EB"/>
+                                                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#9CA3AF"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </CheckBox.Style>
+                                </CheckBox>
+                                <StackPanel>
+                                    <TextBlock Text="Check for Updates Automatically" FontWeight="SemiBold" 
+                                               Foreground="#1F2937" FontSize="16"/>
+                                    <TextBlock Text="Automatically check and notify about new versions" 
+                                               Foreground="#6B7280" FontSize="14" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Theme -->
-                        <StackPanel>
-                            <TextBlock Text="Theme" FontWeight="Medium" 
-                                       Foreground="#111827" Margin="0,0,0,8"/>
-                            <ComboBox Name="ThemeComboBox" FontSize="14"
-                                      Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1">
-                                <ComboBoxItem Content="Light" Tag="light"/>
-                                <ComboBoxItem Content="Dark" Tag="dark" IsSelected="True"/>
-                                <ComboBoxItem Content="System" Tag="system"/>
-                            </ComboBox>
-                        </StackPanel>
+                        <Border Background="#F9FAFB" CornerRadius="8" Padding="16">
+                            <StackPanel>
+                                <TextBlock Text="Application Theme" FontWeight="SemiBold" 
+                                           Foreground="#1F2937" FontSize="16" Margin="0,0,0,8"/>
+                                <TextBlock Text="Choose your preferred color scheme" 
+                                           Foreground="#6B7280" FontSize="14" Margin="0,0,0,12"/>
+                                <ComboBox Name="ThemeComboBox" FontSize="14" Height="40"
+                                          Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1"
+                                          Background="White">
+                                    <ComboBoxItem Content="🌞 Light Theme" Tag="light"/>
+                                    <ComboBoxItem Content="🌙 Dark Theme" Tag="dark" IsSelected="True"/>
+                                    <ComboBoxItem Content="🖥️ System Theme" Tag="system"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </StackPanel>
             </Border>
 
-            <!-- Launcher Settings -->
-            <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                    CornerRadius="8" Padding="24">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="20" Height="20" Fill="#3B82F6" Margin="0,0,8,0"/>
-                        <TextBlock Text="Launcher Settings" FontSize="18" FontWeight="SemiBold" 
-                                   Foreground="#111827" VerticalAlignment="Center"/>
-                    </StackPanel>
 
-                    <StackPanel >
-                        <!-- Default launcher path -->
-                        <StackPanel>
-                            <TextBlock Text="Default Launcher Path" FontWeight="Medium" 
-                                       Foreground="#111827" Margin="0,0,0,8"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                
-                                <TextBox Grid.Column="0" Name="DefaultLauncherPathTextBox" 
-                                         Text="D:\SPT\SPT.Launcher.exe" FontSize="14"
-                                         Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1"/>
-                                
-                                <Button Grid.Column="1" Name="BrowseDefaultPathButton" Content="Browse" 
-                                        Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
-                                        Padding="12,8" Margin="8,0,0,0" Click="BrowseDefaultPathButton_Click"/>
-                            </Grid>
-                        </StackPanel>
-
-                        <!-- Auto-save logs -->
-                        <CheckBox Name="AutoSaveLogsCheckBox" Content="Automatically save server logs" 
-                                  FontWeight="Medium" Foreground="#111827"/>
-
-                        <!-- Log retention -->
-                        <StackPanel>
-                            <TextBlock Text="Log Retention (days)" FontWeight="Medium" 
-                                       Foreground="#111827" Margin="0,0,0,8"/>
-                            <TextBox Name="LogRetentionTextBox" Text="30" FontSize="14"
-                                     Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1" Width="100" HorizontalAlignment="Left"/>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- Server Settings -->
-            <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                    CornerRadius="8" Padding="24">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="20" Height="20" Fill="#3B82F6" Margin="0,0,8,0"/>
-                        <TextBlock Text="Server Settings" FontSize="18" FontWeight="SemiBold" 
-                                   Foreground="#111827" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <StackPanel >
-                        <!-- Default server port -->
-                        <StackPanel>
-                            <TextBlock Text="Default Server Port" FontWeight="Medium" 
-                                       Foreground="#111827" Margin="0,0,0,8"/>
-                            <TextBox Name="DefaultPortTextBox" Text="6969" FontSize="14"
-                                     Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1" Width="100" HorizontalAlignment="Left"/>
-                        </StackPanel>
-
-                        <!-- Auto-start servers -->
-                        <CheckBox Name="AutoStartServersCheckBox" Content="Auto-start configured servers on launch" 
-                                  FontWeight="Medium" Foreground="#111827"/>
-
-                        <!-- Server timeout -->
-                        <StackPanel>
-                            <TextBlock Text="Server Timeout (seconds)" FontWeight="Medium" 
-                                       Foreground="#111827" Margin="0,0,0,8"/>
-                            <TextBox Name="ServerTimeoutTextBox" Text="30" FontSize="14"
-                                     Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1" Width="100" HorizontalAlignment="Left"/>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
 
 
             <!-- Action Buttons -->
-            <StackPanel Orientation="Horizontal"  HorizontalAlignment="Center">
-                <Button Name="SaveSettingsButton" Content="Save Settings" 
-                        Style="{StaticResource ModernButtonStyle}" Background="#2563EB"
-                        Padding="24,12" FontSize="16" Click="SaveSettingsButton_Click"/>
-                <Button Name="CancelSettingsButton" Content="Cancel" 
-                        Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
-                        Padding="24,12" FontSize="16" Click="CancelSettingsButton_Click"/>
-            </StackPanel>
+            <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
+                    CornerRadius="12" Padding="24" Margin="0,0,0,24">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
+                        <Border Background="#10B981" CornerRadius="6" Padding="6" Margin="0,0,10,0">
+                            <TextBlock Text="💾" FontSize="14" Foreground="White"/>
+                        </Border>
+                        <TextBlock Text="Actions" FontSize="18" FontWeight="Bold" 
+                                   Foreground="#1F2937" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Name="SaveSettingsButton" 
+                                Style="{StaticResource ModernButtonStyle}" 
+                                Background="#2563EB"
+                                Padding="32,16" FontSize="16" FontWeight="SemiBold"
+                                Click="SaveSettingsButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💾" FontSize="16" Margin="0,0,8,0"/>
+                                <TextBlock Text="Save Settings"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <Button Name="CancelSettingsButton" 
+                                Style="{StaticResource ModernButtonStyle}" 
+                                Background="#6B7280"
+                                Padding="32,16" FontSize="16" FontWeight="SemiBold"
+                                Margin="16,0,0,0" Click="CancelSettingsButton_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="↩️" FontSize="16" Margin="0,0,8,0"/>
+                                <TextBlock Text="Reset Changes"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </ScrollViewer>
 </Page>

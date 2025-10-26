@@ -33,15 +33,7 @@ namespace SptLauncherWpf.Pages
                 }
             }
 
-            // Load launcher settings
-            DefaultLauncherPathTextBox.Text = SettingsService.Instance.DefaultLauncherPath ?? "D:\\SPT\\SPT.Launcher.exe";
-            AutoSaveLogsCheckBox.IsChecked = SettingsService.Instance.AutoSaveLogs;
-            LogRetentionTextBox.Text = SettingsService.Instance.LogRetentionDays.ToString();
 
-            // Load server settings
-            DefaultPortTextBox.Text = SettingsService.Instance.DefaultPort;
-            AutoStartServersCheckBox.IsChecked = SettingsService.Instance.AutoStartServers;
-            ServerTimeoutTextBox.Text = SettingsService.Instance.ServerTimeoutSeconds.ToString();
 
         }
 
@@ -59,23 +51,7 @@ namespace SptLauncherWpf.Pages
                     SettingsService.Instance.Theme = selectedTheme.Tag?.ToString() ?? "dark";
                 }
 
-                // Save launcher settings
-                SettingsService.Instance.DefaultLauncherPath = DefaultLauncherPathTextBox.Text;
-                SettingsService.Instance.AutoSaveLogs = AutoSaveLogsCheckBox.IsChecked ?? false;
-                
-                if (int.TryParse(LogRetentionTextBox.Text, out int logRetention))
-                {
-                    SettingsService.Instance.LogRetentionDays = logRetention;
-                }
 
-                // Save server settings
-                SettingsService.Instance.DefaultPort = DefaultPortTextBox.Text;
-                SettingsService.Instance.AutoStartServers = AutoStartServersCheckBox.IsChecked ?? false;
-                
-                if (int.TryParse(ServerTimeoutTextBox.Text, out int timeout))
-                {
-                    SettingsService.Instance.ServerTimeoutSeconds = timeout;
-                }
 
 
                 SettingsService.Instance.SaveSettings();
@@ -89,20 +65,6 @@ namespace SptLauncherWpf.Pages
             }
         }
 
-        private void BrowseDefaultPathButton_Click(object sender, RoutedEventArgs e)
-        {
-            var openFileDialog = new OpenFileDialog
-            {
-                Title = "Select Default Launcher Executable",
-                Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
-                InitialDirectory = Path.GetDirectoryName(DefaultLauncherPathTextBox.Text) ?? "C:\\"
-            };
-
-            if (openFileDialog.ShowDialog() == true)
-            {
-                DefaultLauncherPathTextBox.Text = openFileDialog.FileName;
-            }
-        }
 
         private void ResetSettingsButton_Click(object sender, RoutedEventArgs e)
         {
@@ -116,12 +78,6 @@ namespace SptLauncherWpf.Pages
                 SettingsService.Instance.MinimizeToTray = false;
                 SettingsService.Instance.AutoUpdate = true;
                 SettingsService.Instance.Theme = "dark";
-                SettingsService.Instance.DefaultLauncherPath = "";
-                SettingsService.Instance.AutoSaveLogs = false;
-                SettingsService.Instance.LogRetentionDays = 30;
-                SettingsService.Instance.DefaultPort = "6969";
-                SettingsService.Instance.AutoStartServers = false;
-                SettingsService.Instance.ServerTimeoutSeconds = 30;
                 SettingsService.Instance.DebugMode = false;
                 SettingsService.Instance.VerboseLogging = false;
                 SettingsService.Instance.SaveSettings();
@@ -152,12 +108,6 @@ namespace SptLauncherWpf.Pages
                     MinimizeToTray = SettingsService.Instance.MinimizeToTray,
                     AutoUpdate = SettingsService.Instance.AutoUpdate,
                     Theme = SettingsService.Instance.Theme,
-                    DefaultLauncherPath = SettingsService.Instance.DefaultLauncherPath,
-                    AutoSaveLogs = SettingsService.Instance.AutoSaveLogs,
-                    LogRetentionDays = SettingsService.Instance.LogRetentionDays,
-                    DefaultPort = SettingsService.Instance.DefaultPort,
-                    AutoStartServers = SettingsService.Instance.AutoStartServers,
-                    ServerTimeoutSeconds = SettingsService.Instance.ServerTimeoutSeconds,
                     DebugMode = SettingsService.Instance.DebugMode,
                     VerboseLogging = SettingsService.Instance.VerboseLogging
                 };
@@ -204,23 +154,7 @@ namespace SptLauncherWpf.Pages
                     if (settings.TryGetProperty("Theme", out var theme))
                         SettingsService.Instance.Theme = theme.GetString() ?? "dark";
                     
-                    if (settings.TryGetProperty("DefaultLauncherPath", out var defaultPath))
-                        SettingsService.Instance.DefaultLauncherPath = defaultPath.GetString() ?? "";
                     
-                    if (settings.TryGetProperty("AutoSaveLogs", out var autoSaveLogs))
-                        SettingsService.Instance.AutoSaveLogs = autoSaveLogs.GetBoolean();
-                    
-                    if (settings.TryGetProperty("LogRetentionDays", out var logRetention))
-                        SettingsService.Instance.LogRetentionDays = logRetention.GetInt32();
-                    
-                    if (settings.TryGetProperty("DefaultPort", out var defaultPort))
-                        SettingsService.Instance.DefaultPort = defaultPort.GetString() ?? "6969";
-                    
-                    if (settings.TryGetProperty("AutoStartServers", out var autoStartServers))
-                        SettingsService.Instance.AutoStartServers = autoStartServers.GetBoolean();
-                    
-                    if (settings.TryGetProperty("ServerTimeoutSeconds", out var serverTimeout))
-                        SettingsService.Instance.ServerTimeoutSeconds = serverTimeout.GetInt32();
                     
                     if (settings.TryGetProperty("DebugMode", out var debugMode))
                         SettingsService.Instance.DebugMode = debugMode.GetBoolean();
