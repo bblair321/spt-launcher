@@ -38,10 +38,8 @@ namespace SptLauncherWpf.Pages
 
         private void LauncherPage_Loaded(object sender, RoutedEventArgs e)
         {
-            // Force UI update on the UI thread
-            Dispatcher.BeginInvoke(new Action(() => {
-                UpdateLauncherUI();
-            }), System.Windows.Threading.DispatcherPriority.Normal);
+            // Simple, direct UI update
+            UpdateLauncherUI();
         }
 
         private void LauncherPage_Unloaded(object sender, RoutedEventArgs e)
@@ -111,47 +109,33 @@ namespace SptLauncherWpf.Pages
 
         private void RestoreLauncherState()
         {
-            // Restore UI state from static variables when switching tabs
-            if (_isLauncherRunning)
+            // Always check for actual running processes first, regardless of static variables
+            var sptProcesses = Process.GetProcessesByName("SPT.Server");
+            var launcherProcesses = Process.GetProcessesByName("SPT.Launcher");
+            
+            if (sptProcesses.Length > 0 || launcherProcesses.Length > 0)
             {
-                if (_launcherPid > 0)
+                // Update our static variables with the found processes
+                if (sptProcesses.Length > 0)
                 {
-                    StatusText.Text = $"Launcher started (PID: {_launcherPid})";
+                    _serverProcess = sptProcesses[0];
+                    _isLauncherRunning = true;
                 }
-                else if (_serverProcess != null && !_serverProcess.HasExited)
+                if (launcherProcesses.Length > 0)
                 {
-                    StatusText.Text = $"SPT Server running (Launcher PID: {_launcherPid}, Server PID: {_serverProcess.Id})";
+                    _launcherProcess = launcherProcesses[0];
+                    _launcherPid = _launcherProcess.Id;
+                    _isLauncherRunning = true;
                 }
-                else
-                {
-                    // Check if processes are actually running even if our variables are null
-                    var sptProcesses = Process.GetProcessesByName("SPT.Server");
-                    var launcherProcesses = Process.GetProcessesByName("SPT.Launcher");
-                    
-                    if (sptProcesses.Length > 0 || launcherProcesses.Length > 0)
-                    {
-                        // Update our static variables with the found processes
-                        if (sptProcesses.Length > 0)
-                        {
-                            _serverProcess = sptProcesses[0];
-                            StatusText.Text = $"SPT Server running (PID: {_serverProcess.Id})";
-                        }
-                        if (launcherProcesses.Length > 0)
-                        {
-                            _launcherProcess = launcherProcesses[0];
-                            if (_launcherPid == 0)
-                            {
-                                _launcherPid = _launcherProcess.Id;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // No processes found, reset the running state
-                        _isLauncherRunning = false;
-                        StatusText.Text = "Ready";
-                    }
-                }
+            }
+            else
+            {
+                // No processes found, reset the running state
+                _isLauncherRunning = false;
+                _launcherProcess = null;
+                _serverProcess = null;
+                _launcherPid = 0;
+                _serverPid = 0;
             }
         }
 
@@ -317,68 +301,64 @@ namespace SptLauncherWpf.Pages
         {
             try
             {
-                // Always check for current processes - don't rely on stored PIDs
-                var sptProcesses = Process.GetProcessesByName("SPT.Server");
-                var launcherProcesses = Process.GetProcessesByName("SPT.Launcher");
+                System.Diagnostics.Debug.WriteLine("[StopButton_Click] Stop button clicked!");
                 
-                bool processesStopped = false;
-                int stoppedCount = 0;
+                // Get current process ID to exclude it from stopping
+                int currentProcessId = Process.GetCurrentProcess().Id;
+                System.Diagnostics.Debug.WriteLine($"[StopButton_Click] Current process ID: {currentProcessId}");
                 
-                // Stop all SPT.Server processes
-                foreach (var process in sptProcesses)
+                // Stop only SPT launcher processes (not servers)
+                var sptLauncherProcesses = Process.GetProcessesByName("SPT.Launcher");
+                var akiLauncherProcesses = Process.GetProcessesByName("Aki.Launcher");
+                
+                // Also check for any launcher processes that might have different names
+                var allProcesses = Process.GetProcesses();
+                var launcherProcesses = allProcesses.Where(p => 
+                    p.Id != currentProcessId && // Exclude current process
+                    (p.ProcessName.Contains("SPT", StringComparison.OrdinalIgnoreCase) ||
+                     p.ProcessName.Contains("Aki", StringComparison.OrdinalIgnoreCase)) &&
+                    !p.ProcessName.Contains("Server", StringComparison.OrdinalIgnoreCase) // Exclude server processes
+                ).ToList();
+                
+                System.Diagnostics.Debug.WriteLine($"[StopButton_Click] Found {launcherProcesses.Count} SPT launcher processes to stop (excluding current process and servers):");
+                foreach (var proc in launcherProcesses)
                 {
-                    try
-                    {
-                        if (!process.HasExited)
-                        {
-                            process.Kill();
-                            processesStopped = true;
-                            stoppedCount++;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Error stopping SPT.Server (PID: {process.Id}): {ex.Message}", "Warning", 
-                                      MessageBoxButton.OK, MessageBoxImage.Warning);
-                    }
+                    System.Diagnostics.Debug.WriteLine($"  - {proc.ProcessName} (PID: {proc.Id})");
                 }
                 
-                // Stop all SPT.Launcher processes
+                int stoppedCount = 0;
                 foreach (var process in launcherProcesses)
                 {
                     try
                     {
                         if (!process.HasExited)
                         {
+                            System.Diagnostics.Debug.WriteLine($"[StopButton_Click] Killing {process.ProcessName} (PID: {process.Id})");
                             process.Kill();
-                            processesStopped = true;
                             stoppedCount++;
                         }
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Error stopping SPT.Launcher (PID: {process.Id}): {ex.Message}", "Warning", 
+                        System.Diagnostics.Debug.WriteLine($"[StopButton_Click] Error stopping {process.ProcessName}: {ex.Message}");
+                        MessageBox.Show($"Error stopping {process.ProcessName} (PID: {process.Id}): {ex.Message}", "Warning", 
                                       MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }
                 
-                // Wait a moment for processes to actually stop
-                System.Threading.Thread.Sleep(1000);
+                System.Diagnostics.Debug.WriteLine($"[StopButton_Click] Stopped {stoppedCount} launcher processes");
                 
-                // Update UI immediately
+                // Update UI
                 LaunchButton.IsEnabled = true;
                 StopButton.IsEnabled = false;
-                StatusText.Text = processesStopped ? $"Stopped {stoppedCount} processes" : "No processes were running";
+                StatusText.Text = stoppedCount > 0 ? $"Stopped {stoppedCount} launcher processes" : "No launcher processes were running";
                 
-                // Clear all static state
-                _isLauncherRunning = false;
-                _launcherProcess = null;
-                _serverProcess = null;
-                _launcherPid = 0;
-                _serverPid = 0;
+                // Force UI refresh
+                UpdateLauncherUI();
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[StopButton_Click] Error: {ex.Message}");
                 MessageBox.Show($"Error stopping processes: {ex.Message}", "Error", 
                               MessageBoxButton.OK, MessageBoxImage.Error);
             }
@@ -533,58 +513,71 @@ namespace SptLauncherWpf.Pages
 
         private void UpdateLauncherUI()
         {
-            // Always check current process state - don't rely on static variables
-            var sptProcesses = Process.GetProcessesByName("SPT.Server");
-            var launcherProcesses = Process.GetProcessesByName("SPT.Launcher");
-            bool hasRunningProcesses = sptProcesses.Length > 0 || launcherProcesses.Length > 0;
-            
-            if (hasRunningProcesses)
+            try
             {
-                LaunchButton.IsEnabled = false;
-                StopButton.IsEnabled = true;
+                // Get current process ID to exclude it from detection
+                int currentProcessId = Process.GetCurrentProcess().Id;
                 
-                // Update status to show what's running
-                if (sptProcesses.Length > 0 && launcherProcesses.Length > 0)
+                // Check for launcher processes (for Launch button state)
+                var sptLauncherProcesses = Process.GetProcessesByName("SPT.Launcher");
+                var akiLauncherProcesses = Process.GetProcessesByName("Aki.Launcher");
+                
+                // Check for any SPT-related processes for the Stop button (excluding current process)
+                var allProcesses = Process.GetProcesses();
+                var sptProcesses = allProcesses.Where(p => 
+                    p.Id != currentProcessId && // Exclude current process
+                    (p.ProcessName.Contains("SPT", StringComparison.OrdinalIgnoreCase) ||
+                     p.ProcessName.Contains("Aki", StringComparison.OrdinalIgnoreCase) ||
+                     p.ProcessName.Contains("Tarkov", StringComparison.OrdinalIgnoreCase) ||
+                     p.ProcessName.Contains("Escape", StringComparison.OrdinalIgnoreCase))
+                ).ToList();
+                
+                System.Diagnostics.Debug.WriteLine($"[UpdateLauncherUI] Found {sptProcesses.Count} SPT-related processes (excluding current process):");
+                foreach (var proc in sptProcesses)
                 {
-                    StatusText.Text = $"Server running (PID: {sptProcesses[0].Id}), Launcher running (PID: {launcherProcesses[0].Id})";
+                    System.Diagnostics.Debug.WriteLine($"  - {proc.ProcessName} (PID: {proc.Id})");
                 }
-                else if (sptProcesses.Length > 0)
+                
+                bool hasLauncherRunning = sptLauncherProcesses.Length > 0 || akiLauncherProcesses.Length > 0;
+                bool hasAnySptProcesses = sptProcesses.Count > 0;
+                
+                if (hasLauncherRunning)
                 {
-                    StatusText.Text = $"Server running (PID: {sptProcesses[0].Id})";
+                    LaunchButton.IsEnabled = false;
+                    StopButton.IsEnabled = true;
+                    var processId = sptLauncherProcesses.Length > 0 ? sptLauncherProcesses[0].Id : akiLauncherProcesses[0].Id;
+                    StatusText.Text = $"SPT Launcher running (PID: {processId})";
+                    System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] Launcher running - Launch button DISABLED, Stop button ENABLED");
                 }
-                else if (launcherProcesses.Length > 0)
+                else if (hasAnySptProcesses)
                 {
-                    StatusText.Text = $"Launcher running (PID: {launcherProcesses[0].Id})";
+                    LaunchButton.IsEnabled = true;
+                    StopButton.IsEnabled = true;
+                    StatusText.Text = $"SPT process running (PID: {sptProcesses[0].Id})";
+                    System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] SPT process running - Launch button ENABLED, Stop button ENABLED");
+                }
+                else
+                {
+                    LaunchButton.IsEnabled = true;
+                    StopButton.IsEnabled = false;
+                    StatusText.Text = "Ready";
+                    System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] No processes - Launch button ENABLED, Stop button DISABLED");
                 }
             }
-            else
+            catch (Exception ex)
             {
+                // Fallback to enabled state if there's an error
                 LaunchButton.IsEnabled = true;
                 StopButton.IsEnabled = false;
                 StatusText.Text = "Ready";
+                System.Diagnostics.Debug.WriteLine($"[UpdateLauncherUI] Error: {ex.Message}");
             }
         }
 
         private void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_isLauncherRunning && _launcherProcess != null)
-            {
-                if (_launcherProcess.HasExited)
-                {
-                    _isLauncherRunning = false;
-                    LaunchButton.IsEnabled = true;
-                    StopButton.IsEnabled = false;
-                    StatusText.Text = "Launcher stopped";
-                }
-                else
-                {
-                    StatusText.Text = $"Launcher running (PID: {_launcherProcess.Id})";
-                }
-            }
-            else
-            {
-                StatusText.Text = "Ready";
-            }
+            // Force refresh of the UI state
+            UpdateLauncherUI();
         }
 
         private void ToggleFikaButton_Click(object sender, RoutedEventArgs e)
