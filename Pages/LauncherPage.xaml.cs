@@ -18,8 +18,6 @@ namespace SptLauncherWpf.Pages
         private static int _launcherPid = 0;
         private static int _serverPid = 0;
         private static string _launcherPath = "";
-        private bool _showFikaSettings = false;
-        private string _configPath = "";
         private System.Windows.Threading.DispatcherTimer? _uiUpdateTimer;
         
         // Global process monitoring - independent of page lifecycle
@@ -156,9 +154,6 @@ namespace SptLauncherWpf.Pages
         {
             // Load launcher path from settings
             LauncherPathTextBox.Text = SettingsService.Instance.LauncherPath ?? "D:\\SPT\\SPT.Launcher.exe";
-            
-            // Load Fika configuration
-            LoadFikaConfig();
         }
 
         private void RestoreLauncherState()
@@ -199,81 +194,6 @@ namespace SptLauncherWpf.Pages
             SettingsService.Instance.SaveSettings();
         }
 
-        private async void LoadFikaConfig()
-        {
-            try
-            {
-                var sptDirectory = Path.GetDirectoryName(LauncherPathTextBox.Text);
-                if (string.IsNullOrEmpty(sptDirectory)) return;
-
-                var configFile = Path.Combine(sptDirectory, "config.json");
-                if (File.Exists(configFile))
-                {
-                    _configPath = configFile;
-                    ConfigPathText.Text = configFile;
-
-                    var json = await File.ReadAllTextAsync(configFile);
-                    var config = JsonSerializer.Deserialize<JsonElement>(json);
-
-                    if (config.TryGetProperty("enableFika", out var enableFika))
-                        EnableFikaCheckBox.IsChecked = enableFika.GetBoolean();
-
-                    if (config.TryGetProperty("serverAddress", out var serverAddress))
-                        ServerAddressTextBox.Text = serverAddress.GetString() ?? "";
-
-                    if (config.TryGetProperty("serverPort", out var serverPort))
-                        ServerPortTextBox.Text = serverPort.GetString() ?? "6969";
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to load Fika configuration: {ex.Message}", "Error", 
-                              MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-
-        private async void SaveFikaConfig()
-        {
-            try
-            {
-                var sptDirectory = Path.GetDirectoryName(LauncherPathTextBox.Text);
-                if (string.IsNullOrEmpty(sptDirectory))
-                {
-                    MessageBox.Show("Please set a valid launcher path first.", "Invalid Path", 
-                                  MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                var configFile = Path.Combine(sptDirectory, "config.json");
-                var isFikaEnabled = EnableFikaCheckBox.IsChecked ?? false;
-                
-                // When Fika is disabled, reset to default values
-                var config = new
-                {
-                    enableFika = isFikaEnabled,
-                    serverAddress = isFikaEnabled ? ServerAddressTextBox.Text : "127.0.0.1",
-                    serverPort = isFikaEnabled ? ServerPortTextBox.Text : "6969"
-                };
-
-                var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-                await File.WriteAllTextAsync(configFile, json);
-
-                // Update the UI to reflect the saved values
-                if (!isFikaEnabled)
-                {
-                    ServerAddressTextBox.Text = "127.0.0.1";
-                    ServerPortTextBox.Text = "6969";
-                }
-
-                MessageBox.Show("Fika configuration saved successfully!", "Success", 
-                              MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to save Fika configuration: {ex.Message}", "Error", 
-                              MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
 
         private void BrowseButton_Click(object sender, RoutedEventArgs e)
         {
@@ -288,7 +208,6 @@ namespace SptLauncherWpf.Pages
             {
                 LauncherPathTextBox.Text = openFileDialog.FileName;
                 SaveSettings();
-                LoadFikaConfig(); // Reload Fika config for new path
             }
         }
 
@@ -634,35 +553,5 @@ namespace SptLauncherWpf.Pages
             UpdateLauncherUI();
         }
 
-        private void ToggleFikaButton_Click(object sender, RoutedEventArgs e)
-        {
-            _showFikaSettings = !_showFikaSettings;
-            FikaSettingsPanel.Visibility = _showFikaSettings ? Visibility.Visible : Visibility.Collapsed;
-            ToggleFikaButton.Content = _showFikaSettings ? "Hide" : "Configure";
-        }
-
-        private void EnableFikaCheckBox_Changed(object sender, RoutedEventArgs e)
-        {
-            // Check if controls are initialized before accessing them
-            if (FikaConfigPanel == null || SaveConfigButton == null || ReloadConfigButton == null)
-                return;
-                
-            bool isFikaEnabled = EnableFikaCheckBox.IsChecked == true;
-            FikaConfigPanel.Visibility = isFikaEnabled ? Visibility.Visible : Visibility.Collapsed;
-            
-            // Also hide the save/reload buttons when Fika is disabled
-            SaveConfigButton.Visibility = isFikaEnabled ? Visibility.Visible : Visibility.Collapsed;
-            ReloadConfigButton.Visibility = isFikaEnabled ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        private void SaveConfigButton_Click(object sender, RoutedEventArgs e)
-        {
-            SaveFikaConfig();
-        }
-
-        private void ReloadConfigButton_Click(object sender, RoutedEventArgs e)
-        {
-            LoadFikaConfig();
-        }
     }
 }
