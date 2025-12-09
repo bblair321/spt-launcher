@@ -391,34 +391,6 @@ namespace SptLauncherWpf.Controls
             });
         }
 
-        private void Send_Click(object sender, RoutedEventArgs e)
-        {
-            SendInput(InputBox.Text);
-            InputBox.Clear();
-        }
-
-        private void InputBox_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter)
-            {
-                SendInput(InputBox.Text);
-                InputBox.Clear();
-                e.Handled = true;
-            }
-        }
-
-        private void SendInput(string input)
-        {
-            if (process == null || process.HasExited)
-            {
-                AppendLine("[Cannot send input — process not running]");
-                return;
-            }
-
-            process.StandardInput.WriteLine(input);
-            process.StandardInput.Flush();
-        }
-
         private void OutputBlock_SelectionChanged(object sender, RoutedEventArgs e)
         {
             // This method is called when the user selects text in the output

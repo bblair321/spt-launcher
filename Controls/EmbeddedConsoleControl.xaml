@@ -3,11 +3,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Height="300" Width="600">
     <Grid Background="#111">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
         <!-- Console output -->
         <ScrollViewer x:Name="OutputScrollViewer"
                       VerticalScrollBarVisibility="Hidden"
@@ -25,22 +20,5 @@
                      Text=""
                      SelectionChanged="OutputBlock_SelectionChanged"/>
         </ScrollViewer>
-
-        <!-- Input area -->
-        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="5">
-            <TextBox x:Name="InputBox"
-                     FontFamily="Consolas"
-                     FontSize="13"
-                     Width="500"
-                     Background="#222"
-                     Foreground="White"
-                     BorderBrush="#333"
-                     BorderThickness="1"
-                     KeyDown="InputBox_KeyDown" />
-            <Button Content="Send"
-                    Margin="5,0,0,0"
-                    Width="70"
-                    Click="Send_Click" />
-        </StackPanel>
     </Grid>
 </UserControl>

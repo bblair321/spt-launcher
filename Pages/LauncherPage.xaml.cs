@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -551,6 +552,73 @@ namespace SptLauncherWpf.Pages
         {
             // Force refresh of the UI state
             UpdateLauncherUI();
+        }
+
+        private async void InstallSptButton_Click(object sender, RoutedEventArgs e)
+        {
+            const string installerUrl = "https://ligma.waffle-lord.net/SPTInstaller.exe";
+            const string installerFileName = "SPTInstaller.exe";
+            
+            try
+            {
+                // Disable button during download
+                InstallSptButton.IsEnabled = false;
+                InstallSptButton.Content = "⏳ Downloading installer...";
+                
+                // Get temporary file path
+                string tempPath = Path.GetTempPath();
+                string installerPath = Path.Combine(tempPath, installerFileName);
+                
+                // Download the installer
+                using (HttpClient client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromMinutes(5); // Set timeout for large downloads
+                    
+                    byte[] fileBytes = await client.GetByteArrayAsync(installerUrl);
+                    await File.WriteAllBytesAsync(installerPath, fileBytes);
+                }
+                
+                // Update button text
+                InstallSptButton.Content = "🚀 Launching installer...";
+                
+                // Execute the installer
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = installerPath,
+                    UseShellExecute = true,
+                    CreateNoWindow = false
+                };
+                
+                Process.Start(processInfo);
+                
+                // Reset button state
+                InstallSptButton.Content = "📥 Install Latest SPT Version";
+                InstallSptButton.IsEnabled = true;
+                
+                MessageBox.Show("SPT installer has been launched. Please follow the installation wizard.", 
+                    "Installer Launched", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (HttpRequestException ex)
+            {
+                InstallSptButton.Content = "📥 Install Latest SPT Version";
+                InstallSptButton.IsEnabled = true;
+                MessageBox.Show($"Failed to download the SPT installer.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.", 
+                    "Download Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (TaskCanceledException ex)
+            {
+                InstallSptButton.Content = "📥 Install Latest SPT Version";
+                InstallSptButton.IsEnabled = true;
+                MessageBox.Show($"Download timed out.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.", 
+                    "Download Timeout", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            catch (Exception ex)
+            {
+                InstallSptButton.Content = "📥 Install Latest SPT Version";
+                InstallSptButton.IsEnabled = true;
+                MessageBox.Show($"An error occurred while installing SPT.\n\nError: {ex.Message}", 
+                    "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
     }

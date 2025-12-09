@@ -23,6 +23,26 @@
                            Margin="0,8,0,0"/>
             </StackPanel>
 
+            <!-- SPT Installation Section -->
+            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
+                        <TextBlock Text="SPT Installation" FontSize="16" FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <TextBlock Text="Do you need to install SPT?" 
+                               FontSize="14" Foreground="{DynamicResource TextPrimaryColor}" 
+                               Margin="0,0,0,12"/>
+                    
+                    <Button Name="InstallSptButton" Content="📥 Install Latest SPT Version" 
+                            Style="{StaticResource ModernButtonStyle}" 
+                            Click="InstallSptButton_Click"
+                            HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
             <!-- Modern Status Card -->
             <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
                 <StackPanel>
