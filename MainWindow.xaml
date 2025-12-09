@@ -4,9 +4,9 @@
         Title="SPT Launcher" Height="800" Width="1200"
         MinHeight="600" MinWidth="800"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource BackgroundColor}"
+        Background="#2563EB"
         WindowStyle="None"
-        AllowsTransparency="False"
+        AllowsTransparency="True"
         ResizeMode="CanResize"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
@@ -16,7 +16,7 @@
         RenderOptions.ClearTypeHint="Enabled"
         RenderOptions.EdgeMode="Unspecified">
     
-    <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+    <Border Background="#2563EB" Margin="0">
         <Grid Margin="0">
             
             <Grid.RowDefinitions>
@@ -26,70 +26,141 @@
             </Grid.RowDefinitions>
 
             <!-- Modern Title Bar -->
-            <Border Grid.Row="0" Height="64" Margin="0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="{DynamicResource PrimaryColor}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                
-                        <!-- Modern App Title and Icon -->
-                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0">
-                            <Ellipse Width="32" Height="32" Fill="White" Margin="0,0,16,0"
-                                     RenderOptions.EdgeMode="Unspecified"
-                                     UseLayoutRounding="True"
-                                     SnapsToDevicePixels="True"
-                                     RenderOptions.BitmapScalingMode="HighQuality">
-                                <Ellipse.Effect>
-                                    <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="2" Opacity="0.2"/>
-                                </Ellipse.Effect>
-                            </Ellipse>
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="SPT Launcher" Foreground="White" FontWeight="Bold" FontSize="20" VerticalAlignment="Center"/>
-                                <TextBlock Name="VersionText" Text="v3.0.0" Foreground="#E0E7FF" FontSize="12" VerticalAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
+            <Border Grid.Row="0" Height="48" Margin="0,0,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#3B82F6" Offset="0"/>
+                        <GradientStop Color="#2563EB" Offset="0.35"/>
+                        <GradientStop Color="#1E40AF" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.Effect>
+                    <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="2" Opacity="0.15" Direction="270"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- Modern App Title -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="SPT Launcher" Foreground="White" FontWeight="SemiBold" FontSize="18" VerticalAlignment="Center" LineHeight="20"/>
+                            <TextBlock Name="VersionText" Text="v3.0.0" Foreground="#E0E7FF" FontSize="11" VerticalAlignment="Center" Margin="0,0,0,0" Opacity="0.9"/>
                         </StackPanel>
-                
-                <!-- Modern Window Controls -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,8,0">
-                    <Button Name="MinimizeButton" Width="44" Height="32" Background="Transparent" BorderThickness="0" 
-                            Click="MinimizeButton_Click" Cursor="Hand" Margin="2">
-                        <TextBlock Text="−" Foreground="White" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Button>
-                    <Button Name="MaximizeButton" Width="44" Height="32" Background="Transparent" BorderThickness="0" 
-                            Click="MaximizeButton_Click" Cursor="Hand" Margin="2">
-                        <TextBlock Text="□" Foreground="White" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Button>
-                    <Button Name="CloseButton" Width="44" Height="32" Background="#EF4444" BorderThickness="0" 
-                            Click="CloseButton_Click" Cursor="Hand" Margin="2">
-                        <TextBlock Text="×" Foreground="White" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
+                    </StackPanel>
+                    
+                    <!-- Modern Window Controls -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,8,0">
+                        <Button Name="MinimizeButton" Width="46" Height="32" Background="Transparent" BorderThickness="0" 
+                                Click="MinimizeButton_Click" Cursor="Hand" Margin="2">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#3B82F6"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#60A5FA"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="−" Foreground="White" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button Name="MaximizeButton" Width="46" Height="32" Background="Transparent" BorderThickness="0" 
+                                Click="MaximizeButton_Click" Cursor="Hand" Margin="2">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#3B82F6"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#60A5FA"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="□" Foreground="White" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                        <Button Name="CloseButton" Width="46" Height="32" Background="#EF4444" BorderThickness="0" 
+                                Click="CloseButton_Click" Cursor="Hand" Margin="2">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#DC2626"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter Property="Background" Value="#B91C1C"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <TextBlock Text="×" Foreground="White" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
 
         <!-- Modern Tab Navigation -->
-        <Border Grid.Row="1" Background="{DynamicResource PrimaryColor}" BorderThickness="0" Padding="16,8">
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+        <Border Grid.Row="1" BorderThickness="0" Padding="16,8">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#3B82F6" Offset="0"/>
+                    <GradientStop Color="#2563EB" Offset="0.35"/>
+                    <GradientStop Color="#1E40AF" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden">
                 <StackPanel Orientation="Horizontal" Margin="0,0">
                     <Button Name="LauncherTabButton" Content="Launcher" Tag="launcher" 
-                            Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
+                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}" Background="{DynamicResource PrimaryColor}" FontWeight="SemiBold"/>
-                    <Rectangle Width="1" Height="32" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
+                    <Rectangle Width="1" Height="28" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Name="ServersTabButton" Content="Servers" Tag="servers" 
-                            Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
+                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="32" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
+                    <Rectangle Width="1" Height="28" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Name="ModsTabButton" Content="Mods" Tag="mods" 
-                            Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
+                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="32" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
+                    <Rectangle Width="1" Height="28" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Name="SettingsTabButton" Content="Settings" Tag="settings" 
-                            Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
+                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="32" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
+                    <Rectangle Width="1" Height="28" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Name="DevToolsTabButton" Content="Tools" Tag="devtools" 
-                            Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
+                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}"/>
                 </StackPanel>
             </ScrollViewer>

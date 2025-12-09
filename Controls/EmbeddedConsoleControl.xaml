@@ -10,8 +10,8 @@
 
         <!-- Console output -->
         <ScrollViewer x:Name="OutputScrollViewer"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Hidden"
+                      HorizontalScrollBarVisibility="Hidden"
                       Margin="5"
                       ScrollChanged="OutputScrollViewer_ScrollChanged">
             <TextBox x:Name="OutputBlock"

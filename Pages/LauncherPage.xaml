@@ -11,7 +11,7 @@
       TextOptions.TextRenderingMode="ClearType"
       RenderOptions.EdgeMode="Unspecified">
     
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
         <StackPanel Margin="0,16,0,0">
             
             <!-- Header -->
@@ -49,7 +49,7 @@
                         
                         <!-- Refresh Button -->
                         <Button Grid.Column="2" Name="RefreshButton" Content="Refresh" 
-                                Background="{DynamicResource HoverColor}" Foreground="{DynamicResource TextSecondaryColor}" BorderThickness="0"
+                                Background="{DynamicResource HoverColor}" Foreground="{DynamicResource TextPrimaryColor}" BorderThickness="0"
                                 Padding="12,6" FontSize="12" Click="RefreshButton_Click"/>
                     </Grid>
                 </StackPanel>
@@ -112,7 +112,7 @@
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
                             <Ellipse Width="16" Height="16" Fill="#2563EB" Margin="0,0,8,0"/>
                             <TextBlock Text="Fika Co-op Configuration" FontSize="16" FontWeight="SemiBold" 
-                                       Foreground="#374151" VerticalAlignment="Center"/>
+                                       Foreground="White" VerticalAlignment="Center"/>
                         </StackPanel>
                         
                         <Button Grid.Column="1" Name="ToggleFikaButton" Content="Configure" 
@@ -124,7 +124,7 @@
                     <StackPanel Name="FikaSettingsPanel" Visibility="Collapsed" >
                         <!-- Enable Fika Checkbox -->
                         <CheckBox Name="EnableFikaCheckBox" Content="Enable Fika Co-op Mode" 
-                                  FontWeight="Medium" Foreground="#111827" Checked="EnableFikaCheckBox_Changed" 
+                                  FontWeight="Medium" Foreground="{DynamicResource TextPrimaryColor}" Checked="EnableFikaCheckBox_Changed" 
                                   Unchecked="EnableFikaCheckBox_Changed"/>
 
                         <!-- Fika Configuration Fields -->
@@ -142,18 +142,18 @@
                                 <!-- Server Address -->
                                 <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,8,0">
                                     <TextBlock Text="Server Address" FontWeight="Medium" 
-                                               Foreground="#111827" Margin="0,0,0,8"/>
+                                               Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
                                     <TextBox Name="ServerAddressTextBox" 
                                              Text="192.168.1.100" FontSize="14"
-                                             Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1"/>
+                                             Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"/>
                                 </StackPanel>
 
                                 <!-- Server Port -->
                                 <StackPanel Grid.Row="0" Grid.Column="1" Margin="8,0,0,0">
                                     <TextBlock Text="Server Port" FontWeight="Medium" 
-                                               Foreground="#111827" Margin="0,0,0,8"/>
+                                               Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
                                     <TextBox Name="ServerPortTextBox" Text="6969" FontSize="14"
-                                             Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1"/>
+                                             Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"/>
                                 </StackPanel>
                             </Grid>
 
@@ -168,16 +168,16 @@
                             </StackPanel>
 
                             <!-- Config Info -->
-                            <Border Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" 
+                            <Border Background="{DynamicResource SurfaceColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" 
                                     CornerRadius="6" Padding="12">
                                 <StackPanel>
                                     <TextBlock Text="Configuration Location:" FontWeight="Medium" 
-                                               Foreground="#111827" Margin="0,0,0,4"/>
+                                               Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,4"/>
                                     <TextBlock Name="ConfigPathText" Text="D:\SPT\config.json" 
                                                FontFamily="Consolas" FontSize="12" 
-                                               Foreground="#6B7280" Margin="0,0,0,8"/>
+                                               Foreground="{DynamicResource TextSecondaryColor}" Margin="0,0,0,8"/>
                                     <TextBlock Text="This configuration will be applied to your SPT launcher's config.json file. When Fika mode is enabled, the launcher will connect to the specified server." 
-                                               FontSize="12" Foreground="#6B7280" TextWrapping="Wrap"/>
+                                               FontSize="12" Foreground="{DynamicResource TextSecondaryColor}" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

@@ -9,7 +9,7 @@
       TextOptions.TextRenderingMode="ClearType"
       RenderOptions.EdgeMode="Unspecified">
     
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
         <StackPanel Margin="0,16,0,0" >
             
             <!-- Header -->

@@ -11,7 +11,7 @@
       TextOptions.TextRenderingMode="ClearType"
       RenderOptions.EdgeMode="Unspecified">
     
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
         <StackPanel Margin="0,16,0,0" >
             
             <!-- Header -->
@@ -40,14 +40,14 @@
                                      UseLayoutRounding="True"
                                      SnapsToDevicePixels="True"/>
                             <TextBlock Name="FormTitle" Text="Add New Server" FontSize="16" FontWeight="SemiBold" 
-                                       Foreground="#374151" VerticalAlignment="Center"/>
+                                       Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                         </StackPanel>
 
                         <StackPanel >
                             <!-- Server Name -->
                             <StackPanel Margin="0,0,0,16">
                                 <TextBlock Text="Server Name" FontWeight="Medium" 
-                                           Foreground="#374151" Margin="0,0,0,8"/>
+                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
                                 <TextBox Name="ServerNameTextBox" Text="My SPT Server" 
                                          Style="{StaticResource ModernTextBoxStyle}"/>
                             </StackPanel>
@@ -55,12 +55,12 @@
                             <!-- Server Type -->
                             <StackPanel Margin="0,0,0,16">
                                 <TextBlock Text="Server Type" FontWeight="Medium" 
-                                           Foreground="#374151" Margin="0,0,0,12"/>
+                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,12"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
                                     <RadioButton Name="LocalServerRadio" Content="Local Server" 
                                                 IsChecked="True" GroupName="ServerType" 
                                                 Checked="ServerType_Changed" Margin="0,0,32,0"
-                                                FontSize="14" Foreground="#374151" Padding="0,8">
+                                                FontSize="14" Foreground="{DynamicResource TextPrimaryColor}" Padding="0,8">
                                         <RadioButton.Style>
                                             <Style TargetType="RadioButton">
                                                 <Setter Property="Template">
@@ -105,7 +105,7 @@
                             <!-- Local Server Path -->
                             <StackPanel Name="LocalServerPanel" Margin="0,0,0,16">
                                 <TextBlock Text="Server Executable" FontWeight="Medium" 
-                                           Foreground="#111827" Margin="0,0,0,8"/>
+                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -127,7 +127,7 @@
                             <!-- Port -->
                             <StackPanel Margin="0,0,0,16">
                                 <TextBlock Text="Port" FontWeight="Medium" 
-                                           Foreground="#111827" Margin="0,0,0,8"/>
+                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
                                 <TextBox Name="PortTextBox" Text="6969" 
                                          Style="{StaticResource ModernTextBoxStyle}"/>
                             </StackPanel>
@@ -135,7 +135,7 @@
                             <!-- Description -->
                             <StackPanel Margin="0,0,0,16">
                                 <TextBlock Text="Description" FontWeight="Medium" 
-                                           Foreground="#111827" Margin="0,0,0,8"/>
+                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
                                 <TextBox Name="DescriptionTextBox" Text="" 
                                          TextWrapping="Wrap" AcceptsReturn="True" Height="60"
                                          Style="{StaticResource ModernTextBoxStyle}"/>
@@ -144,7 +144,7 @@
                             <!-- Auto-start -->
                             <StackPanel Margin="0,0,0,24">
                                 <CheckBox Name="AutoStartCheckBox" Content="Auto-start with launcher" 
-                                          FontWeight="Medium" Foreground="#111827" FontSize="14" Padding="0,8">
+                                          FontWeight="Medium" Foreground="{DynamicResource TextPrimaryColor}" FontSize="14" Padding="0,8">
                                     <CheckBox.Style>
                                         <Style TargetType="CheckBox">
                                             <Setter Property="Template">
@@ -203,10 +203,10 @@
                                      UseLayoutRounding="True"
                                      SnapsToDevicePixels="True"/>
                             <TextBlock Text="Configured Servers" FontSize="18" FontWeight="SemiBold" 
-                                       Foreground="#111827" VerticalAlignment="Center"/>
+                                       Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <ScrollViewer Height="300" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Height="300" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
                             <StackPanel Name="ServersListPanel" >
                                 <!-- Servers will be added here dynamically -->
                             </StackPanel>
@@ -221,7 +221,7 @@
                                          UseLayoutRounding="True"
                                          SnapsToDevicePixels="True"/>
                                 <TextBlock Text="Server Console" FontSize="16" FontWeight="SemiBold" 
-                                           Foreground="#111827" VerticalAlignment="Center"/>
+                                           Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                                 <Button Name="ClearLogButton" Content="Clear Console" 
                                         Style="{StaticResource ModernButtonStyle}" 
                                         Background="#6B7280" Padding="8,4" Margin="16,0,0,0"
@@ -234,7 +234,7 @@
                                     <TextBlock Name="NoServerRunningText" 
                                                Text="No server is currently running. Launch a server to see its console output here."
                                                FontSize="14"
-                                               Foreground="#6B7280"
+                                               Foreground="{DynamicResource TextSecondaryColor}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
                                                TextWrapping="Wrap"/>

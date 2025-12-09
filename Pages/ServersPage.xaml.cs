@@ -152,7 +152,7 @@ namespace SptLauncherWpf.Pages
                 Text = server.Name,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 16,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x11, 0x18, 0x27)),
+                Foreground = (Brush)FindResource("TextPrimaryColor"),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -160,7 +160,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"({server.ServerType.ToUpper()})",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80)),
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0)
             };
@@ -173,7 +173,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"Path: {server.Path}\nPort: {server.Port}",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80)),
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
             };

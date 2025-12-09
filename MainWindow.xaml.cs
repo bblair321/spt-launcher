@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -12,6 +13,18 @@ namespace SptLauncherWpf
         private string _currentTab = "launcher";
         private bool _isMaximized = false;
 
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MARGINS
+        {
+            public int cxLeftWidth;
+            public int cxRightWidth;
+            public int cyTopHeight;
+            public int cyBottomHeight;
+        }
+
         public MainWindow()
         {
             try
@@ -21,12 +34,30 @@ namespace SptLauncherWpf
                 SetActiveTab("launcher");
                 SetupDragFunctionality();
                 SetVersionFromAssembly();
+                
+                // Extend window frame into client area to eliminate white border
+                Loaded += MainWindow_Loaded;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to initialize MainWindow: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 throw;
+            }
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var helper = new System.Windows.Interop.WindowInteropHelper(this);
+                helper.EnsureHandle();
+                var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
+                DwmExtendFrameIntoClientArea(helper.Handle, ref margins);
+            }
+            catch
+            {
+                // Ignore if DWM extension fails
             }
         }
 
@@ -96,13 +127,15 @@ namespace SptLauncherWpf
         {
             if (isActive)
             {
-                button.Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)); // #2563EB
+                button.Background = new SolidColorBrush(Color.FromRgb(59, 130, 246)); // #3B82F6 - brighter blue
                 button.FontWeight = FontWeights.SemiBold;
+                button.Opacity = 1.0;
             }
             else
             {
                 button.Background = Brushes.Transparent;
                 button.FontWeight = FontWeights.Normal;
+                button.Opacity = 0.9;
             }
         }
 
