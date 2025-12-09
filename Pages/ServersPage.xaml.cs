@@ -402,6 +402,46 @@ namespace SptLauncherWpf.Pages
             // Cancel edit functionality - will be implemented with proper UI controls
         }
 
+        private void ServersListScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            var scrollViewer = sender as ScrollViewer;
+            if (scrollViewer == null) return;
+
+            // Check if the inner ScrollViewer can scroll in the direction of the wheel
+            bool canScrollDown = e.Delta < 0 && scrollViewer.VerticalOffset < scrollViewer.ScrollableHeight - 1;
+            bool canScrollUp = e.Delta > 0 && scrollViewer.VerticalOffset > 1;
+
+            // If the inner ScrollViewer can scroll, let it handle it
+            if (canScrollDown || canScrollUp)
+            {
+                return; // Let the inner ScrollViewer handle it
+            }
+
+            // If the inner ScrollViewer can't scroll in this direction, pass the event to the parent
+            var parentScrollViewer = FindParentScrollViewer(scrollViewer);
+            if (parentScrollViewer != null)
+            {
+                // Scroll the parent ScrollViewer
+                var newOffset = parentScrollViewer.VerticalOffset - (e.Delta / 3.0);
+                parentScrollViewer.ScrollToVerticalOffset(Math.Max(0, Math.Min(newOffset, parentScrollViewer.ScrollableHeight)));
+                e.Handled = true;
+            }
+        }
+
+        private ScrollViewer? FindParentScrollViewer(DependencyObject child)
+        {
+            var parent = VisualTreeHelper.GetParent(child);
+            while (parent != null)
+            {
+                if (parent is ScrollViewer scrollViewer)
+                {
+                    return scrollViewer;
+                }
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+            return null;
+        }
+
         private void ClearLogButton_Click(object sender, RoutedEventArgs e)
         {
             // Clear the embedded console if it exists

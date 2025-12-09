@@ -206,7 +206,8 @@
                                        Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <ScrollViewer Height="300" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
+                        <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden"
+                                    PreviewMouseWheel="ServersListScrollViewer_PreviewMouseWheel">
                             <StackPanel Name="ServersListPanel" >
                                 <!-- Servers will be added here dynamically -->
                             </StackPanel>

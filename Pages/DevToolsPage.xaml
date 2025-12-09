@@ -24,20 +24,23 @@
             </StackPanel>
 
             <!-- Process Monitor -->
-            <Border Style="{StaticResource ModernCardStyle}" Padding="32">
+            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
                 <StackPanel>
                     <!-- Modern Header -->
-                    <StackPanel Margin="0,0,0,24">
-                        <TextBlock Text="SPT Process Monitor" FontSize="20" FontWeight="Bold" 
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
+                        <TextBlock Text="SPT Process Monitor" FontSize="16" FontWeight="SemiBold" 
                                    Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                        <TextBlock Text="Real-time process monitoring and management" 
-                                   FontSize="14" Foreground="{DynamicResource TextSecondaryColor}" Margin="0,4,0,0"/>
                     </StackPanel>
+                    
+                    <TextBlock Text="Real-time process monitoring and management" 
+                               FontSize="14" Foreground="{DynamicResource TextSecondaryColor}" 
+                               Margin="0,0,0,16"/>
 
                     <!-- Modern Process List -->
                     <StackPanel Margin="0,0,0,24">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                            <Border Background="#F3F4F6" CornerRadius="6" Padding="8,4" Margin="0,0,8,0">
+                            <Border Background="{DynamicResource HoverColor}" CornerRadius="6" Padding="8,4" Margin="0,0,8,0">
                                 <TextBlock Text="ACTIVE PROCESSES" FontSize="12" FontWeight="Bold" 
                                            Foreground="{DynamicResource TextSecondaryColor}" VerticalAlignment="Center"/>
                             </Border>
@@ -45,102 +48,25 @@
                                        Foreground="{DynamicResource TextSecondaryColor}" VerticalAlignment="Center"/>
                         </StackPanel>
                         
-                        <!-- Modern ListView Container -->
-                        <Border Background="#FAFBFC" BorderBrush="#E5E7EB" BorderThickness="1" 
-                                CornerRadius="12" Height="280">
+                        <!-- Process List Container -->
+                        <Border Style="{StaticResource ModernCardStyle}" Padding="16" MaxHeight="400">
                             <Grid>
-                                <!-- Modern ListView -->
-                                <ListView Name="ProcessListView" Background="Transparent" 
-                                          BorderThickness="0" Margin="0">
-                                    <ListView.View>
-                                        <GridView>
-                                            <GridViewColumn Header="PID" Width="80">
-                                                <GridViewColumn.HeaderTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="PID" FontWeight="SemiBold" 
-                                                                   Foreground="{DynamicResource TextPrimaryColor}" FontSize="13"/>
-                                                    </DataTemplate>
-                                                </GridViewColumn.HeaderTemplate>
-                                                <GridViewColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="#F3F4F6" CornerRadius="4" 
-                                                                Padding="8,4" Margin="4">
-                                                            <TextBlock Text="{Binding Id}" FontFamily="Consolas" 
-                                                                       FontSize="12" Foreground="{DynamicResource TextPrimaryColor}" 
-                                                                       HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </GridViewColumn.CellTemplate>
-                                            </GridViewColumn>
-                                            <GridViewColumn Header="Process Name" Width="250">
-                                                <GridViewColumn.HeaderTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="PROCESS NAME" FontWeight="SemiBold" 
-                                                                   Foreground="{DynamicResource TextPrimaryColor}" FontSize="13"/>
-                                                    </DataTemplate>
-                                                </GridViewColumn.HeaderTemplate>
-                                                <GridViewColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <StackPanel Orientation="Horizontal" Margin="8,4">
-                                                            <Ellipse Width="8" Height="8" Fill="#10B981" 
-                                                                     Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                            <TextBlock Text="{Binding ProcessName}" FontWeight="Medium" 
-                                                                       Foreground="{DynamicResource TextPrimaryColor}" FontSize="13" 
-                                                                       VerticalAlignment="Center"/>
-                                                        </StackPanel>
-                                                    </DataTemplate>
-                                                </GridViewColumn.CellTemplate>
-                                            </GridViewColumn>
-                                            <GridViewColumn Header="CPU" Width="100">
-                                                <GridViewColumn.HeaderTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="CPU" FontWeight="SemiBold" 
-                                                                   Foreground="{DynamicResource TextPrimaryColor}" FontSize="13"/>
-                                                    </DataTemplate>
-                                                </GridViewColumn.HeaderTemplate>
-                                                <GridViewColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="#FEF3C7" CornerRadius="4" 
-                                                                Padding="8,4" Margin="4">
-                                                            <TextBlock Text="{Binding CPU}" FontFamily="Consolas" 
-                                                                       FontSize="12" Foreground="{DynamicResource TextPrimaryColor}" 
-                                                                       HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </GridViewColumn.CellTemplate>
-                                            </GridViewColumn>
-                                            <GridViewColumn Header="Memory" Width="120">
-                                                <GridViewColumn.HeaderTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="MEMORY" FontWeight="SemiBold" 
-                                                                   Foreground="{DynamicResource TextPrimaryColor}" FontSize="13"/>
-                                                    </DataTemplate>
-                                                </GridViewColumn.HeaderTemplate>
-                                                <GridViewColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="#DBEAFE" CornerRadius="4" 
-                                                                Padding="8,4" Margin="4">
-                                                            <TextBlock Text="{Binding Memory}" FontFamily="Consolas" 
-                                                                       FontSize="12" Foreground="{DynamicResource TextPrimaryColor}" 
-                                                                       HorizontalAlignment="Center"/>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </GridViewColumn.CellTemplate>
-                                            </GridViewColumn>
-                                        </GridView>
-                                    </ListView.View>
-                                </ListView>
+                                <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
+                                    <StackPanel Name="ProcessListPanel">
+                                        <!-- Process cards will be added here dynamically -->
+                                    </StackPanel>
+                                </ScrollViewer>
                                 
                                 <!-- Empty State -->
                                 <StackPanel Name="EmptyStatePanel" HorizontalAlignment="Center" 
                                             VerticalAlignment="Center" Visibility="Visible">
-                                    <Border Width="64" Height="64" Background="#F3F4F6" CornerRadius="32" 
+                                    <Border Width="64" Height="64" Background="{DynamicResource HoverColor}" CornerRadius="32" 
                                             Margin="0,0,0,16">
                                         <TextBlock Text="📊" FontSize="32" HorizontalAlignment="Center" 
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Text="No SPT processes running" FontSize="16" FontWeight="Medium" 
-                                               Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center"/>
+                                               Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Start an SPT server to see processes here" FontSize="14" 
                                                Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                                 </StackPanel>
@@ -149,7 +75,7 @@
                     </StackPanel>
 
                     <!-- Modern Action Buttons -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,16,0,0">
                         <Button Name="RefreshProcessesButton" Content="🔄 Refresh" 
                                 Style="{StaticResource ModernButtonStyle}"
                                 Background="#6B7280" Padding="20,12" FontSize="14" FontWeight="SemiBold"
