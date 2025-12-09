@@ -75,6 +75,80 @@
                 </StackPanel>
             </Border>
 
+            <!-- Fika Co-op Configuration -->
+            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
+                        <TextBlock Text="Fika Co-op Configuration" FontSize="16" FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <StackPanel Margin="0,0,0,0">
+                        <CheckBox Name="EnableFikaCheckBox" Content="Enable Fika Co-op" 
+                                  FontWeight="Medium" Foreground="{DynamicResource TextPrimaryColor}" FontSize="14" Padding="0,8"
+                                  Checked="EnableFikaCheckBox_Changed" Unchecked="EnableFikaCheckBox_Changed">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="CheckBox">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <ContentPresenter Grid.Column="0" 
+                                                                      VerticalAlignment="Center"
+                                                                      HorizontalAlignment="Left"
+                                                                      Margin="0,0,12,0"/>
+                                                    <Border x:Name="border" Grid.Column="1" Width="20" Height="20" 
+                                                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="2" 
+                                                            Background="{DynamicResource CardBackgroundColor}" CornerRadius="4" 
+                                                            VerticalAlignment="Center"
+                                                            HorizontalAlignment="Right"/>
+                                                    <Path x:Name="checkMark" Grid.Column="1" Data="M 2 6 L 6 10 L 14 2" 
+                                                          Stroke="{DynamicResource PrimaryColor}" StrokeThickness="2" 
+                                                          Visibility="Collapsed" Margin="3,3,3,3" 
+                                                          VerticalAlignment="Center"
+                                                          HorizontalAlignment="Right"/>
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
+                                                        <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource PrimaryColor}"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource TextSecondaryColor}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
+                        
+                        <!-- IP Address Editor (collapsible) -->
+                        <StackPanel Name="FikaIpEditorPanel" Margin="0,16,0,0" Visibility="Collapsed">
+                            <StackPanel Margin="0,0,0,12">
+                                <TextBlock Text="IP Address" FontWeight="Medium" 
+                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8" FontSize="14"/>
+                                <TextBox Name="FikaIpTextBox" 
+                                         FontSize="14"
+                                         Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                         Background="{DynamicResource CardBackgroundColor}"/>
+                            </StackPanel>
+                            
+                            <Button Name="SaveFikaIpButton" Content="Save IP Address" 
+                                    Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
+                                    Padding="16,8" FontSize="14" FontWeight="SemiBold"
+                                    HorizontalAlignment="Left" Click="SaveFikaIpButton_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Modern SPT Launcher Configuration -->
             <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
                 <StackPanel>

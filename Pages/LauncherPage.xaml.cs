@@ -24,6 +24,10 @@ namespace SptLauncherWpf.Pages
         // Global process monitoring - independent of page lifecycle
         private static System.Windows.Threading.DispatcherTimer? _globalProcessTimer;
         private static bool _globalProcessMonitoring = false;
+        
+        // Fika Co-op configuration
+        private bool _fikaEnabled = false;
+        private const string _defaultIp = "127.0.0.1";
 
         public LauncherPage()
         {
@@ -621,5 +625,215 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        // Fika Co-op Configuration Methods
+        
+        private string GetSptInstallPath()
+        {
+            try
+            {
+                var launcherPath = LauncherPathTextBox.Text;
+                if (string.IsNullOrEmpty(launcherPath) || !File.Exists(launcherPath))
+                {
+                    return string.Empty;
+                }
+                
+                // Extract directory from launcher path (e.g., D:\SPT\SPT\SPT.Launcher.exe -> D:\SPT\SPT)
+                var launcherDir = Path.GetDirectoryName(launcherPath);
+                return launcherDir ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private string GetHttpJsonPath()
+        {
+            try
+            {
+                var sptPath = GetSptInstallPath();
+                if (string.IsNullOrEmpty(sptPath))
+                {
+                    return string.Empty;
+                }
+                
+                return Path.Combine(sptPath, "SPT_Data", "configs", "http.json");
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private HttpConfig? LoadHttpJson()
+        {
+            try
+            {
+                var httpJsonPath = GetHttpJsonPath();
+                if (string.IsNullOrEmpty(httpJsonPath) || !File.Exists(httpJsonPath))
+                {
+                    return null;
+                }
+                
+                var jsonContent = File.ReadAllText(httpJsonPath);
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip
+                };
+                
+                return JsonSerializer.Deserialize<HttpConfig>(jsonContent, options);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load http.json: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return null;
+            }
+        }
+
+        private bool SaveHttpJson(string ip)
+        {
+            try
+            {
+                var httpJsonPath = GetHttpJsonPath();
+                if (string.IsNullOrEmpty(httpJsonPath))
+                {
+                    MessageBox.Show("Unable to determine SPT installation path. Please check your launcher path.", 
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return false;
+                }
+                
+                // Validate IP address format (basic validation)
+                if (!System.Net.IPAddress.TryParse(ip, out _))
+                {
+                    MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
+                        "Invalid IP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                
+                // Load existing config or create default
+                var config = LoadHttpJson() ?? new HttpConfig();
+                
+                // Update IP addresses
+                config.ip = ip;
+                config.backendIp = ip;
+                
+                // Ensure directory exists
+                var configDir = Path.GetDirectoryName(httpJsonPath);
+                if (!string.IsNullOrEmpty(configDir) && !Directory.Exists(configDir))
+                {
+                    Directory.CreateDirectory(configDir);
+                }
+                
+                // Save JSON
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                };
+                var jsonContent = JsonSerializer.Serialize(config, options);
+                File.WriteAllText(httpJsonPath, jsonContent);
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save http.json: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
+
+        private void RevertToDefaultIp()
+        {
+            try
+            {
+                SaveHttpJson(_defaultIp);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to revert IP address: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void EnableFikaCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var checkBox = sender as CheckBox;
+                if (checkBox == null) return;
+                
+                _fikaEnabled = checkBox.IsChecked == true;
+                
+                if (_fikaEnabled)
+                {
+                    // Show IP editor
+                    FikaIpEditorPanel.Visibility = Visibility.Visible;
+                    
+                    // Load current IP from http.json
+                    var config = LoadHttpJson();
+                    if (config != null)
+                    {
+                        FikaIpTextBox.Text = config.ip;
+                    }
+                    else
+                    {
+                        FikaIpTextBox.Text = _defaultIp;
+                    }
+                }
+                else
+                {
+                    // Hide IP editor
+                    FikaIpEditorPanel.Visibility = Visibility.Collapsed;
+                    
+                    // Revert to default IP
+                    RevertToDefaultIp();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error updating Fika Co-op configuration: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SaveFikaIpButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var ipAddress = FikaIpTextBox.Text.Trim();
+                
+                if (string.IsNullOrEmpty(ipAddress))
+                {
+                    MessageBox.Show("Please enter an IP address.", "Invalid Input", 
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                
+                if (SaveHttpJson(ipAddress))
+                {
+                    MessageBox.Show("IP address saved successfully.", "Success", 
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving IP address: {ex.Message}", "Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+    }
+
+    // HttpConfig class for JSON serialization
+    public class HttpConfig
+    {
+        public string ip { get; set; } = "127.0.0.1";
+        public int port { get; set; } = 6969;
+        public string backendIp { get; set; } = "127.0.0.1";
+        public int backendPort { get; set; } = 6969;
+        public bool logRequests { get; set; } = true;
+        public Dictionary<string, object> serverImagePathOverride { get; set; } = new();
     }
 }
