@@ -3,7 +3,13 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:local="clr-namespace:SptLauncherWpf.Controls"
       Title="Servers"
-      Loaded="ServersPage_Loaded">
+      Loaded="ServersPage_Loaded"
+      UseLayoutRounding="True"
+      SnapsToDevicePixels="True"
+      RenderOptions.BitmapScalingMode="HighQuality"
+      TextOptions.TextFormattingMode="Ideal"
+      TextOptions.TextRenderingMode="ClearType"
+      RenderOptions.EdgeMode="Unspecified">
     
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,16,0,0" >
@@ -11,9 +17,9 @@
             <!-- Header -->
             <StackPanel HorizontalAlignment="Center" Margin="0,0,0,32">
                 <TextBlock Text="Server Management" FontSize="28" FontWeight="Bold" 
-                           Foreground="#374151" HorizontalAlignment="Center"/>
+                           Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
                 <TextBlock Text="Configure and manage your SPT-AKI servers" 
-                           FontSize="16" Foreground="#6B7280" HorizontalAlignment="Center" 
+                           FontSize="16" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
                            Margin="0,8,0,0"/>
             </StackPanel>
 
@@ -28,7 +34,11 @@
                         Padding="24" Margin="0,0,12,0">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                            <Ellipse Width="16" Height="16" Fill="#2563EB" Margin="0,0,8,0"/>
+                            <Ellipse Width="16" Height="16" Fill="#2563EB" Margin="0,0,8,0"
+                                     RenderOptions.EdgeMode="Unspecified"
+                                     RenderOptions.BitmapScalingMode="HighQuality"
+                                     UseLayoutRounding="True"
+                                     SnapsToDevicePixels="True"/>
                             <TextBlock Name="FormTitle" Text="Add New Server" FontSize="16" FontWeight="SemiBold" 
                                        Foreground="#374151" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -59,10 +69,18 @@
                                                             <Grid>
                                                                 <Ellipse x:Name="OuterEllipse" Width="20" Height="20" 
                                                                          Stroke="#D1D5DB" StrokeThickness="2" 
-                                                                         Fill="White" Margin="-76,0,8,0" VerticalAlignment="Center"/>
+                                                                         Fill="White" Margin="-76,0,8,0" VerticalAlignment="Center"
+                                                                         RenderOptions.EdgeMode="Unspecified"
+                                                                         RenderOptions.BitmapScalingMode="HighQuality"
+                                                                         UseLayoutRounding="True"
+                                                                         SnapsToDevicePixels="True"/>
                                                                 <Ellipse x:Name="InnerEllipse" Width="10" Height="10" 
                                                                          Fill="#2563EB" Margin="-71,5,13,5" 
-                                                                         Visibility="Collapsed" VerticalAlignment="Center"/>
+                                                                         Visibility="Collapsed" VerticalAlignment="Center"
+                                                                         RenderOptions.EdgeMode="Unspecified"
+                                                                         RenderOptions.BitmapScalingMode="HighQuality"
+                                                                         UseLayoutRounding="True"
+                                                                         SnapsToDevicePixels="True"/>
                                                                 <ContentPresenter Margin="32,0,0,0" 
                                                                                   VerticalAlignment="Center"/>
                                                             </Grid>
@@ -179,7 +197,11 @@
                         Padding="24" Margin="12,0,0,0">
                     <StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                            <Ellipse Width="20" Height="20" Fill="#3B82F6" Margin="0,0,8,0"/>
+                            <Ellipse Width="20" Height="20" Fill="#3B82F6" Margin="0,0,8,0"
+                                     RenderOptions.EdgeMode="Unspecified"
+                                     RenderOptions.BitmapScalingMode="HighQuality"
+                                     UseLayoutRounding="True"
+                                     SnapsToDevicePixels="True"/>
                             <TextBlock Text="Configured Servers" FontSize="18" FontWeight="SemiBold" 
                                        Foreground="#111827" VerticalAlignment="Center"/>
                         </StackPanel>
@@ -193,7 +215,11 @@
                         <!-- Server Console Section -->
                         <StackPanel Margin="0,16,0,0">
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Ellipse Width="16" Height="16" Fill="#10B981" Margin="0,0,8,0"/>
+                                <Ellipse Width="16" Height="16" Fill="#10B981" Margin="0,0,8,0"
+                                         RenderOptions.EdgeMode="Unspecified"
+                                         RenderOptions.BitmapScalingMode="HighQuality"
+                                         UseLayoutRounding="True"
+                                         SnapsToDevicePixels="True"/>
                                 <TextBlock Text="Server Console" FontSize="16" FontWeight="SemiBold" 
                                            Foreground="#111827" VerticalAlignment="Center"/>
                                 <Button Name="ClearLogButton" Content="Clear Console" 

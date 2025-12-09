@@ -1,7 +1,13 @@
 <Page x:Class="SptLauncherWpf.Pages.ModsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      Title="Mods">
+      Title="Mods"
+      UseLayoutRounding="True"
+      SnapsToDevicePixels="True"
+      RenderOptions.BitmapScalingMode="HighQuality"
+      TextOptions.TextFormattingMode="Ideal"
+      TextOptions.TextRenderingMode="ClearType"
+      RenderOptions.EdgeMode="Unspecified">
     
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,16,0,0" >
@@ -9,22 +15,22 @@
             <!-- Header -->
             <StackPanel HorizontalAlignment="Center" Margin="0,0,0,32">
                 <TextBlock Text="SPT Mods" FontSize="28" FontWeight="Bold" 
-                           Foreground="#374151" HorizontalAlignment="Center"/>
+                           Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
                 <TextBlock Text="Browse and download mods from the SPT Forge" 
-                           FontSize="16" Foreground="#6B7280" HorizontalAlignment="Center" 
+                           FontSize="16" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
                            Margin="0,8,0,0"/>
             </StackPanel>
 
             <!-- Authentication Panel -->
-            <Border Name="AuthPanel" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
+            <Border Name="AuthPanel" Background="{DynamicResource CardBackgroundColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" 
                     CornerRadius="8" Padding="32" MaxWidth="400" HorizontalAlignment="Center">
                 <StackPanel>
                     <StackPanel HorizontalAlignment="Center" Margin="0,0,0,24">
-                        <Ellipse Width="48" Height="48" Fill="#2563EB" Margin="0,0,0,16"/>
+                        <Ellipse Width="48" Height="48" Fill="{DynamicResource PrimaryColor}" Margin="0,0,0,16"/>
                         <TextBlock Text="SPT Mods" FontSize="24" FontWeight="Bold" 
-                                   Foreground="#374151" HorizontalAlignment="Center"/>
+                                   Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
                         <TextBlock Text="Browse and download mods from the SPT Forge" 
-                                   FontSize="14" Foreground="#6B7280" HorizontalAlignment="Center" 
+                                   FontSize="14" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
                                    Margin="0,8,0,0"/>
                     </StackPanel>
 

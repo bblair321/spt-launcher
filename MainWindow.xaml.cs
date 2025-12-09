@@ -14,11 +14,20 @@ namespace SptLauncherWpf
 
         public MainWindow()
         {
-            InitializeComponent();
-            InitializeStyles();
-            SetActiveTab("launcher");
-            SetupDragFunctionality();
-            SetVersionFromAssembly();
+            try
+            {
+                InitializeComponent();
+                InitializeStyles();
+                SetActiveTab("launcher");
+                SetupDragFunctionality();
+                SetVersionFromAssembly();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to initialize MainWindow: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                    "Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                throw;
+            }
         }
 
         private void InitializeStyles()
@@ -45,33 +54,41 @@ namespace SptLauncherWpf
 
         private void SetActiveTab(string tabId)
         {
-            _currentTab = tabId;
-            
-            // Update button styles
-            UpdateTabButtonStyle(LauncherTabButton, tabId == "launcher");
-            UpdateTabButtonStyle(ServersTabButton, tabId == "servers");
-            UpdateTabButtonStyle(ModsTabButton, tabId == "mods");
-            UpdateTabButtonStyle(SettingsTabButton, tabId == "settings");
-            UpdateTabButtonStyle(DevToolsTabButton, tabId == "devtools");
-
-            // Navigate to appropriate page
-            switch (tabId)
+            try
             {
-                case "launcher":
-                    ContentFrame.Navigate(new LauncherPage());
-                    break;
-                case "servers":
-                    ContentFrame.Navigate(new ServersPage());
-                    break;
-                case "mods":
-                    ContentFrame.Navigate(new ModsPage());
-                    break;
-                case "settings":
-                    ContentFrame.Navigate(new SettingsPage());
-                    break;
-                case "devtools":
-                    ContentFrame.Navigate(new DevToolsPage());
-                    break;
+                _currentTab = tabId;
+                
+                // Update button styles
+                UpdateTabButtonStyle(LauncherTabButton, tabId == "launcher");
+                UpdateTabButtonStyle(ServersTabButton, tabId == "servers");
+                UpdateTabButtonStyle(ModsTabButton, tabId == "mods");
+                UpdateTabButtonStyle(SettingsTabButton, tabId == "settings");
+                UpdateTabButtonStyle(DevToolsTabButton, tabId == "devtools");
+
+                // Navigate to appropriate page
+                switch (tabId)
+                {
+                    case "launcher":
+                        ContentFrame.Navigate(new LauncherPage());
+                        break;
+                    case "servers":
+                        ContentFrame.Navigate(new ServersPage());
+                        break;
+                    case "mods":
+                        ContentFrame.Navigate(new ModsPage());
+                        break;
+                    case "settings":
+                        ContentFrame.Navigate(new SettingsPage());
+                        break;
+                    case "devtools":
+                        ContentFrame.Navigate(new DevToolsPage());
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to set active tab '{tabId}': {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                    "Navigation Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

@@ -14,7 +14,7 @@ namespace SptLauncherWpf.Controls
 {
     public partial class EmbeddedConsoleControl : UserControl
     {
-        private Process process;
+        private Process? process;
         private bool isProcessRunning = false;
         private bool _userHasScrolled = false;
         
@@ -71,7 +71,7 @@ namespace SptLauncherWpf.Controls
             InitializeComponent();
         }
 
-        public async void StartProcess(string exePath, string args = "")
+        public void StartProcess(string exePath, string args = "")
         {
             try
             {
@@ -84,6 +84,11 @@ namespace SptLauncherWpf.Controls
                 AppendLine($"[Launching] {exePath}");
 
                 var workingDir = System.IO.Path.GetDirectoryName(exePath);
+                if (string.IsNullOrEmpty(workingDir))
+                {
+                    AppendLine("❌ Invalid executable path");
+                    return;
+                }
                 
                 // Launch server in background (hidden) and monitor log files
                 var psi = new ProcessStartInfo
@@ -124,10 +129,16 @@ namespace SptLauncherWpf.Controls
             }
         }
 
-        private async Task CaptureConsoleOutput()
+        private Task CaptureConsoleOutput()
         {
             try
             {
+                if (process == null)
+                {
+                    AppendLine("❌ Cannot capture output: process is null");
+                    return Task.CompletedTask;
+                }
+
                 AppendLine("📋 Starting console output capture...");
                 
                 // Start reading from standard output
@@ -135,9 +146,10 @@ namespace SptLauncherWpf.Controls
                 {
                     try
                     {
+                        if (process.StandardOutput == null) return;
                         using var reader = process.StandardOutput;
-                        string line;
-                        while ((line = await reader.ReadLineAsync()) != null && !process.HasExited)
+                        string? line;
+                        while (process != null && !process.HasExited && (line = await reader.ReadLineAsync()) != null)
                         {
                             Dispatcher.Invoke(() => AppendLine(CleanOutputLine(line)));
                         }
@@ -153,9 +165,10 @@ namespace SptLauncherWpf.Controls
                 {
                     try
                     {
+                        if (process.StandardError == null) return;
                         using var reader = process.StandardError;
-                        string line;
-                        while ((line = await reader.ReadLineAsync()) != null && !process.HasExited)
+                        string? line;
+                        while (process != null && !process.HasExited && (line = await reader.ReadLineAsync()) != null)
                         {
                             Dispatcher.Invoke(() => AppendLine($"[ERROR] {CleanOutputLine(line)}"));
                         }
@@ -172,6 +185,8 @@ namespace SptLauncherWpf.Controls
             {
                 AppendLine($"❌ Failed to start console output capture: {ex.Message}");
             }
+            
+            return Task.CompletedTask;
         }
 
         private IntPtr FindWindowByProcessId(int processId)
@@ -236,7 +251,7 @@ namespace SptLauncherWpf.Controls
                                 fs.Seek(lastPosition, SeekOrigin.Begin);
                                 using var reader = new StreamReader(fs);
                                 
-                                string line;
+                                string? line;
                                 while ((line = await reader.ReadLineAsync()) != null)
                                 {
                                     if (!string.IsNullOrWhiteSpace(line))
@@ -315,7 +330,7 @@ namespace SptLauncherWpf.Controls
             return line.Trim();
         }
 
-        public Process Process => process;
+        public Process? Process => process;
         
         public bool IsProcessRunning => isProcessRunning;
         

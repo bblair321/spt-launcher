@@ -20,20 +20,74 @@ namespace SptLauncherWpf.Pages
         private static string _launcherPath = "";
         private bool _showFikaSettings = false;
         private string _configPath = "";
-        private System.Windows.Threading.DispatcherTimer _uiUpdateTimer;
+        private System.Windows.Threading.DispatcherTimer? _uiUpdateTimer;
         
         // Global process monitoring - independent of page lifecycle
-        private static System.Windows.Threading.DispatcherTimer _globalProcessTimer;
+        private static System.Windows.Threading.DispatcherTimer? _globalProcessTimer;
         private static bool _globalProcessMonitoring = false;
 
         public LauncherPage()
         {
-            InitializeComponent();
-            LoadSettings();
-            RestoreLauncherState(); // Restore state from static variables
-            UpdateLauncherUI();
-            SetupUITimer(); // Set up periodic UI updates
-            StartGlobalProcessMonitoring(); // Start global monitoring if not already running
+            try
+            {
+                InitializeComponent();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to initialize LauncherPage XAML: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                    "XAML Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                throw;
+            }
+            
+            try
+            {
+                LoadSettings();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load settings: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                    "Load Settings Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            
+            try
+            {
+                RestoreLauncherState(); // Restore state from static variables
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to restore launcher state: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                    "Restore State Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            
+            try
+            {
+                UpdateLauncherUI();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to update launcher UI: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                    "Update UI Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            
+            try
+            {
+                SetupUITimer(); // Set up periodic UI updates
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to setup UI timer: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                    "Timer Setup Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            
+            try
+            {
+                StartGlobalProcessMonitoring(); // Start global monitoring if not already running
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to start process monitoring: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                    "Process Monitoring Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void LauncherPage_Loaded(object sender, RoutedEventArgs e)
@@ -238,7 +292,7 @@ namespace SptLauncherWpf.Pages
             }
         }
 
-        private async void LaunchButton_Click(object sender, RoutedEventArgs e)
+        private void LaunchButton_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrEmpty(LauncherPathTextBox.Text))
             {

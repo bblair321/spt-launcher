@@ -3,7 +3,13 @@
               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
               Title="DevTools"
               Loaded="DevToolsPage_Loaded"
-              Unloaded="DevToolsPage_Unloaded">
+              Unloaded="DevToolsPage_Unloaded"
+              UseLayoutRounding="True"
+              SnapsToDevicePixels="True"
+              RenderOptions.BitmapScalingMode="HighQuality"
+              TextOptions.TextFormattingMode="Ideal"
+              TextOptions.TextRenderingMode="ClearType"
+              RenderOptions.EdgeMode="Unspecified">
     
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,16,0,0" >
@@ -11,9 +17,9 @@
             <!-- Header -->
             <StackPanel HorizontalAlignment="Center" Margin="0,0,0,32">
                 <TextBlock Text="Development Tools" FontSize="28" FontWeight="Bold" 
-                           Foreground="#374151" HorizontalAlignment="Center"/>
+                           Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
                 <TextBlock Text="Debugging and development utilities" 
-                           FontSize="16" Foreground="#6B7280" HorizontalAlignment="Center" 
+                           FontSize="16" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
                            Margin="0,8,0,0"/>
             </StackPanel>
 
@@ -23,9 +29,9 @@
                     <!-- Modern Header -->
                     <StackPanel Margin="0,0,0,24">
                         <TextBlock Text="SPT Process Monitor" FontSize="20" FontWeight="Bold" 
-                                   Foreground="#1F2937" VerticalAlignment="Center"/>
+                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                         <TextBlock Text="Real-time process monitoring and management" 
-                                   FontSize="14" Foreground="#6B7280" Margin="0,4,0,0"/>
+                                   FontSize="14" Foreground="{DynamicResource TextSecondaryColor}" Margin="0,4,0,0"/>
                     </StackPanel>
 
                     <!-- Modern Process List -->

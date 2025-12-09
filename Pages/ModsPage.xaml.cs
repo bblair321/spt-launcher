@@ -20,17 +20,16 @@ namespace SptLauncherWpf.Pages
         private List<ModInfo> _mods = new();
         private ModInfo? _selectedMod = null;
         private int _currentPage = 1;
-        private int _perPage = 12;
         private string _searchTerm = "";
         private bool _showFilters = false;
 
         public ModsPage()
         {
             InitializeComponent();
-            CheckAuthentication();
+            _ = CheckAuthentication();
         }
 
-        private void CheckAuthentication()
+        private async Task CheckAuthentication()
         {
             _authToken = SettingsService.Instance.AuthToken ?? "";
             _isAuthenticated = !string.IsNullOrEmpty(_authToken);
@@ -40,7 +39,7 @@ namespace SptLauncherWpf.Pages
                 AuthPanel.Visibility = Visibility.Collapsed;
                 MainContentPanel.Visibility = Visibility.Visible;
                 UserInfoText.Text = SettingsService.Instance.UserName ?? "User";
-                LoadMods();
+                await LoadMods();
             }
             else
             {
@@ -439,12 +438,11 @@ namespace SptLauncherWpf.Pages
             SearchTextBox.Text = "";
             _searchTerm = "";
             PerPageComboBox.SelectedIndex = 1; // 12 per page
-            _perPage = 12;
             _currentPage = 1;
             FiltersPanel.Visibility = Visibility.Collapsed;
             _showFilters = false;
             
-            LoadMods();
+            _ = LoadMods();
         }
 
         private void PrevPageButton_Click(object sender, RoutedEventArgs e)
@@ -452,14 +450,14 @@ namespace SptLauncherWpf.Pages
             if (_currentPage > 1)
             {
                 _currentPage--;
-                LoadMods();
+                _ = LoadMods();
             }
         }
 
         private void NextPageButton_Click(object sender, RoutedEventArgs e)
         {
             _currentPage++;
-            LoadMods();
+            _ = LoadMods();
         }
     }
 

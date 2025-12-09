@@ -14,7 +14,7 @@ namespace SptLauncherWpf.Pages
     public partial class DevToolsPage : Page
     {
         private List<ProcessInfo> _processes = new();
-        private static DevToolsPage _currentInstance;
+        private static DevToolsPage? _currentInstance;
 
         public DevToolsPage()
         {

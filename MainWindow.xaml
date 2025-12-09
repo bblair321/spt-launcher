@@ -4,27 +4,29 @@
         Title="SPT Launcher" Height="800" Width="1200"
         MinHeight="600" MinWidth="800"
         WindowStartupLocation="CenterScreen"
-        Background="#2563EB"
+        Background="{DynamicResource BackgroundColor}"
         WindowStyle="None"
-        AllowsTransparency="True"
-        ResizeMode="CanResize">
+        AllowsTransparency="False"
+        ResizeMode="CanResize"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        RenderOptions.BitmapScalingMode="HighQuality"
+        RenderOptions.ClearTypeHint="Enabled"
+        RenderOptions.EdgeMode="Unspecified">
     
-    <Grid Margin="0">
-        
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- Title Bar -->
-            <RowDefinition Height="Auto"/> <!-- Tab Navigation -->
-            <RowDefinition Height="*"/>     <!-- Content -->
-        </Grid.RowDefinitions>
+    <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
+        <Grid Margin="0">
+            
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/> <!-- Title Bar -->
+                <RowDefinition Height="Auto"/> <!-- Tab Navigation -->
+                <RowDefinition Height="*"/>     <!-- Content -->
+            </Grid.RowDefinitions>
 
-        <!-- Modern Title Bar -->
-        <Border Grid.Row="0" Height="64" Margin="0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#2563EB" Offset="0"/>
-                    <GradientStop Color="#1D4ED8" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.Background>
+            <!-- Modern Title Bar -->
+            <Border Grid.Row="0" Height="64" Margin="0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="{DynamicResource PrimaryColor}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -33,7 +35,11 @@
                 
                         <!-- Modern App Title and Icon -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0">
-                            <Ellipse Width="32" Height="32" Fill="White" Margin="0,0,16,0">
+                            <Ellipse Width="32" Height="32" Fill="White" Margin="0,0,16,0"
+                                     RenderOptions.EdgeMode="Unspecified"
+                                     UseLayoutRounding="True"
+                                     SnapsToDevicePixels="True"
+                                     RenderOptions.BitmapScalingMode="HighQuality">
                                 <Ellipse.Effect>
                                     <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="2" Opacity="0.2"/>
                                 </Ellipse.Effect>
@@ -63,25 +69,25 @@
         </Border>
 
         <!-- Modern Tab Navigation -->
-        <Border Grid.Row="1" Background="#1E40AF" BorderThickness="0" Padding="16,8">
+        <Border Grid.Row="1" Background="{DynamicResource PrimaryColor}" BorderThickness="0" Padding="16,8">
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                 <StackPanel Orientation="Horizontal" Margin="0,0">
                     <Button Name="LauncherTabButton" Content="Launcher" Tag="launcher" 
                             Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
-                            Style="{StaticResource TabButtonStyle}" Background="#2563EB" FontWeight="SemiBold"/>
-                    <Rectangle Width="1" Height="32" Fill="#3B82F6" VerticalAlignment="Center" Margin="8,0"/>
+                            Style="{StaticResource TabButtonStyle}" Background="{DynamicResource PrimaryColor}" FontWeight="SemiBold"/>
+                    <Rectangle Width="1" Height="32" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Name="ServersTabButton" Content="Servers" Tag="servers" 
                             Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="32" Fill="#3B82F6" VerticalAlignment="Center" Margin="8,0"/>
+                    <Rectangle Width="1" Height="32" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Name="ModsTabButton" Content="Mods" Tag="mods" 
                             Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="32" Fill="#3B82F6" VerticalAlignment="Center" Margin="8,0"/>
+                    <Rectangle Width="1" Height="32" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Name="SettingsTabButton" Content="Settings" Tag="settings" 
                             Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="32" Fill="#3B82F6" VerticalAlignment="Center" Margin="8,0"/>
+                    <Rectangle Width="1" Height="32" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Name="DevToolsTabButton" Content="Tools" Tag="devtools" 
                             Click="TabButton_Click" Height="48" Padding="24,12" Margin="0,0,0,0"
                             Style="{StaticResource TabButtonStyle}"/>
@@ -89,9 +95,10 @@
             </ScrollViewer>
         </Border>
 
-        <!-- Modern Content Area -->
-        <Grid Grid.Row="2" Background="#F8FAFC" Margin="0">
-            <Frame Name="ContentFrame" NavigationUIVisibility="Hidden" Background="Transparent" Margin="24"/>
+            <!-- Modern Content Area -->
+            <Grid Grid.Row="2" Background="{DynamicResource BackgroundColor}" Margin="0">
+                <Frame Name="ContentFrame" NavigationUIVisibility="Hidden" Background="{DynamicResource BackgroundColor}" Margin="24"/>
+            </Grid>
         </Grid>
-    </Grid>
+    </Border>
 </Window>

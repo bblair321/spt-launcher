@@ -14,6 +14,15 @@ namespace SptLauncherWpf.Pages
         {
             InitializeComponent();
             LoadSettings();
+            
+            // Subscribe to theme changes
+            ThemeService.Instance.ThemeChanged += OnThemeChanged;
+        }
+
+        private void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
+        {
+            // Theme is applied automatically by ThemeService
+            // This method can be used for additional UI updates if needed
         }
 
         private void LoadSettings()
@@ -184,6 +193,15 @@ namespace SptLauncherWpf.Pages
         private void CancelSettingsButton_Click(object sender, RoutedEventArgs e)
         {
             LoadSettings(); // Reload original settings
+        }
+
+        private void ThemeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ThemeComboBox.SelectedItem is ComboBoxItem selectedItem)
+            {
+                var themeName = selectedItem.Tag?.ToString() ?? "dark";
+                ThemeService.Instance.ApplyTheme(themeName);
+            }
         }
     }
 }

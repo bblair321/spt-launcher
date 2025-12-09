@@ -3,7 +3,13 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Title="Launcher"
       Loaded="LauncherPage_Loaded"
-      Unloaded="LauncherPage_Unloaded">
+      Unloaded="LauncherPage_Unloaded"
+      UseLayoutRounding="True"
+      SnapsToDevicePixels="True"
+      RenderOptions.BitmapScalingMode="HighQuality"
+      TextOptions.TextFormattingMode="Ideal"
+      TextOptions.TextRenderingMode="ClearType"
+      RenderOptions.EdgeMode="Unspecified">
     
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,16,0,0">
@@ -11,9 +17,9 @@
             <!-- Header -->
             <StackPanel HorizontalAlignment="Center" Margin="0,0,0,32">
                 <TextBlock Text="SPT Launcher" FontSize="28" FontWeight="Bold" 
-                           Foreground="#374151" HorizontalAlignment="Center"/>
+                           Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
                 <TextBlock Text="Launch and manage your SPT-AKI installation" 
-                           FontSize="16" Foreground="#6B7280" HorizontalAlignment="Center" 
+                           FontSize="16" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
                            Margin="0,8,0,0"/>
             </StackPanel>
 
@@ -21,9 +27,9 @@
             <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                        <Ellipse Width="16" Height="16" Fill="#2563EB" Margin="0,0,8,0"/>
+                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
                         <TextBlock Text="Status" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="#374151" VerticalAlignment="Center"/>
+                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                     </StackPanel>
                     
                     <Grid>
@@ -34,16 +40,16 @@
                         </Grid.ColumnDefinitions>
                         
                         <!-- Status Icon -->
-                        <Ellipse Grid.Column="0" Width="8" Height="8" Fill="#10B981" 
+                        <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{DynamicResource PrimaryColor}" 
                                  VerticalAlignment="Center" Margin="0,0,8,0"/>
                         
                         <!-- Status Text -->
                         <TextBlock Grid.Column="1" Name="StatusText" Text="Ready" 
-                                   FontSize="14" Foreground="#374151" VerticalAlignment="Center"/>
+                                   FontSize="14" Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                         
                         <!-- Refresh Button -->
                         <Button Grid.Column="2" Name="RefreshButton" Content="Refresh" 
-                                Background="#F3F4F6" Foreground="#6B7280" BorderThickness="0"
+                                Background="{DynamicResource HoverColor}" Foreground="{DynamicResource TextSecondaryColor}" BorderThickness="0"
                                 Padding="12,6" FontSize="12" Click="RefreshButton_Click"/>
                     </Grid>
                 </StackPanel>
@@ -53,16 +59,16 @@
             <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="#2563EB" Margin="0,0,8,0"/>
+                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
                         <TextBlock Text="SPT Launcher Executable" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="#374151" VerticalAlignment="Center"/>
+                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <StackPanel>
                         <!-- Path Input -->
                         <StackPanel Margin="0,0,0,16">
                             <TextBlock Text="Launcher Path" FontWeight="Medium" 
-                                       Foreground="#374151" Margin="0,0,0,8" FontSize="14"/>
+                                       Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8" FontSize="14"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -71,8 +77,8 @@
                                 
                                 <TextBox Grid.Column="0" Name="LauncherPathTextBox" 
                                          Text="D:\SPT\SPT\SPT.Launcher.exe" FontSize="14"
-                                         Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1"
-                                         Background="White"/>
+                                         Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                         Background="{DynamicResource CardBackgroundColor}"/>
                                 
                                 <Button Grid.Column="1" Name="BrowseButton" Content="Browse" 
                                         Style="{StaticResource ModernButtonStyle}" Background="#6B7280"

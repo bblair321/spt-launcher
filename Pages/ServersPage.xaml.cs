@@ -45,7 +45,7 @@ namespace SptLauncherWpf.Pages
     {
         private ObservableCollection<ServerInfo> _servers = new();
         private ServerInfo? _editingServer = null;
-        private Dictionary<string, Process> _runningServers = new();
+        private Dictionary<string, Process?> _runningServers = new();
         
         // Static reference to preserve console output across tab switches
         private static string _staticConsoleOutput = "";
@@ -413,7 +413,7 @@ namespace SptLauncherWpf.Pages
         }
 
 
-        private async void LaunchServer(ServerInfo server)
+        private void LaunchServer(ServerInfo server)
         {
             if (_runningServers.ContainsKey(server.Id))
             {
