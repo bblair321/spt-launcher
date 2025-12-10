@@ -1,0 +1,20 @@
+﻿SPT Launcher
+3.0.0.0
+
+winexe
+C#
+.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\
+SptLauncherWpf
+none
+false
+TRACE;DEBUG;NET;NET8_0;NETCOREAPP
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\App.xaml
+7-1493717958
+
+131534319019
+2001945412149
+Controls\EmbeddedConsoleControl.xaml;MainWindow.xaml;Pages\DevToolsPage.xaml;Pages\LauncherPage.xaml;Pages\ModsPage.xaml;Pages\ServersPage.xaml;Pages\SettingsPage.xaml;
+
+False
+

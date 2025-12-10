@@ -1,0 +1,37 @@
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\bin\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.exe
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\bin\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.deps.json
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\bin\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.runtimeconfig.json
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\bin\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.dll
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\bin\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.pdb
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\bin\Debug\net8.0-windows10.0.19041.0\win-x64\Microsoft.Windows.SDK.NET.dll
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\bin\Debug\net8.0-windows10.0.19041.0\win-x64\WinRT.Runtime.dll
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Controls\EmbeddedConsoleControl.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\MainWindow.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\DevToolsPage.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\LauncherPage.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\ModsPage.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\SettingsPage.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\App.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Controls\EmbeddedConsoleControl.g.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\MainWindow.g.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\DevToolsPage.g.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\LauncherPage.g.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\ModsPage.g.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\ServersPage.g.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\SettingsPage.g.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\App.g.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher_MarkupCompile.cache
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher_MarkupCompile.lref
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\Pages\ServersPage.baml
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.g.resources
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLauncherWpf.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLauncherWpf.AssemblyInfoInputs.cache
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLauncherWpf.AssemblyInfo.cs
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLauncherWpf.csproj.CoreCompileInputs.cache
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLauncherWpf.sourcelink.json
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLaunc.6CEEBB1E.Up2Date
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.dll
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\refint\SPT Launcher.dll
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.pdb
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLauncherWpf.genruntimeconfig.cache
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\ref\SPT Launcher.dll
