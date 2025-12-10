@@ -172,7 +172,7 @@ namespace SptLauncherWpf.Pages {
                 return;
             }
             _contentLoaded = true;
-            System.Uri resourceLocater = new System.Uri("/SptLauncherWpf;V3.0.0.0;component/pages/serverspage.xaml", System.UriKind.Relative);
+            System.Uri resourceLocater = new System.Uri("/SPT Launcher;V3.0.0.0;component/pages/serverspage.xaml", System.UriKind.Relative);
             
             #line 1 "..\..\..\..\Pages\ServersPage.xaml"
             System.Windows.Application.LoadComponent(this, resourceLocater);

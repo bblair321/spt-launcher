@@ -67,7 +67,7 @@ namespace SptLauncherWpf.Controls {
                 return;
             }
             _contentLoaded = true;
-            System.Uri resourceLocater = new System.Uri("/SptLauncherWpf;V3.0.0.0;component/controls/embeddedconsolecontrol.xaml", System.UriKind.Relative);
+            System.Uri resourceLocater = new System.Uri("/SPT Launcher;V3.0.0.0;component/controls/embeddedconsolecontrol.xaml", System.UriKind.Relative);
             
             #line 1 "..\..\..\..\Controls\EmbeddedConsoleControl.xaml"
             System.Windows.Application.LoadComponent(this, resourceLocater);
