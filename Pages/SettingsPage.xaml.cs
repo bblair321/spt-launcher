@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Microsoft.Win32;
 using SptLauncherWpf.Services;
 
@@ -14,15 +15,6 @@ namespace SptLauncherWpf.Pages
         {
             InitializeComponent();
             LoadSettings();
-            
-            // Subscribe to theme changes
-            ThemeService.Instance.ThemeChanged += OnThemeChanged;
-        }
-
-        private void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
-        {
-            // Theme is applied automatically by ThemeService
-            // This method can be used for additional UI updates if needed
         }
 
         private void LoadSettings()
@@ -31,19 +23,6 @@ namespace SptLauncherWpf.Pages
             AutoStartCheckBox.IsChecked = SettingsService.Instance.AutoStart;
             MinimizeToTrayCheckBox.IsChecked = SettingsService.Instance.MinimizeToTray;
             AutoUpdateCheckBox.IsChecked = SettingsService.Instance.AutoUpdate;
-            
-            // Set theme
-            foreach (ComboBoxItem item in ThemeComboBox.Items)
-            {
-                if (item.Tag?.ToString() == SettingsService.Instance.Theme)
-                {
-                    ThemeComboBox.SelectedItem = item;
-                    break;
-                }
-            }
-
-
-
         }
 
         private void SaveSettings()
@@ -55,14 +34,10 @@ namespace SptLauncherWpf.Pages
                 SettingsService.Instance.MinimizeToTray = MinimizeToTrayCheckBox.IsChecked ?? false;
                 SettingsService.Instance.AutoUpdate = AutoUpdateCheckBox.IsChecked ?? false;
                 
-                if (ThemeComboBox.SelectedItem is ComboBoxItem selectedTheme)
-                {
-                    SettingsService.Instance.Theme = selectedTheme.Tag?.ToString() ?? "dark";
-                }
-
-
-
-
+                // Theme is already saved by ThemeService.ApplyTheme() when changed via ComboBox
+                // We should NOT overwrite it here - just ensure the ComboBox reflects the current saved theme
+                // The theme in SettingsService.Instance.Theme is the source of truth
+                
                 SettingsService.Instance.SaveSettings();
                 MessageBox.Show("Settings saved successfully!", "Success", 
                               MessageBoxButton.OK, MessageBoxImage.Information);
@@ -195,13 +170,5 @@ namespace SptLauncherWpf.Pages
             LoadSettings(); // Reload original settings
         }
 
-        private void ThemeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (ThemeComboBox.SelectedItem is ComboBoxItem selectedItem)
-            {
-                var themeName = selectedItem.Tag?.ToString() ?? "dark";
-                ThemeService.Instance.ApplyTheme(themeName);
-            }
-        }
     }
 }

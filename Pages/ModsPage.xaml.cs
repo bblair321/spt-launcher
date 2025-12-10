@@ -201,11 +201,8 @@ namespace SptLauncherWpf.Pages
         {
             var card = new Border
             {
-                Background = new SolidColorBrush(Colors.White),
-                BorderBrush = new SolidColorBrush(Color.FromRgb(229, 231, 235)),
-                BorderThickness = new Thickness(1, 1, 1, 1),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(16, 16, 16, 16),
+                Style = (Style)FindResource("ModernCardStyle"),
+                Padding = new Thickness(16),
                 Margin = new Thickness(0, 0, 0, 12),
                 Cursor = Cursors.Hand
             };
@@ -216,9 +213,9 @@ namespace SptLauncherWpf.Pages
             var nameText = new TextBlock
             {
                 Text = mod.Name,
-                FontWeight = FontWeights.Medium,
-                FontSize = 18,
-                Foreground = new SolidColorBrush(Color.FromRgb(17, 24, 39)),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 16,
+                Foreground = (Brush)FindResource("TextPrimaryColor"),
                 Margin = new Thickness(0, 0, 0, 8)
             };
             panel.Children.Add(nameText);
@@ -228,7 +225,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = mod.Description,
                 FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)),
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
                 TextWrapping = TextWrapping.Wrap,
                 MaxHeight = 40,
                 Margin = new Thickness(0, 0, 0, 12)
@@ -242,7 +239,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"⬇ {mod.Downloads}",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)),
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(downloadsText);
@@ -251,7 +248,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"⭐ {mod.Rating}",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)),
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(ratingText);
@@ -260,11 +257,21 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"📅 {mod.CreatedAt:MMM dd, yyyy}",
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                Foreground = (Brush)FindResource("TextSecondaryColor")
             };
             statsPanel.Children.Add(dateText);
 
             panel.Children.Add(statsPanel);
+
+            // Add hover effect
+            card.MouseEnter += (s, e) =>
+            {
+                card.Background = (Brush)FindResource("HoverColor");
+            };
+            card.MouseLeave += (s, e) =>
+            {
+                card.Background = (Brush)FindResource("CardBackgroundColor");
+            };
 
             card.Child = panel;
             card.MouseLeftButtonDown += (s, e) => SelectMod(mod);
@@ -285,8 +292,8 @@ namespace SptLauncherWpf.Pages
             if (_selectedMod == null)
             {
                 var emptyPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 32, 0, 16) };
-                emptyPanel.Children.Add(new Ellipse { Width = 48, Height = 48, Fill = new SolidColorBrush(Color.FromRgb(156, 163, 175)), Margin = new Thickness(0, 0, 0, 8) });
-                emptyPanel.Children.Add(new TextBlock { Text = "Select a mod to view details", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)), HorizontalAlignment = HorizontalAlignment.Center });
+                emptyPanel.Children.Add(new Ellipse { Width = 48, Height = 48, Fill = (Brush)FindResource("TextSecondaryColor"), Margin = new Thickness(0, 0, 0, 8) });
+                emptyPanel.Children.Add(new TextBlock { Text = "Select a mod to view details", FontSize = 14, Foreground = (Brush)FindResource("TextSecondaryColor"), HorizontalAlignment = HorizontalAlignment.Center });
                 ModDetailsPanel.Children.Add(emptyPanel);
                 return;
             }
@@ -299,7 +306,7 @@ namespace SptLauncherWpf.Pages
                 Text = _selectedMod.Name,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 18,
-                Foreground = new SolidColorBrush(Color.FromRgb(17, 24, 39)),
+                Foreground = (Brush)FindResource("TextPrimaryColor"),
                 Margin = new Thickness(0, 0, 0, 8)
             };
             detailsPanel.Children.Add(nameText);
@@ -309,7 +316,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = _selectedMod.Description,
                 FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)),
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 16)
             };
@@ -322,7 +329,8 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"⬇ {_selectedMod.Downloads} downloads",
                 FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(downloadsText);
 
@@ -330,7 +338,8 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"⭐ {_selectedMod.Rating} rating",
                 FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(ratingText);
 
@@ -338,7 +347,8 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"📅 {_selectedMod.CreatedAt:MMM dd, yyyy}",
                 FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(dateText);
 
@@ -346,7 +356,8 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"👤 {_selectedMod.Author}",
                 FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(authorText);
 
@@ -354,7 +365,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"🔢 Version {_selectedMod.Version}",
                 FontSize = 14,
-                Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128))
+                Foreground = (Brush)FindResource("TextSecondaryColor")
             };
             statsPanel.Children.Add(versionText);
 
@@ -364,11 +375,7 @@ namespace SptLauncherWpf.Pages
             var downloadButton = new Button
             {
                 Content = "Download",
-                Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
-                Foreground = new SolidColorBrush(Colors.White),
-                BorderThickness = new Thickness(0, 0, 0, 0),
-                Padding = new Thickness(16, 8, 16, 8),
-                FontSize = 14,
+                Style = (Style)FindResource("ModernButtonStyle"),
                 Margin = new Thickness(0, 16, 0, 0),
                 Cursor = Cursors.Hand
             };

@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using SptLauncherWpf.Pages;
+using SptLauncherWpf.Services;
 
 namespace SptLauncherWpf
 {
@@ -34,6 +35,10 @@ namespace SptLauncherWpf
                 SetActiveTab("launcher");
                 SetupDragFunctionality();
                 SetVersionFromAssembly();
+                UpdateThemeIcon();
+                
+                // Subscribe to theme changes to update icon
+                ThemeService.Instance.ThemeChanged += OnThemeChanged;
                 
                 // Extend window frame into client area to eliminate white border
                 Loaded += MainWindow_Loaded;
@@ -44,6 +49,24 @@ namespace SptLauncherWpf
                     "Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 throw;
             }
+        }
+        
+        private void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
+        {
+            UpdateThemeIcon();
+        }
+        
+        private void UpdateThemeIcon()
+        {
+            var currentTheme = ThemeService.Instance.CurrentTheme;
+            ThemeToggleIcon.Text = currentTheme == "light" ? "🌙" : "🌞";
+        }
+        
+        private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            var currentTheme = ThemeService.Instance.CurrentTheme;
+            var newTheme = currentTheme == "light" ? "dark" : "light";
+            ThemeService.Instance.ApplyTheme(newTheme);
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)

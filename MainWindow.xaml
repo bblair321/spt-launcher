@@ -41,6 +41,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
                     <!-- Modern App Title -->
@@ -51,8 +52,35 @@
                         </StackPanel>
                     </StackPanel>
                     
+                    <!-- Theme Toggle Button -->
+                    <Button Name="ThemeToggleButton" Grid.Column="1" Width="40" Height="32" Background="Transparent" BorderThickness="0" 
+                            Click="ThemeToggleButton_Click" Cursor="Hand" Margin="0,0,8,0" ToolTip="Toggle Theme" VerticalAlignment="Center">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#3B82F6"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#60A5FA"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Name="ThemeToggleIcon" Text="🌙" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                    
                     <!-- Modern Window Controls -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,8,0">
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,8,0">
                         <Button Name="MinimizeButton" Width="46" Height="32" Background="Transparent" BorderThickness="0" 
                                 Click="MinimizeButton_Click" Cursor="Hand" Margin="2">
                             <Button.Style>

@@ -14,34 +14,59 @@ namespace SptLauncherWpf.Services
         public static ThemeService Instance => _instance ??= new ThemeService();
 
         public event EventHandler<ThemeChangedEventArgs>? ThemeChanged;
+        
+        // Store current theme to avoid reading stale values from SettingsService
+        private string _currentTheme = "dark";
+
+        public string CurrentTheme => _currentTheme;
 
         private ThemeService()
         {
             // Apply saved theme on startup
-            ApplyTheme(SettingsService.Instance.Theme);
+            var savedTheme = SettingsService.Instance.Theme;
+            
+            // Normalize theme - convert old "system" theme to "dark", ensure only light/dark
+            if (savedTheme != "light" && savedTheme != "dark")
+            {
+                savedTheme = "dark";
+                SettingsService.Instance.Theme = savedTheme;
+                SettingsService.Instance.SaveSettings();
+            }
+            
+            _currentTheme = savedTheme;
+            ApplyTheme(savedTheme);
         }
 
         public void ApplyTheme(string themeName)
         {
             try
             {
+                // Normalize theme name - only support light or dark
+                themeName = themeName.ToLower();
+                if (themeName != "light" && themeName != "dark")
+                {
+                    themeName = "dark"; // Default to dark
+                }
+                
+                // Don't reapply if already the current theme
+                if (_currentTheme == themeName)
+                {
+                    return;
+                }
+                
                 Console.WriteLine($"Applying theme: {themeName}");
                 
-                switch (themeName.ToLower())
+                if (themeName == "light")
                 {
-                    case "light":
-                        ApplyLightTheme();
-                        break;
-                    case "dark":
-                        ApplyDarkTheme();
-                        break;
-                    case "system":
-                        ApplySystemTheme();
-                        break;
-                    default:
-                        ApplyDarkTheme();
-                        break;
+                    ApplyLightTheme();
                 }
+                else
+                {
+                    ApplyDarkTheme();
+                }
+
+                // Update current theme tracking
+                _currentTheme = themeName;
 
                 // Save theme preference
                 SettingsService.Instance.Theme = themeName;
@@ -196,35 +221,6 @@ namespace SptLauncherWpf.Services
             Console.WriteLine("Dark theme colors applied");
         }
 
-        private void ApplySystemTheme()
-        {
-            // Check system theme preference
-            var isDarkMode = IsSystemDarkMode();
-            if (isDarkMode)
-            {
-                ApplyDarkTheme();
-            }
-            else
-            {
-                ApplyLightTheme();
-            }
-        }
-
-        private bool IsSystemDarkMode()
-        {
-            try
-            {
-                // Check Windows theme preference
-                var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-                var value = key?.GetValue("AppsUseLightTheme");
-                return value is int intValue && intValue == 0;
-            }
-            catch
-            {
-                // Default to dark theme if we can't detect system preference
-                return true;
-            }
-        }
     }
 
     public class ThemeChangedEventArgs : EventArgs

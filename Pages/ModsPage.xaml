@@ -19,46 +19,56 @@
                 <TextBlock Text="Browse and download mods from the SPT Forge" 
                            FontSize="16" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
                            Margin="0,8,0,0"/>
+                
+                <!-- Work in Progress Notice -->
+                <Border Background="{DynamicResource HoverColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" 
+                        CornerRadius="8" Padding="12,8" Margin="0,16,0,0" MaxWidth="600">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <TextBlock Text="🚧" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="This page is currently under development" 
+                                   FontSize="14" FontWeight="Medium"
+                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
             <!-- Authentication Panel -->
-            <Border Name="AuthPanel" Background="{DynamicResource CardBackgroundColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" 
-                    CornerRadius="8" Padding="32" MaxWidth="400" HorizontalAlignment="Center">
+            <Border Name="AuthPanel" Style="{StaticResource ModernCardStyle}" 
+                    Padding="24" MaxWidth="400" HorizontalAlignment="Center" Margin="0,0,0,20">
                 <StackPanel>
-                    <StackPanel HorizontalAlignment="Center" Margin="0,0,0,24">
-                        <Ellipse Width="48" Height="48" Fill="{DynamicResource PrimaryColor}" Margin="0,0,0,16"/>
-                        <TextBlock Text="SPT Mods" FontSize="24" FontWeight="Bold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Browse and download mods from the SPT Forge" 
-                                   FontSize="14" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
-                                   Margin="0,8,0,0"/>
-                    </StackPanel>
-
                     <StackPanel>
-                        <TextBlock Text="Sign in to your account" FontSize="18" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center" Margin="0,0,0,24"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
+                            <TextBlock Text="SPT Mods Authentication" FontSize="16" FontWeight="SemiBold" 
+                                       Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        
+                        <TextBlock Text="Sign in to your account to browse and download mods" 
+                                   FontSize="14" Foreground="{DynamicResource TextSecondaryColor}" 
+                                   Margin="0,0,0,16"/>
 
-                        <StackPanel >
+                        <StackPanel>
                             <!-- Email -->
-                            <StackPanel>
+                            <StackPanel Margin="0,0,0,16">
                                 <TextBlock Text="Email Address" FontWeight="Medium" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
-                                <TextBox Name="EmailTextBox" FontSize="14"
-                                         Padding="12,12" BorderBrush="#D1D5DB" BorderThickness="1"/>
+                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8" FontSize="14"/>
+                                <TextBox Name="EmailTextBox" 
+                                         Style="{StaticResource ModernTextBoxStyle}"/>
                             </StackPanel>
 
                             <!-- Password -->
-                            <StackPanel>
+                            <StackPanel Margin="0,0,0,16">
                                 <TextBlock Text="Password" FontWeight="Medium" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
+                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8" FontSize="14"/>
                                 <PasswordBox Name="PasswordBox" FontSize="14"
-                                             Padding="12,12" BorderBrush="#D1D5DB" BorderThickness="1"/>
+                                             Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                             Background="{DynamicResource CardBackgroundColor}"/>
                             </StackPanel>
 
                             <!-- Login Button -->
                             <Button Name="LoginButton" Content="Sign In" 
-                                    Background="#2563EB" Foreground="White" BorderThickness="0"
-                                    Padding="16,12" FontSize="14" Click="LoginButton_Click"/>
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Click="LoginButton_Click"/>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
@@ -68,8 +78,7 @@
             <StackPanel Name="MainContentPanel" Visibility="Collapsed" >
                 
                 <!-- User Info and Logout -->
-                <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                        CornerRadius="8" Padding="16">
+                <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -77,48 +86,47 @@
                         </Grid.ColumnDefinitions>
                         
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <Ellipse Width="16" Height="16" Fill="#3B82F6" Margin="0,0,8,0"/>
+                            <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
                             <TextBlock Name="UserInfoText" Text="User" FontSize="14" 
                                        Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                         </StackPanel>
                         
                         <Button Grid.Column="1" Name="LogoutButton" Content="Logout" 
-                                Background="#6B7280" Foreground="White" BorderThickness="0"
-                                Padding="12,6" FontSize="14" Click="LogoutButton_Click"/>
+                                Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
+                                Padding="16,8" FontSize="14" Click="LogoutButton_Click"/>
                     </Grid>
                 </Border>
 
                 <!-- Search and Filters -->
-                <Border Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                        CornerRadius="8" Padding="16">
-                    <StackPanel >
+                <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
+                    <StackPanel>
                         <!-- Search -->
-                        <Grid>
+                        <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             
                             <TextBox Grid.Column="0" Name="SearchTextBox" 
-                                     Text="Search mods..." FontSize="14"
-                                     Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1"
+                                     Text="Search mods..." 
+                                     Style="{StaticResource ModernTextBoxStyle}"
                                      TextChanged="SearchTextBox_TextChanged"/>
                             
                             <Button Grid.Column="1" Name="SearchButton" Content="Search" 
-                                    Background="#3B82F6" Foreground="White" BorderThickness="0"
+                                    Style="{StaticResource ModernButtonStyle}"
                                     Padding="16,8" Margin="8,0,0,0" FontSize="14" Click="SearchButton_Click"/>
                         </Grid>
 
                         <!-- Filters -->
-                        <Grid>
+                        <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             
                             <Button Grid.Column="0" Name="FiltersButton" Content="Filters" 
-                                    Background="{DynamicResource SurfaceColor}" Foreground="{DynamicResource TextPrimaryColor}" BorderThickness="0"
-                                    Padding="12,8" FontSize="14" Click="FiltersButton_Click"/>
+                                    Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
+                                    Padding="16,8" FontSize="14" Click="FiltersButton_Click"/>
                             
                             <TextBlock Grid.Column="1" Name="ResultsText" Text="Showing 0 of 0 mods" 
                                        FontSize="14" Foreground="{DynamicResource TextSecondaryColor}" VerticalAlignment="Center" 
@@ -126,9 +134,9 @@
                         </Grid>
 
                         <!-- Filters Panel -->
-                        <Border Name="FiltersPanel" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" 
-                                CornerRadius="6" Padding="16" Visibility="Collapsed">
-                            <StackPanel >
+                        <Border Name="FiltersPanel" Background="{DynamicResource HoverColor}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" 
+                                CornerRadius="12" Padding="16" Visibility="Collapsed" Margin="0,16,0,0">
+                            <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -138,9 +146,10 @@
                                     <!-- Per Page -->
                                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
                                         <TextBlock Text="Per Page" FontWeight="Medium" 
-                                                   Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
+                                                   Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8" FontSize="14"/>
                                         <ComboBox Name="PerPageComboBox" FontSize="14"
-                                                  Padding="12,8" BorderBrush="#D1D5DB" BorderThickness="1">
+                                                  Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                                                  Background="{DynamicResource CardBackgroundColor}">
                                             <ComboBoxItem Content="6 per page" Tag="6"/>
                                             <ComboBoxItem Content="12 per page" Tag="12" IsSelected="True"/>
                                             <ComboBoxItem Content="24 per page" Tag="24"/>
@@ -151,8 +160,8 @@
 
                                 <!-- Reset Filters -->
                                 <Button Name="ResetFiltersButton" Content="Reset Filters" 
-                                        Background="#6B7280" Foreground="White" BorderThickness="0"
-                                        Padding="12,8" FontSize="14" HorizontalAlignment="Right" 
+                                        Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
+                                        Padding="16,8" FontSize="14" HorizontalAlignment="Left" Margin="0,16,0,0"
                                         Click="ResetFiltersButton_Click"/>
                             </StackPanel>
                         </Border>
@@ -167,25 +176,36 @@
                     </Grid.ColumnDefinitions>
 
                     <!-- Mod List -->
-                    <Border Grid.Column="0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                            CornerRadius="8" Padding="16" Margin="0,0,12,0">
-                        <ScrollViewer Name="ModsScrollViewer" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden" Height="400">
-                            <StackPanel Name="ModsListPanel">
-                                <!-- Mods will be added here dynamically -->
+                    <Border Grid.Column="0" Style="{StaticResource ModernCardStyle}" 
+                            Padding="24" Margin="0,0,12,0">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
+                                <TextBlock Text="Available Mods" FontSize="16" FontWeight="SemiBold" 
+                                           Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
                             </StackPanel>
-                        </ScrollViewer>
+                            
+                            <ScrollViewer Name="ModsScrollViewer" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden" MaxHeight="400">
+                                <StackPanel Name="ModsListPanel">
+                                    <!-- Mods will be added here dynamically -->
+                                </StackPanel>
+                            </ScrollViewer>
+                        </StackPanel>
                     </Border>
 
                     <!-- Mod Details -->
-                    <Border Grid.Column="1" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                            CornerRadius="8" Padding="16" Margin="12,0,0,0">
+                    <Border Grid.Column="1" Style="{StaticResource ModernCardStyle}" 
+                            Padding="24" Margin="12,0,0,0">
                         <StackPanel>
-                            <TextBlock Text="Mod Details" FontSize="18" FontWeight="SemiBold" 
-                                       Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,16"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
+                                <TextBlock Text="Mod Details" FontSize="16" FontWeight="SemiBold" 
+                                           Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                            </StackPanel>
                             
                             <StackPanel Name="ModDetailsPanel">
                                 <StackPanel HorizontalAlignment="Center" Margin="0,32,0,16">
-                                    <Ellipse Width="48" Height="48" Fill="#9CA3AF" Margin="0,0,0,8"/>
+                                    <Ellipse Width="48" Height="48" Fill="{DynamicResource TextSecondaryColor}" Margin="0,0,0,8"/>
                                     <TextBlock Text="Select a mod to view details" FontSize="14" 
                                                Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center"/>
                                 </StackPanel>
@@ -195,8 +215,8 @@
                 </Grid>
 
                 <!-- Pagination -->
-                <Border Name="PaginationPanel" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" 
-                        CornerRadius="8" Padding="16" Visibility="Collapsed">
+                <Border Name="PaginationPanel" Style="{StaticResource ModernCardStyle}" 
+                        Padding="24" Visibility="Collapsed" Margin="0,20,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -206,18 +226,18 @@
                         <TextBlock Grid.Column="0" Name="PaginationInfo" Text="Showing 1 to 12 of 0 results" 
                                    FontSize="14" Foreground="{DynamicResource TextSecondaryColor}" VerticalAlignment="Center"/>
                         
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" >
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <Button Name="PrevPageButton" Content="◀" 
-                                    Background="{DynamicResource SurfaceColor}" Foreground="{DynamicResource TextPrimaryColor}" BorderThickness="0"
-                                    Padding="12,8" FontSize="14" Click="PrevPageButton_Click"/>
+                                    Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
+                                    Padding="16,8" FontSize="14" Click="PrevPageButton_Click"/>
                             
                             <TextBlock Name="PageInfo" Text="Page 1 of 1" 
                                        FontSize="14" Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center" 
                                        Margin="8,0"/>
                             
                             <Button Name="NextPageButton" Content="▶" 
-                                    Background="{DynamicResource SurfaceColor}" Foreground="{DynamicResource TextPrimaryColor}" BorderThickness="0"
-                                    Padding="12,8" FontSize="14" Click="NextPageButton_Click"/>
+                                    Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
+                                    Padding="16,8" FontSize="14" Click="NextPageButton_Click"/>
                         </StackPanel>
                     </Grid>
                 </Border>
