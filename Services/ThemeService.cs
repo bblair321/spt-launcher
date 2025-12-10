@@ -22,7 +22,8 @@ namespace SptLauncherWpf.Services
 
         private ThemeService()
         {
-            // Apply saved theme on startup
+            // Initialize current theme from settings, but don't apply yet
+            // Theme will be applied explicitly by App.xaml.cs on startup
             var savedTheme = SettingsService.Instance.Theme;
             
             // Normalize theme - convert old "system" theme to "dark", ensure only light/dark
@@ -34,7 +35,6 @@ namespace SptLauncherWpf.Services
             }
             
             _currentTheme = savedTheme;
-            ApplyTheme(savedTheme);
         }
 
         public void ApplyTheme(string themeName)
@@ -48,13 +48,8 @@ namespace SptLauncherWpf.Services
                     themeName = "dark"; // Default to dark
                 }
                 
-                // Don't reapply if already the current theme
-                if (_currentTheme == themeName)
-                {
-                    return;
-                }
-                
-                Console.WriteLine($"Applying theme: {themeName}");
+                // Always apply the theme (even if same) to ensure it's properly set
+                Console.WriteLine($"Applying theme: {themeName} (current: {_currentTheme})");
                 
                 if (themeName == "light")
                 {
@@ -65,19 +60,19 @@ namespace SptLauncherWpf.Services
                     ApplyDarkTheme();
                 }
 
-                // Update current theme tracking
+                // Update current theme tracking BEFORE saving
                 _currentTheme = themeName;
 
-                // Save theme preference
+                // Save theme preference immediately
                 SettingsService.Instance.Theme = themeName;
                 SettingsService.Instance.SaveSettings();
 
-                Console.WriteLine($"Theme {themeName} applied successfully");
+                Console.WriteLine($"Theme {themeName} applied and saved successfully");
 
                 // Force UI refresh
                 ForceCompleteUIRefresh();
 
-                // Notify theme change
+                // Notify theme change AFTER everything is applied
                 ThemeChanged?.Invoke(this, new ThemeChangedEventArgs(themeName));
             }
             catch (Exception ex)

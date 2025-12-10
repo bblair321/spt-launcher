@@ -20,8 +20,6 @@ namespace SptLauncherWpf.Pages
         private void LoadSettings()
         {
             // Load general settings
-            AutoStartCheckBox.IsChecked = SettingsService.Instance.AutoStart;
-            MinimizeToTrayCheckBox.IsChecked = SettingsService.Instance.MinimizeToTray;
             AutoUpdateCheckBox.IsChecked = SettingsService.Instance.AutoUpdate;
         }
 
@@ -30,8 +28,6 @@ namespace SptLauncherWpf.Pages
             try
             {
                 // Save general settings
-                SettingsService.Instance.AutoStart = AutoStartCheckBox.IsChecked ?? false;
-                SettingsService.Instance.MinimizeToTray = MinimizeToTrayCheckBox.IsChecked ?? false;
                 SettingsService.Instance.AutoUpdate = AutoUpdateCheckBox.IsChecked ?? false;
                 
                 // Theme is already saved by ThemeService.ApplyTheme() when changed via ComboBox
@@ -58,8 +54,6 @@ namespace SptLauncherWpf.Pages
             if (result == MessageBoxResult.Yes)
             {
                 // Reset to default values
-                SettingsService.Instance.AutoStart = false;
-                SettingsService.Instance.MinimizeToTray = false;
                 SettingsService.Instance.AutoUpdate = true;
                 SettingsService.Instance.Theme = "dark";
                 SettingsService.Instance.DebugMode = false;
@@ -88,8 +82,6 @@ namespace SptLauncherWpf.Pages
                 {
                 var settings = new
                 {
-                    AutoStart = SettingsService.Instance.AutoStart,
-                    MinimizeToTray = SettingsService.Instance.MinimizeToTray,
                     AutoUpdate = SettingsService.Instance.AutoUpdate,
                     Theme = SettingsService.Instance.Theme,
                     DebugMode = SettingsService.Instance.DebugMode,
@@ -126,12 +118,6 @@ namespace SptLauncherWpf.Pages
                     var settings = JsonSerializer.Deserialize<JsonElement>(json);
 
                     // Import settings
-                    if (settings.TryGetProperty("AutoStart", out var autoStart))
-                        SettingsService.Instance.AutoStart = autoStart.GetBoolean();
-                    
-                    if (settings.TryGetProperty("MinimizeToTray", out var minimizeToTray))
-                        SettingsService.Instance.MinimizeToTray = minimizeToTray.GetBoolean();
-                    
                     if (settings.TryGetProperty("AutoUpdate", out var autoUpdate))
                         SettingsService.Instance.AutoUpdate = autoUpdate.GetBoolean();
                     

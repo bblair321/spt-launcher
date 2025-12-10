@@ -31,8 +31,13 @@ namespace SptLauncherWpf
             
             try
             {
-                // Initialize theme service to apply saved theme
-                ThemeService.Instance.ApplyTheme(SettingsService.Instance.Theme);
+                // Load and apply saved theme BEFORE creating main window
+                var savedTheme = SettingsService.Instance.Theme;
+                if (string.IsNullOrEmpty(savedTheme) || (savedTheme != "light" && savedTheme != "dark"))
+                {
+                    savedTheme = "dark"; // Default to dark
+                }
+                ThemeService.Instance.ApplyTheme(savedTheme);
                 
                 var mainWindow = new MainWindow();
                 mainWindow.Show();

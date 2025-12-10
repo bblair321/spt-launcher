@@ -35,10 +35,12 @@ namespace SptLauncherWpf
                 SetActiveTab("launcher");
                 SetupDragFunctionality();
                 SetVersionFromAssembly();
-                UpdateThemeIcon();
                 
-                // Subscribe to theme changes to update icon
+                // Subscribe to theme changes to update icon BEFORE loading
                 ThemeService.Instance.ThemeChanged += OnThemeChanged;
+                
+                // Update icon to reflect current theme
+                UpdateThemeIcon();
                 
                 // Extend window frame into client area to eliminate white border
                 Loaded += MainWindow_Loaded;
@@ -53,20 +55,54 @@ namespace SptLauncherWpf
         
         private void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
         {
-            UpdateThemeIcon();
+            // Update icon on UI thread
+            Dispatcher.Invoke(() =>
+            {
+                UpdateThemeIcon();
+            });
         }
         
         private void UpdateThemeIcon()
         {
-            var currentTheme = ThemeService.Instance.CurrentTheme;
-            ThemeToggleIcon.Text = currentTheme == "light" ? "🌙" : "🌞";
+            try
+            {
+                var currentTheme = ThemeService.Instance.CurrentTheme;
+                // Show opposite icon: if light mode, show moon (to switch to dark), if dark mode, show sun (to switch to light)
+                ThemeToggleIcon.Text = currentTheme == "light" ? "🌙" : "🌞";
+            }
+            catch
+            {
+                // Fallback if update fails
+                ThemeToggleIcon.Text = "🌙";
+            }
         }
         
         private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
         {
-            var currentTheme = ThemeService.Instance.CurrentTheme;
-            var newTheme = currentTheme == "light" ? "dark" : "light";
-            ThemeService.Instance.ApplyTheme(newTheme);
+            try
+            {
+                // Disable button temporarily to prevent rapid clicking
+                ThemeToggleButton.IsEnabled = false;
+                
+                var currentTheme = ThemeService.Instance.CurrentTheme;
+                var newTheme = currentTheme == "light" ? "dark" : "light";
+                
+                // Apply theme synchronously
+                ThemeService.Instance.ApplyTheme(newTheme);
+                
+                // Re-enable button after a short delay
+                Dispatcher.BeginInvoke(new Action(() => 
+                {
+                    ThemeToggleButton.IsEnabled = true;
+                }), System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+            catch (Exception ex)
+            {
+                // Re-enable button on error
+                ThemeToggleButton.IsEnabled = true;
+                MessageBox.Show($"Failed to toggle theme: {ex.Message}", "Theme Error", 
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
