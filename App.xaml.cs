@@ -41,6 +41,12 @@ namespace SptLauncherWpf
                 
                 var mainWindow = new MainWindow();
                 mainWindow.Show();
+                
+                // Start periodic update checking if enabled
+                if (SettingsService.Instance.AutoUpdate)
+                {
+                    UpdateService.Instance.StartPeriodicCheck();
+                }
             }
             catch (Exception ex)
             {

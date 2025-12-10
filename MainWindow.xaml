@@ -21,6 +21,7 @@
             
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/> <!-- Title Bar -->
+                <RowDefinition Height="Auto"/> <!-- Update Notification Banner -->
                 <RowDefinition Height="Auto"/> <!-- Tab Navigation -->
                 <RowDefinition Height="*"/>     <!-- Content -->
             </Grid.RowDefinitions>
@@ -160,8 +161,96 @@
                 </Grid>
             </Border>
 
+            <!-- Update Notification Banner -->
+            <Border Name="UpdateNotificationBanner" Grid.Row="1" 
+                    Background="{DynamicResource PrimaryColor}" 
+                    Padding="16,12" 
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="🔄" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                        <StackPanel>
+                            <TextBlock Name="UpdateNotificationText" 
+                                       Text="A new version is available!" 
+                                       Foreground="White" 
+                                       FontWeight="SemiBold" 
+                                       FontSize="14"/>
+                            <TextBlock Name="UpdateVersionText" 
+                                       Text="" 
+                                       Foreground="#E0E7FF" 
+                                       FontSize="12" 
+                                       Margin="0,2,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+                    
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Name="UpdateDownloadButton" 
+                                Content="Download" 
+                                Background="#10B981" 
+                                Foreground="White" 
+                                BorderThickness="0" 
+                                Padding="16,8" 
+                                Margin="0,0,8,0"
+                                Cursor="Hand"
+                                Click="UpdateDownloadButton_Click">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#059669"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Name="UpdateDismissButton" 
+                                Content="✕" 
+                                Background="Transparent" 
+                                Foreground="White" 
+                                BorderThickness="0" 
+                                Width="32" 
+                                Height="32"
+                                Cursor="Hand"
+                                Click="UpdateDismissButton_Click">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#3B82F6"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
         <!-- Modern Tab Navigation -->
-        <Border Grid.Row="1" BorderThickness="0" Padding="16,8">
+        <Border Grid.Row="2" BorderThickness="0" Padding="16,8">
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                     <GradientStop Color="#3B82F6" Offset="0"/>
@@ -195,7 +284,7 @@
         </Border>
 
             <!-- Modern Content Area -->
-            <Grid Grid.Row="2" Background="{DynamicResource BackgroundColor}" Margin="0">
+            <Grid Grid.Row="3" Background="{DynamicResource BackgroundColor}" Margin="0">
                 <Frame Name="ContentFrame" NavigationUIVisibility="Hidden" Background="{DynamicResource BackgroundColor}" Margin="24"/>
             </Grid>
         </Grid>

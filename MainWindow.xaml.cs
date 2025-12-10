@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using SptLauncherWpf.Pages;
 using SptLauncherWpf.Services;
+using System.Threading.Tasks;
 
 namespace SptLauncherWpf
 {
@@ -38,6 +39,9 @@ namespace SptLauncherWpf
                 
                 // Subscribe to theme changes to update icon BEFORE loading
                 ThemeService.Instance.ThemeChanged += OnThemeChanged;
+                
+                // Subscribe to update service events
+                UpdateService.Instance.UpdateAvailable += OnUpdateAvailable;
                 
                 // Update icon to reflect current theme
                 UpdateThemeIcon();
@@ -261,6 +265,63 @@ namespace SptLauncherWpf
                 // Fallback to default version if assembly version can't be read
                 VersionText.Text = "v3.0.0";
             }
+        }
+
+        private UpdateInfo? _availableUpdate;
+
+        private void OnUpdateAvailable(object? sender, UpdateInfo updateInfo)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                _availableUpdate = updateInfo;
+                UpdateNotificationText.Text = $"A new version is available!";
+                UpdateVersionText.Text = $"Version {updateInfo.Version} - Click Download to update";
+                UpdateNotificationBanner.Visibility = Visibility.Visible;
+            });
+        }
+
+        private async void UpdateDownloadButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_availableUpdate == null) return;
+
+            try
+            {
+                UpdateDownloadButton.IsEnabled = false;
+                UpdateDownloadButton.Content = "Downloading...";
+
+                var progress = new Progress<double>(percent =>
+                {
+                    UpdateDownloadButton.Content = $"Downloading... {percent:F0}%";
+                });
+
+                var success = await UpdateService.Instance.DownloadUpdateAsync(_availableUpdate, progress);
+
+                if (success)
+                {
+                    MessageBox.Show("Update downloaded successfully. The installer will launch shortly.", 
+                        "Update Ready", MessageBoxButton.OK, MessageBoxImage.Information);
+                    UpdateNotificationBanner.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    MessageBox.Show("Failed to download the update. Please try again later.", 
+                        "Download Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                    UpdateDownloadButton.IsEnabled = true;
+                    UpdateDownloadButton.Content = "Download";
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error downloading update: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                UpdateDownloadButton.IsEnabled = true;
+                UpdateDownloadButton.Content = "Download";
+            }
+        }
+
+        private void UpdateDismissButton_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateNotificationBanner.Visibility = Visibility.Collapsed;
         }
     }
 }

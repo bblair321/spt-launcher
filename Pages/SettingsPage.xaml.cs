@@ -28,11 +28,18 @@ namespace SptLauncherWpf.Pages
             try
             {
                 // Save general settings
-                SettingsService.Instance.AutoUpdate = AutoUpdateCheckBox.IsChecked ?? false;
+                var autoUpdateEnabled = AutoUpdateCheckBox.IsChecked ?? false;
+                SettingsService.Instance.AutoUpdate = autoUpdateEnabled;
                 
-                // Theme is already saved by ThemeService.ApplyTheme() when changed via ComboBox
-                // We should NOT overwrite it here - just ensure the ComboBox reflects the current saved theme
-                // The theme in SettingsService.Instance.Theme is the source of truth
+                // Start or stop periodic update checking based on setting
+                if (autoUpdateEnabled)
+                {
+                    UpdateService.Instance.StartPeriodicCheck();
+                }
+                else
+                {
+                    UpdateService.Instance.StopPeriodicCheck();
+                }
                 
                 SettingsService.Instance.SaveSettings();
                 MessageBox.Show("Settings saved successfully!", "Success", 
@@ -42,6 +49,45 @@ namespace SptLauncherWpf.Pages
             {
                 MessageBox.Show($"Failed to save settings: {ex.Message}", "Save Error", 
                               MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private async void CheckForUpdatesButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                CheckForUpdatesButton.IsEnabled = false;
+                CheckForUpdatesButton.Content = "Checking...";
+                
+                // Force check regardless of auto-update setting
+                var updateInfo = await UpdateService.Instance.CheckForUpdatesAsync(forceCheck: true);
+                
+                if (updateInfo != null)
+                {
+                    // Update is available - the banner will be shown automatically via the event
+                    MessageBox.Show(
+                        $"A new version ({updateInfo.Version}) is available!\n\n" +
+                        $"Current version: {UpdateService.Instance.GetCurrentVersion()}\n\n" +
+                        $"The update notification banner has been displayed at the top of the window.",
+                        "Update Available",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show("You are running the latest version.", 
+                        "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to check for updates: {ex.Message}", 
+                    "Update Check Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                CheckForUpdatesButton.IsEnabled = true;
+                CheckForUpdatesButton.Content = "Check for Updates Now";
             }
         }
 
