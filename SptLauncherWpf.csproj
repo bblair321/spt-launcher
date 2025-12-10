@@ -2,10 +2,15 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+
+    <!-- Explicit Windows target to avoid SDK normalization -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- Assembly metadata -->
     <AssemblyName>SPT Launcher</AssemblyName>
     <AssemblyTitle>SPT Launcher</AssemblyTitle>
     <AssemblyDescription>SPT-AKI Launcher with Fika Co-op Support - Modern WPF Version</AssemblyDescription>
@@ -16,15 +21,25 @@
     <Copyright>Copyright © 2025 SPT Launcher Team</Copyright>
   </PropertyGroup>
 
-  <!-- Publish settings for self-contained single-file executable -->
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <PublishReadyToRun>true</PublishReadyToRun>
+  <!-- Single-file & self-contained settings -->
+  <PropertyGroup>
+    <!-- Default to false; can be overridden at publish time -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+
+    <!-- WPF apps must not be trimmed -->
+    <PublishTrimmed>false</PublishTrimmed>
+
+    <!-- Embed native DLLs properly for single-file -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- Compress the single-file bundle -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
-
+  <!-- Optional: define runtime for publish -->
+  <PropertyGroup>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
 
 </Project>

@@ -1,8 +1,15 @@
 {
   "version": 2,
-  "dgSpecHash": "mi15An3QkdI9tI4yxXUmBfjcuVlSCuk/HzL1l0qVX2ACsfdUUHIJmeAag4t82lQYqNBmZgMm8nL6+HgPtXz4uQ==",
+  "dgSpecHash": "P9UxMimR5fk=",
   "success": true,
   "projectFilePath": "C:\\Users\\bblai\\dev\\personal-projects\\spt-launcher-wpf\\SptLauncherWpf.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "C:\\Users\\bblai\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.22\\microsoft.net.illink.tasks.8.0.22.nupkg.sha512",
+    "C:\\Users\\bblai\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.22\\microsoft.netcore.app.runtime.win-x64.8.0.22.nupkg.sha512",
+    "C:\\Users\\bblai\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.22\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.22.nupkg.sha512",
+    "C:\\Users\\bblai\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.22\\microsoft.aspnetcore.app.runtime.win-x64.8.0.22.nupkg.sha512",
+    "C:\\Users\\bblai\\.nuget\\packages\\microsoft.netcore.app.crossgen2.win-x64\\8.0.22\\microsoft.netcore.app.crossgen2.win-x64.8.0.22.nupkg.sha512",
+    "C:\\Users\\bblai\\.nuget\\packages\\microsoft.windows.sdk.net.ref\\10.0.19041.56\\microsoft.windows.sdk.net.ref.10.0.19041.56.nupkg.sha512"
+  ],
   "logs": []
 }
