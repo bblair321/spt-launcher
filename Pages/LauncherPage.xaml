@@ -190,26 +190,42 @@
                                 </Grid.ColumnDefinitions>
                                 
                                 <TextBox Grid.Column="0" Name="LauncherPathTextBox" 
-                                         Text="D:\SPT\SPT\SPT.Launcher.exe" FontSize="14"
+                                         Text="" FontSize="14"
                                          Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                         Background="{DynamicResource CardBackgroundColor}"/>
+                                         Background="{DynamicResource CardBackgroundColor}"
+                                         TextChanged="LauncherPathTextBox_TextChanged"/>
                                 
                                 <Button Grid.Column="1" Name="BrowseButton" Content="Browse" 
                                         Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
                                         Padding="16,8" Margin="8,0,0,0" Click="BrowseButton_Click"/>
                             </Grid>
+                            <TextBlock Name="PathStatusText" Text="Please select your SPT Launcher executable using the Browse button." 
+                                       FontSize="12" Foreground="{DynamicResource TextSecondaryColor}" 
+                                       Margin="0,4,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
 
-                                <!-- Modern Action Buttons -->
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,16,0,0">
-                                    <Button Name="LaunchButton" Content="🚀 Launch SPT" 
-                                            Style="{StaticResource ModernButtonStyle}" Click="LaunchButton_Click"
-                                            Margin="0,0,12,0"/>
-                                    <Button Name="StopButton" Content="⏹ Stop" 
-                                            Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
-                                            Padding="20,12" FontSize="14" FontWeight="SemiBold" 
-                                            IsEnabled="False" Click="StopButton_Click"/>
-                                </StackPanel>
+                        <!-- Modern Action Buttons -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,16,0,0">
+                            <Button Name="LaunchButton" Content="🚀 Launch SPT" 
+                                    Style="{StaticResource ModernButtonStyle}" Click="LaunchButton_Click"
+                                    Margin="0,0,12,0"/>
+                            <!-- Use Border as clickable stop button to bypass Button control issues -->
+                            <Border Name="StopButtonBorder" 
+                                    Background="#6B7280" 
+                                    CornerRadius="12"
+                                    Padding="20,12"
+                                    Cursor="Hand"
+                                    MouseDown="StopButtonBorder_MouseDown"
+                                    MouseEnter="StopButtonBorder_MouseEnter"
+                                    MouseLeave="StopButtonBorder_MouseLeave">
+                                <TextBlock Text="⏹ Stop" 
+                                           FontSize="14" 
+                                           FontWeight="SemiBold"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </Border>

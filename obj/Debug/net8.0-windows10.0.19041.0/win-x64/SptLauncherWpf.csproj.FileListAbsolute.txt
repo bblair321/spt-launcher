@@ -35,3 +35,5 @@ C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10
 C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SPT Launcher.pdb
 C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLauncherWpf.genruntimeconfig.cache
 C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\ref\SPT Launcher.dll
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\bin\Debug\net8.0-windows10.0.19041.0\win-x64\System.Management.dll
+C:\Users\bblai\dev\personal-projects\spt-launcher-wpf\obj\Debug\net8.0-windows10.0.19041.0\win-x64\SptLauncherWpf.csproj.AssemblyReference.cache

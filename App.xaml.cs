@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
@@ -11,9 +13,41 @@ namespace SptLauncherWpf
         [DllImport("user32.dll")]
         private static extern bool SetProcessDPIAware();
 
+        // P/Invoke for unblocking files
+        [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool DeleteFile(string name);
+
+        /// <summary>
+        /// Unblocks the current application executable if it was downloaded from the internet
+        /// </summary>
+        private static void UnblockCurrentExecutable()
+        {
+            try
+            {
+                string? exePath = Process.GetCurrentProcess().MainModule?.FileName;
+                if (string.IsNullOrEmpty(exePath) || !File.Exists(exePath))
+                {
+                    return;
+                }
+
+                string zoneIdentifier = $"{exePath}:Zone.Identifier";
+                bool unblocked = DeleteFile(zoneIdentifier);
+                System.Diagnostics.Debug.WriteLine($"[App] Unblocked current executable: {unblocked}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[App] Failed to unblock current executable: {ex.Message}");
+            }
+        }
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+            
+            // Unblock the current executable if it was downloaded from the internet
+            // This is important because a blocked app may not be able to launch other processes
+            UnblockCurrentExecutable();
             
             // Set DPI awareness for better text rendering
             try
