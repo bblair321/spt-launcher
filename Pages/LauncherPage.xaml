@@ -11,7 +11,8 @@
       TextOptions.TextRenderingMode="ClearType"
       RenderOptions.EdgeMode="Unspecified">
     
-    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
         <StackPanel Margin="0,16,0,0">
             
             <!-- Header -->
@@ -231,4 +232,34 @@
             </Border>
         </StackPanel>
     </ScrollViewer>
+    
+    <!-- Toast Notification -->
+    <Border Name="ToastNotification" 
+            Background="{DynamicResource BackgroundSecondaryColor}"
+            BorderBrush="{DynamicResource PrimaryColor}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="16,12"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,20,20,0"
+            Opacity="0"
+            Visibility="Collapsed"
+            RenderTransformOrigin="0.5,0.5">
+        <Border.RenderTransform>
+            <TranslateTransform X="0" Y="0"/>
+        </Border.RenderTransform>
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Name="ToastMessage" 
+                      Text="IP was applied" 
+                      Foreground="{DynamicResource TextPrimaryColor}"
+                      FontSize="14"
+                      VerticalAlignment="Center"
+                      Margin="0,0,8,0"/>
+            <Ellipse Width="8" Height="8" 
+                    Fill="{DynamicResource PrimaryColor}"
+                    VerticalAlignment="Center"/>
+        </StackPanel>
+    </Border>
+    </Grid>
 </Page>

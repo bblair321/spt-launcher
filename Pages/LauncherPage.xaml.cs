@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -38,6 +39,19 @@ namespace SptLauncherWpf.Pages
             catch
             {
                 return false;
+            }
+        }
+
+        // Helper method to get process executable path safely
+        private static string? TryGetProcessPath(Process process)
+        {
+            try
+            {
+                return process.MainModule?.FileName;
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -79,8 +93,8 @@ namespace SptLauncherWpf.Pages
         public LauncherPage()
         {
             try
-            {
-                InitializeComponent();
+        {
+            InitializeComponent();
                 
             }
             catch (Exception ex)
@@ -92,7 +106,7 @@ namespace SptLauncherWpf.Pages
             
             try
             {
-                LoadSettings();
+            LoadSettings();
             }
             catch (Exception ex)
             {
@@ -102,7 +116,7 @@ namespace SptLauncherWpf.Pages
             
             try
             {
-                RestoreLauncherState(); // Restore state from static variables
+            RestoreLauncherState(); // Restore state from static variables
             }
             catch (Exception ex)
             {
@@ -112,7 +126,7 @@ namespace SptLauncherWpf.Pages
             
             try
             {
-                UpdateLauncherUI();
+            UpdateLauncherUI();
             }
             catch (Exception ex)
             {
@@ -122,7 +136,7 @@ namespace SptLauncherWpf.Pages
             
             try
             {
-                SetupUITimer(); // Set up periodic UI updates
+            SetupUITimer(); // Set up periodic UI updates
             }
             catch (Exception ex)
             {
@@ -132,7 +146,7 @@ namespace SptLauncherWpf.Pages
             
             try
             {
-                StartGlobalProcessMonitoring(); // Start global monitoring if not already running
+            StartGlobalProcessMonitoring(); // Start global monitoring if not already running
             }
             catch (Exception ex)
             {
@@ -227,6 +241,41 @@ namespace SptLauncherWpf.Pages
             }
             // Update path status after loading
             UpdatePathStatus();
+            
+            // Load FIKA settings
+            _fikaEnabled = SettingsService.Instance.FikaEnabled;
+            if (EnableFikaCheckBox != null)
+            {
+                EnableFikaCheckBox.IsChecked = _fikaEnabled;
+                
+                if (_fikaEnabled)
+                {
+                    // Show IP editor and load saved IP
+                    FikaIpEditorPanel.Visibility = Visibility.Visible;
+                    var savedIp = SettingsService.Instance.FikaIpAddress;
+                    if (!string.IsNullOrEmpty(savedIp))
+                    {
+                        FikaIpTextBox.Text = savedIp;
+                    }
+                    else
+                    {
+                        // Try to load from http.json
+                        var config = LoadHttpJson();
+                        if (config != null && !string.IsNullOrEmpty(config.ip))
+                        {
+                            FikaIpTextBox.Text = config.ip;
+                        }
+                        else
+                        {
+                            FikaIpTextBox.Text = _defaultIp;
+                        }
+                    }
+                }
+                else
+                {
+                    FikaIpEditorPanel.Visibility = Visibility.Collapsed;
+                }
+            }
         }
 
         private void RestoreLauncherState()
@@ -479,8 +528,8 @@ namespace SptLauncherWpf.Pages
                     throw new Exception($"Process started but exited immediately with code {exitCode}. This may indicate a security restriction or the executable is blocked.");
                 }
                 
-                _isLauncherRunning = true;
-                _launcherPid = _launcherProcess.Id;
+                    _isLauncherRunning = true;
+                    _launcherPid = _launcherProcess.Id;
                 
                 // Force button states on UI thread - ensure Stop button is definitely enabled
                 Dispatcher.Invoke(() =>
@@ -499,8 +548,8 @@ namespace SptLauncherWpf.Pages
 
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] Launcher started successfully (PID: {_launcherPid})");
 
-                // Start monitoring for the server process
-                _ = Task.Run(() => MonitorForServerProcess());
+                    // Start monitoring for the server process
+                    _ = Task.Run(() => MonitorForServerProcess());
             }
             catch (System.ComponentModel.Win32Exception winEx)
             {
@@ -713,7 +762,7 @@ namespace SptLauncherWpf.Pages
                             if (process.WaitForExit(5000))
                             {
                                 System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Successfully killed {process.ProcessName} (PID: {process.Id})");
-                                stoppedCount++;
+                            stoppedCount++;
                             }
                             else
                             {
@@ -980,8 +1029,8 @@ namespace SptLauncherWpf.Pages
                 System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Error: {ex.Message}\n{ex.StackTrace}");
                 Dispatcher.Invoke(() =>
                 {
-                    MessageBox.Show($"Error stopping processes: {ex.Message}", "Error", 
-                                  MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error stopping processes: {ex.Message}", "Error", 
+                              MessageBoxButton.OK, MessageBoxImage.Error);
                     UpdateLauncherUI();
                 });
             }
@@ -1158,14 +1207,25 @@ namespace SptLauncherWpf.Pages
                 
                 // Check for any SPT-related processes for the Stop button (excluding current process)
                 var allProcesses = Process.GetProcesses();
+                
+                // Get current process executable path for comparison
+                string? currentProcessPath = null;
+                try
+                {
+                    currentProcessPath = Process.GetCurrentProcess().MainModule?.FileName;
+                }
+                catch { }
+                
                 var sptProcesses = allProcesses.Where(p => 
-                    p.Id != currentProcessId && // Exclude current process
+                    p.Id != currentProcessId && // Exclude current process by ID
                     !p.HasExited && // Exclude exited processes
+                    !p.ProcessName.Equals(currentProcessName, StringComparison.OrdinalIgnoreCase) && // Exclude current process by name
                     (p.ProcessName.Contains("SPT", StringComparison.OrdinalIgnoreCase) ||
                      p.ProcessName.Contains("Aki", StringComparison.OrdinalIgnoreCase) ||
                      p.ProcessName.Contains("Tarkov", StringComparison.OrdinalIgnoreCase) ||
                      p.ProcessName.Contains("Escape", StringComparison.OrdinalIgnoreCase)) &&
-                    !p.ProcessName.Equals(currentProcessName, StringComparison.OrdinalIgnoreCase) // Double-check: exclude current process by name too
+                    // Also exclude if it's the same executable path (handles cases where process name might differ)
+                    !(currentProcessPath != null && TryGetProcessPath(p) == currentProcessPath)
                 ).ToList();
                 
                 System.Diagnostics.Debug.WriteLine($"[UpdateLauncherUI] Found {sptProcesses.Count} SPT-related processes (excluding current process):");
@@ -1192,34 +1252,34 @@ namespace SptLauncherWpf.Pages
                     }
                     
                     if (hasTrackedLauncher || hasLauncherRunning)
-                    {
-                        LaunchButton.IsEnabled = false;
+                {
+                    LaunchButton.IsEnabled = false;
                         if (StopButtonBorder != null)
                         {
                             StopButtonBorder.Opacity = 1.0;
                         }
                         var processId = hasTrackedLauncher && _launcherProcess != null && !_launcherProcess.HasExited ? _launcherPid : (sptLauncherProcesses.Length > 0 ? sptLauncherProcesses[0].Id : akiLauncherProcesses[0].Id);
-                        StatusText.Text = $"SPT Launcher running (PID: {processId})";
-                        System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] Launcher running - Launch button DISABLED, Stop button ENABLED");
-                    }
-                    else if (hasAnySptProcesses)
-                    {
-                        LaunchButton.IsEnabled = true;
+                    StatusText.Text = $"SPT Launcher running (PID: {processId})";
+                    System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] Launcher running - Launch button DISABLED, Stop button ENABLED");
+                }
+                else if (hasAnySptProcesses)
+                {
+                    LaunchButton.IsEnabled = true;
                         if (StopButtonBorder != null)
                         {
                             StopButtonBorder.Opacity = 1.0;
                         }
-                        StatusText.Text = $"SPT process running (PID: {sptProcesses[0].Id})";
-                        System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] SPT process running - Launch button ENABLED, Stop button ENABLED");
-                    }
-                    else
-                    {
-                        LaunchButton.IsEnabled = true;
+                    StatusText.Text = $"SPT process running (PID: {sptProcesses[0].Id})";
+                    System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] SPT process running - Launch button ENABLED, Stop button ENABLED");
+                }
+                else
+                {
+                    LaunchButton.IsEnabled = true;
                         if (StopButtonBorder != null)
                         {
                             StopButtonBorder.Opacity = 0.6; // Slightly dim when no processes, but still clickable
                         }
-                        StatusText.Text = "Ready";
+                    StatusText.Text = "Ready";
                         System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] No processes - Launch button ENABLED, Stop button dimmed but clickable");
                     }
                     
@@ -1237,12 +1297,12 @@ namespace SptLauncherWpf.Pages
                 // Fallback to enabled state if there's an error
                 Dispatcher.Invoke(() =>
                 {
-                    LaunchButton.IsEnabled = true;
+                LaunchButton.IsEnabled = true;
                     if (StopButtonBorder != null)
                     {
                         StopButtonBorder.Opacity = 0.6;
                     }
-                    StatusText.Text = "Ready";
+                StatusText.Text = "Ready";
                 });
                 System.Diagnostics.Debug.WriteLine($"[UpdateLauncherUI] Error: {ex.Message}\n{ex.StackTrace}");
             }
@@ -1461,6 +1521,24 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        private string GetLauncherConfigJsonPath()
+        {
+            try
+            {
+                var sptPath = GetSptInstallPath();
+                if (string.IsNullOrEmpty(sptPath))
+                {
+                    return string.Empty;
+                }
+                
+                return Path.Combine(sptPath, "user", "launcher", "config.json");
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
         private HttpConfig? LoadHttpJson()
         {
             try
@@ -1492,6 +1570,23 @@ namespace SptLauncherWpf.Pages
         {
             try
             {
+                // Validate IP address format first
+                if (!System.Net.IPAddress.TryParse(ip, out _))
+                {
+                    MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
+                        "Invalid IP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                
+                // Validate launcher path is set
+                var launcherPath = LauncherPathTextBox.Text;
+                if (string.IsNullOrWhiteSpace(launcherPath) || !File.Exists(launcherPath))
+                {
+                    MessageBox.Show("Please set a valid SPT Launcher path first using the Browse button.", 
+                        "Invalid Path", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                
                 var httpJsonPath = GetHttpJsonPath();
                 if (string.IsNullOrEmpty(httpJsonPath))
                 {
@@ -1500,16 +1595,35 @@ namespace SptLauncherWpf.Pages
                     return false;
                 }
                 
-                // Validate IP address format (basic validation)
-                if (!System.Net.IPAddress.TryParse(ip, out _))
+                // Load existing config or create default
+                HttpConfig? config = null;
+                int retries = 3;
+                for (int i = 0; i < retries; i++)
                 {
-                    MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
-                        "Invalid IP", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return false;
+                    try
+                    {
+                        config = LoadHttpJson() ?? new HttpConfig();
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (i == retries - 1)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[SaveHttpJson] Failed to load http.json after {retries} attempts: {ex.Message}");
+                            // Create new config if we can't load existing
+                            config = new HttpConfig();
+                        }
+                        else
+                        {
+                            System.Threading.Thread.Sleep(100); // Wait a bit before retry
+                        }
+                    }
                 }
                 
-                // Load existing config or create default
-                var config = LoadHttpJson() ?? new HttpConfig();
+                if (config == null)
+                {
+                    config = new HttpConfig();
+                }
                 
                 // Update IP addresses
                 config.ip = ip;
@@ -1522,19 +1636,45 @@ namespace SptLauncherWpf.Pages
                     Directory.CreateDirectory(configDir);
                 }
                 
-                // Save JSON
+                // Save JSON with retry logic
                 var options = new JsonSerializerOptions
                 {
                     WriteIndented = true
                 };
                 var jsonContent = JsonSerializer.Serialize(config, options);
-                File.WriteAllText(httpJsonPath, jsonContent);
                 
-                return true;
+                System.Diagnostics.Debug.WriteLine($"[SaveHttpJson] Attempting to save IP {ip} to {httpJsonPath}");
+                
+                for (int i = 0; i < retries; i++)
+                {
+                    try
+                    {
+                        File.WriteAllText(httpJsonPath, jsonContent);
+                        System.Diagnostics.Debug.WriteLine($"[SaveHttpJson] Successfully saved IP {ip} to http.json");
+                        return true;
+                    }
+                    catch (IOException) when (i < retries - 1)
+                    {
+                        // File might be locked, wait and retry
+                        System.Diagnostics.Debug.WriteLine($"[SaveHttpJson] File locked, retrying... ({i + 1}/{retries})");
+                        System.Threading.Thread.Sleep(200);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[SaveHttpJson] Error on attempt {i + 1}: {ex.Message}");
+                        if (i == retries - 1)
+                        {
+                            throw;
+                        }
+                        System.Threading.Thread.Sleep(200);
+                    }
+                }
+                
+                throw new Exception("Failed to save after multiple retries - file may be locked by another process");
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to save http.json: {ex.Message}", "Error", 
+                MessageBox.Show($"Failed to save http.json: {ex.Message}\n\nMake sure SPT is not running and try again.", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
@@ -1553,6 +1693,161 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        private LauncherConfig? LoadLauncherConfig()
+        {
+            try
+            {
+                var configJsonPath = GetLauncherConfigJsonPath();
+                if (string.IsNullOrEmpty(configJsonPath) || !File.Exists(configJsonPath))
+                {
+                    return null;
+                }
+                
+                var jsonContent = File.ReadAllText(configJsonPath);
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip
+                };
+                
+                return JsonSerializer.Deserialize<LauncherConfig>(jsonContent, options);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[LoadLauncherConfig] Failed to load config.json: {ex.Message}");
+                return null;
+            }
+        }
+
+        private bool SaveLauncherConfig(bool isDevMode, string? ipAddress = null)
+        {
+            try
+            {
+                // Validate launcher path is set
+                var launcherPath = LauncherPathTextBox.Text;
+                if (string.IsNullOrWhiteSpace(launcherPath) || !File.Exists(launcherPath))
+                {
+                    System.Diagnostics.Debug.WriteLine("[SaveLauncherConfig] Invalid launcher path, skipping config.json save");
+                    return false;
+                }
+                
+                var configJsonPath = GetLauncherConfigJsonPath();
+                if (string.IsNullOrEmpty(configJsonPath))
+                {
+                    System.Diagnostics.Debug.WriteLine("[SaveLauncherConfig] Unable to determine config.json path");
+                    return false;
+                }
+                
+                // Load existing config or create default
+                LauncherConfig? config = null;
+                int retries = 3;
+                for (int i = 0; i < retries; i++)
+                {
+                    try
+                    {
+                        config = LoadLauncherConfig();
+                        if (config == null)
+                        {
+                            // Create default config if file doesn't exist
+                            config = new LauncherConfig();
+                        }
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (i == retries - 1)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Failed to load config.json after {retries} attempts: {ex.Message}");
+                            // Create new config if we can't load existing
+                            config = new LauncherConfig();
+                        }
+                        else
+                        {
+                            System.Threading.Thread.Sleep(100); // Wait a bit before retry
+                        }
+                    }
+                }
+                
+                if (config == null)
+                {
+                    config = new LauncherConfig();
+                }
+                
+                // Update IsDevMode
+                config.IsDevMode = isDevMode;
+                
+                // If dev mode is enabled and IP is provided, update the Server URL
+                if (isDevMode && !string.IsNullOrEmpty(ipAddress))
+                {
+                    // Validate IP address format
+                    if (System.Net.IPAddress.TryParse(ipAddress, out _))
+                    {
+                        // Ensure Server object exists
+                        if (config.Server == null)
+                        {
+                            config.Server = new LauncherServerConfig();
+                        }
+                        
+                        // Update URL with the provided IP
+                        config.Server.Url = $"https://{ipAddress}:6969";
+                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Updated Server.Url to {config.Server.Url}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Invalid IP address format: {ipAddress}");
+                    }
+                }
+                
+                // Ensure directory exists
+                var configDir = Path.GetDirectoryName(configJsonPath);
+                if (!string.IsNullOrEmpty(configDir) && !Directory.Exists(configDir))
+                {
+                    Directory.CreateDirectory(configDir);
+                }
+                
+                // Save JSON with retry logic
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                };
+                var jsonContent = JsonSerializer.Serialize(config, options);
+                
+                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Attempting to save IsDevMode={isDevMode} to {configJsonPath}");
+                
+                for (int i = 0; i < retries; i++)
+                {
+                    try
+                    {
+                        File.WriteAllText(configJsonPath, jsonContent);
+                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Successfully saved IsDevMode={isDevMode} to config.json");
+                        return true;
+                    }
+                    catch (IOException) when (i < retries - 1)
+                    {
+                        // File might be locked, wait and retry
+                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] File locked, retrying... ({i + 1}/{retries})");
+                        System.Threading.Thread.Sleep(200);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Error on attempt {i + 1}: {ex.Message}");
+                        if (i == retries - 1)
+                        {
+                            throw;
+                        }
+                        System.Threading.Thread.Sleep(200);
+                    }
+                }
+                
+                throw new Exception("Failed to save after multiple retries - file may be locked by another process");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Failed to save config.json: {ex.Message}");
+                return false;
+            }
+        }
+
         private void EnableFikaCheckBox_Changed(object sender, RoutedEventArgs e)
         {
             try
@@ -1562,20 +1857,53 @@ namespace SptLauncherWpf.Pages
                 
                 _fikaEnabled = checkBox.IsChecked == true;
                 
+                // Save FIKA enabled state
+                SettingsService.Instance.FikaEnabled = _fikaEnabled;
+                SettingsService.Instance.SaveSettings();
+                
+                // Enable/disable developer mode in config.json based on FIKA state
+                SaveLauncherConfig(_fikaEnabled);
+                
                 if (_fikaEnabled)
                 {
                     // Show IP editor
                     FikaIpEditorPanel.Visibility = Visibility.Visible;
                     
-                    // Load current IP from http.json
-                    var config = LoadHttpJson();
-                    if (config != null)
+                    // Load current IP - try saved IP first, then config.json, then default
+                    var savedIp = SettingsService.Instance.FikaIpAddress;
+                    if (!string.IsNullOrEmpty(savedIp) && savedIp != _defaultIp)
                     {
-                        FikaIpTextBox.Text = config.ip;
+                        FikaIpTextBox.Text = savedIp;
                     }
                     else
                     {
-                        FikaIpTextBox.Text = _defaultIp;
+                        // Try to load from config.json Server.Url
+                        var launcherConfig = LoadLauncherConfig();
+                        if (launcherConfig != null && launcherConfig.Server != null && !string.IsNullOrEmpty(launcherConfig.Server.Url))
+                        {
+                            // Extract IP from URL (format: https://IP:PORT)
+                            try
+                            {
+                                var uri = new Uri(launcherConfig.Server.Url);
+                                var ipFromConfig = uri.Host;
+                                if (!string.IsNullOrEmpty(ipFromConfig))
+                                {
+                                    FikaIpTextBox.Text = ipFromConfig;
+                                }
+                                else
+                                {
+                                    FikaIpTextBox.Text = _defaultIp;
+                                }
+                            }
+                            catch
+                            {
+                                FikaIpTextBox.Text = _defaultIp;
+                            }
+                        }
+                        else
+                        {
+                            FikaIpTextBox.Text = _defaultIp;
+                        }
                     }
                 }
                 else
@@ -1583,8 +1911,8 @@ namespace SptLauncherWpf.Pages
                     // Hide IP editor
                     FikaIpEditorPanel.Visibility = Visibility.Collapsed;
                     
-                    // Revert to default IP
-                    RevertToDefaultIp();
+                    // Only revert to default IP if user explicitly unchecks (don't auto-revert on load)
+                    // This allows users to disable FIKA without losing their IP setting
                 }
             }
             catch (Exception ex)
@@ -1604,19 +1932,115 @@ namespace SptLauncherWpf.Pages
                 {
                     MessageBox.Show("Please enter an IP address.", "Invalid Input", 
                         MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+                }
+                
+                // Validate IP address format
+                if (!System.Net.IPAddress.TryParse(ipAddress, out _))
+                {
+                    MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
+                        "Invalid IP", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
                 
-                if (SaveHttpJson(ipAddress))
+                // Always save to settings first (as backup)
+                SettingsService.Instance.FikaIpAddress = ipAddress;
+                SettingsService.Instance.SaveSettings();
+                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Saved IP to settings: {ipAddress}");
+                
+                // Save to config.json with dev mode enabled and IP address
+                // When dev mode is true, the URL in config.json will be updated with the user's IP
+                if (_fikaEnabled)
                 {
-                    MessageBox.Show("IP address saved successfully.", "Success", 
-                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    bool configJsonSaved = SaveLauncherConfig(true, ipAddress);
+                    System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Attempted to save IsDevMode and IP to config.json: {configJsonSaved}");
                 }
+                
+                // Show toast notification
+                ShowToastNotification("IP was applied");
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Error: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show($"Error saving IP address: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ShowToastNotification(string message)
+        {
+            try
+            {
+                if (ToastNotification == null || ToastMessage == null) return;
+
+                // Set the message
+                ToastMessage.Text = message;
+
+                // Make visible
+                ToastNotification.Visibility = Visibility.Visible;
+
+                // Fade in animation
+                var fadeIn = new System.Windows.Media.Animation.DoubleAnimation
+                {
+                    From = 0,
+                    To = 1,
+                    Duration = TimeSpan.FromMilliseconds(300)
+                };
+
+                var slideIn = new System.Windows.Media.Animation.DoubleAnimation
+                {
+                    From = 20,
+                    To = 0,
+                    Duration = TimeSpan.FromMilliseconds(300)
+                };
+
+                ToastNotification.BeginAnimation(UIElement.OpacityProperty, fadeIn);
+                var transform = ToastNotification.RenderTransform as System.Windows.Media.TranslateTransform;
+                if (transform != null)
+                {
+                    transform.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, slideIn);
+                }
+
+                // Auto-dismiss after 2 seconds
+                var dismissTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(2)
+                };
+                dismissTimer.Tick += (s, e) =>
+                {
+                    dismissTimer.Stop();
+                    
+                    // Fade out animation
+                    var fadeOut = new System.Windows.Media.Animation.DoubleAnimation
+                    {
+                        From = 1,
+                        To = 0,
+                        Duration = TimeSpan.FromMilliseconds(300)
+                    };
+
+                    var slideOut = new System.Windows.Media.Animation.DoubleAnimation
+                    {
+                        From = 0,
+                        To = 20,
+                        Duration = TimeSpan.FromMilliseconds(300)
+                    };
+
+                    fadeOut.Completed += (sender, args) =>
+                    {
+                        ToastNotification.Visibility = Visibility.Collapsed;
+                    };
+
+                    ToastNotification.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+                    if (transform != null)
+                    {
+                        transform.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, slideOut);
+                    }
+                };
+                dismissTimer.Start();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ShowToastNotification] Error: {ex.Message}");
             }
         }
 
@@ -1631,5 +2055,45 @@ namespace SptLauncherWpf.Pages
         public int backendPort { get; set; } = 6969;
         public bool logRequests { get; set; } = true;
         public Dictionary<string, object> serverImagePathOverride { get; set; } = new();
+    }
+
+    // LauncherConfig class for JSON serialization (SPT\SPT\user\launcher\config.json)
+    public class LauncherConfig
+    {
+        [JsonPropertyName("FirstRun")]
+        public bool FirstRun { get; set; } = false;
+        
+        [JsonPropertyName("DefaultLocale")]
+        public string DefaultLocale { get; set; } = "English";
+        
+        [JsonPropertyName("LauncherStartGameAction")]
+        public int LauncherStartGameAction { get; set; } = 0;
+        
+        [JsonPropertyName("UseAutoLogin")]
+        public bool UseAutoLogin { get; set; } = false;
+        
+        [JsonPropertyName("IsDevMode")]
+        public bool IsDevMode { get; set; } = false;
+        
+        [JsonPropertyName("GamePath")]
+        public string? GamePath { get; set; }
+        
+        [JsonPropertyName("ExcludeFromCleanup")]
+        public List<string> ExcludeFromCleanup { get; set; } = new();
+        
+        [JsonPropertyName("Server")]
+        public LauncherServerConfig? Server { get; set; }
+    }
+
+    public class LauncherServerConfig
+    {
+        [JsonPropertyName("AutoLoginCreds")]
+        public object? AutoLoginCreds { get; set; }
+        
+        [JsonPropertyName("Name")]
+        public string? Name { get; set; }
+        
+        [JsonPropertyName("Url")]
+        public string Url { get; set; } = "https://127.0.0.1:6969";
     }
 }
