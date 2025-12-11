@@ -229,20 +229,17 @@ namespace SptLauncherWpf.Pages
 
         private void LoadSettings()
         {
-            // Load launcher path from settings, or leave empty if not set
+            // Load launcher path from settings
             var savedPath = SettingsService.Instance.LauncherPath;
-            if (!string.IsNullOrEmpty(savedPath) && File.Exists(savedPath))
+            if (!string.IsNullOrEmpty(savedPath))
             {
                 LauncherPathTextBox.Text = savedPath;
             }
-            else
-            {
-                LauncherPathTextBox.Text = "";
-            }
+            
             // Update path status after loading
             UpdatePathStatus();
             
-            // Load FIKA settings
+            // Load FIKA enabled state but not the IP address
             _fikaEnabled = SettingsService.Instance.FikaEnabled;
             if (EnableFikaCheckBox != null)
             {
@@ -250,25 +247,12 @@ namespace SptLauncherWpf.Pages
                 
                 if (_fikaEnabled)
                 {
-                    // Show IP editor and load saved IP
+                    // Show IP editor
                     FikaIpEditorPanel.Visibility = Visibility.Visible;
-                    var savedIp = SettingsService.Instance.FikaIpAddress;
-                    if (!string.IsNullOrEmpty(savedIp))
+                    // Only set default IP if text box is empty
+                    if (string.IsNullOrWhiteSpace(FikaIpTextBox.Text))
                     {
-                        FikaIpTextBox.Text = savedIp;
-                    }
-                    else
-                    {
-                        // Try to load from http.json
-                        var config = LoadHttpJson();
-                        if (config != null && !string.IsNullOrEmpty(config.ip))
-                        {
-                            FikaIpTextBox.Text = config.ip;
-                        }
-                        else
-                        {
-                            FikaIpTextBox.Text = _defaultIp;
-                        }
+                        FikaIpTextBox.Text = _defaultIp;
                     }
                 }
                 else
@@ -1493,7 +1477,7 @@ namespace SptLauncherWpf.Pages
                     return string.Empty;
                 }
                 
-                // Extract directory from launcher path (e.g., D:\SPT\SPT\SPT.Launcher.exe -> D:\SPT\SPT)
+                // Extract directory from launcher path (e.g., C:\Path\To\SPT\SPT.Launcher.exe -> C:\Path\To\SPT)
                 var launcherDir = Path.GetDirectoryName(launcherPath);
                 return launcherDir ?? string.Empty;
             }

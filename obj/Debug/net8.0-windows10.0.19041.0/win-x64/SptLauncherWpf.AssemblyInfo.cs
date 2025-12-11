@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyCopyrightAttribute("Copyright © 2025 SPT Launcher Team")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("3.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9d9886b2a20d89dc579acf62c4b12f421c29a410")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9be21b8e9aebad918f64756229e94a57f122dbb6")]
 [assembly: System.Reflection.AssemblyProductAttribute("SPT Launcher")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SPT Launcher")]
 [assembly: System.Reflection.AssemblyVersionAttribute("3.0.0.0")]

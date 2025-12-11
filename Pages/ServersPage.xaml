@@ -113,7 +113,7 @@
                                     </Grid.ColumnDefinitions>
                                     
                                     <TextBox Grid.Column="0" Name="ServerPathTextBox" 
-                                             Text="D:\SPT\Aki.Server.exe" 
+                                             Text="" 
                                              Style="{StaticResource ModernTextBoxStyle}"/>
                                     
                                     <Button Grid.Column="1" Name="BrowseServerButton" Content="Browse" 

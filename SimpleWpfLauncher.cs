@@ -49,7 +49,7 @@ namespace SptLauncherWpf
             var pathLabel = new Label { Content = "Server Path:", VerticalAlignment = VerticalAlignment.Center };
             _serverPathTextBox = new TextBox
             {
-                Text = @"D:\SPT\SPT\SPT.Server.exe",
+                Text = "",
                 Width = 400,
                 Margin = new Thickness(5, 0, 5, 0)
             };

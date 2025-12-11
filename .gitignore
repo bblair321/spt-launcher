@@ -81,3 +81,13 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.cache
+
+# User-specific configuration files
+servers.json
