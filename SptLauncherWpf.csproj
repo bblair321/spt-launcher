@@ -10,6 +10,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
+    <!-- Application Icon -->
+    <ApplicationIcon>spt_rpg_icon.ico</ApplicationIcon>
+
     <!-- Assembly metadata -->
     <AssemblyName>SPT Launcher</AssemblyName>
     <AssemblyTitle>SPT Launcher</AssemblyTitle>
@@ -44,6 +47,13 @@
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="spt_rpg_icon.ico" />
+    <None Include="spt_rpg_icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

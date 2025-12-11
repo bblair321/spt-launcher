@@ -1,9 +1,11 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using SptLauncherWpf.Pages;
 using SptLauncherWpf.Services;
 using System.Threading.Tasks;
@@ -32,6 +34,24 @@ namespace SptLauncherWpf
             try
             {
                 InitializeComponent();
+                
+                // Set window icon from resource
+                try
+                {
+                    var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "spt_rpg_icon.ico");
+                    if (File.Exists(iconPath))
+                    {
+                        using (var iconStream = new FileStream(iconPath, FileMode.Open))
+                        {
+                            this.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(iconStream);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Icon loading failed, continue without it
+                }
+                
                 InitializeStyles();
                 SetActiveTab("launcher");
                 SetupDragFunctionality();
