@@ -3,8 +3,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
 
-    <!-- Explicit Windows target to avoid SDK normalization -->
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <!-- Standard Windows target (no SDK needed - saves ~24MB) -->
+    <TargetFramework>net8.0-windows</TargetFramework>
 
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -38,11 +38,6 @@
 
     <!-- Compress the single-file bundle -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-  </PropertyGroup>
-
-  <!-- Optional: define runtime for publish -->
-  <PropertyGroup>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
