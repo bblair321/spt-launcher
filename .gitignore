@@ -88,6 +88,15 @@ obj/
 *.user
 *.suo
 *.cache
+*.dll
+*.pdb
+*.exe
+*.deps.json
+*.runtimeconfig.json
+*.assets.cache
+*.FileListAbsolute.txt
+*_wpftmp.*
+*.sourcelink.json
 
 # User-specific configuration files
 servers.json

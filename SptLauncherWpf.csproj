@@ -14,7 +14,7 @@
     <ApplicationIcon>spt_rpg_icon.ico</ApplicationIcon>
 
     <!-- Assembly metadata -->
-    <AssemblyName>SPT Launcher</AssemblyName>
+    <AssemblyName>SPTLauncher</AssemblyName>
     <AssemblyTitle>SPT Launcher</AssemblyTitle>
     <AssemblyDescription>SPT-AKI Launcher with Fika Co-op Support - Modern WPF Version</AssemblyDescription>
     <AssemblyVersion>3.0.0.0</AssemblyVersion>
