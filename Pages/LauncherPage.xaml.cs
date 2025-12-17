@@ -1365,103 +1365,23 @@ namespace SptLauncherWpf.Pages
             }
         }
 
-        private async void InstallFikaButton_Click(object sender, RoutedEventArgs e)
+        private void InstallFikaButton_Click(object sender, RoutedEventArgs e)
         {
-            const string fikaReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Installer/releases/latest";
+            const string fikaReleasesUrl = "https://github.com/project-fika/Fika-Installer/releases";
             
             try
             {
-                // Disable button during download
-                InstallFikaButton.IsEnabled = false;
-                InstallFikaButton.Content = "⏳ Checking for latest version...";
-                
-                // Fetch latest release from GitHub
-                using (HttpClient client = new HttpClient())
+                // Open the releases page in the default browser
+                Process.Start(new ProcessStartInfo
                 {
-                    client.Timeout = TimeSpan.FromMinutes(5);
-                    client.DefaultRequestHeaders.Add("User-Agent", "SPT-Launcher-WPF");
-                    
-                    // Get release information
-                    InstallFikaButton.Content = "⏳ Fetching release info...";
-                    var response = await client.GetStringAsync(fikaReleasesApiUrl);
-                    var release = JsonSerializer.Deserialize<GitHubRelease>(response, new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = false
-                    });
-                    
-                    if (release == null || release.Assets == null || release.Assets.Count == 0)
-                    {
-                        throw new Exception("No release assets found");
-                    }
-                    
-                    // Find the installer/exe asset
-                    var installerAsset = release.Assets.FirstOrDefault(a => 
-                        a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
-                        a.Name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
-                        a.Name.Contains("setup", StringComparison.OrdinalIgnoreCase));
-                    
-                    if (installerAsset == null)
-                    {
-                        // Fallback to first asset if no installer found
-                        installerAsset = release.Assets.FirstOrDefault();
-                    }
-                    
-                    if (installerAsset == null || string.IsNullOrEmpty(installerAsset.BrowserDownloadUrl))
-                    {
-                        throw new Exception("No installer download URL found");
-                    }
-                    
-                    // Get temporary file path
-                    string tempPath = Path.GetTempPath();
-                    string installerFileName = installerAsset.Name ?? "FikaInstaller.exe";
-                    string installerPath = Path.Combine(tempPath, installerFileName);
-                    
-                    // Download the installer
-                    InstallFikaButton.Content = "⏳ Downloading installer...";
-                    byte[] fileBytes = await client.GetByteArrayAsync(installerAsset.BrowserDownloadUrl);
-                    await File.WriteAllBytesAsync(installerPath, fileBytes);
-                    
-                    // Update button text
-                    InstallFikaButton.Content = "🚀 Launching installer...";
-                    
-                    // Execute the installer
-                    var processInfo = new ProcessStartInfo
-                    {
-                        FileName = installerPath,
-                        UseShellExecute = true,
-                        CreateNoWindow = false
-                    };
-                    
-                    Process.Start(processInfo);
-                    
-                    // Reset button state
-                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                    InstallFikaButton.IsEnabled = true;
-                    
-                    MessageBox.Show("FIKA installer has been launched. Please follow the installation wizard.", 
-                        "Installer Launched", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-            }
-            catch (HttpRequestException ex)
-            {
-                InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                InstallFikaButton.IsEnabled = true;
-                MessageBox.Show($"Failed to download the FIKA installer.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.", 
-                    "Download Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            catch (TaskCanceledException ex)
-            {
-                InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                InstallFikaButton.IsEnabled = true;
-                MessageBox.Show($"Download timed out.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.", 
-                    "Download Timeout", MessageBoxButton.OK, MessageBoxImage.Error);
+                    FileName = fikaReleasesUrl,
+                    UseShellExecute = true
+                });
             }
             catch (Exception ex)
             {
-                InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                InstallFikaButton.IsEnabled = true;
-                MessageBox.Show($"An error occurred while installing FIKA.\n\nError: {ex.Message}", 
-                    "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Failed to open FIKA releases page.\n\nError: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
