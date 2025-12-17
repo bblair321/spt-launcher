@@ -26,8 +26,8 @@
 
   <!-- Single-file & self-contained settings -->
   <PropertyGroup>
-    <!-- Default to false; can be overridden at publish time -->
-    <PublishSingleFile>false</PublishSingleFile>
+    <!-- Framework-dependent single-file (requires .NET 8.0 Runtime) -->
+    <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
 
     <!-- WPF apps must not be trimmed -->
@@ -35,9 +35,6 @@
 
     <!-- Embed native DLLs properly for single-file -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-
-    <!-- Compress the single-file bundle -->
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
