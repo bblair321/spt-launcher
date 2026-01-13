@@ -1417,6 +1417,11 @@ namespace SptLauncherWpf.Pages
 
         private void UpdateSptVersionDisplay()
         {
+            _ = UpdateSptVersionDisplayAsync();
+        }
+
+        private async Task UpdateSptVersionDisplayAsync()
+        {
             try
             {
                 if (SptVersionText == null)
@@ -1433,8 +1438,15 @@ namespace SptLauncherWpf.Pages
 
                 if (string.IsNullOrWhiteSpace(launcherPath))
                 {
-                    SptVersionText.Text = "Not detected";
-                    SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                    Dispatcher.Invoke(() =>
+                    {
+                        SptVersionText.Text = "Not detected";
+                        SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        if (SptUpdateStatusPanel != null)
+                        {
+                            SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                        }
+                    });
                     return;
                 }
 
@@ -1442,31 +1454,94 @@ namespace SptLauncherWpf.Pages
                 var isInstalled = SptDetectionService.Instance.IsSptInstalled(launcherPath);
                 if (!isInstalled)
                 {
-                    SptVersionText.Text = "Not detected";
-                    SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                    Dispatcher.Invoke(() =>
+                    {
+                        SptVersionText.Text = "Not detected";
+                        SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        if (SptUpdateStatusPanel != null)
+                        {
+                            SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                        }
+                    });
                     return;
                 }
 
                 var version = SptDetectionService.Instance.GetSptVersion(launcherPath);
                 if (string.IsNullOrEmpty(version))
                 {
-                    SptVersionText.Text = "Installed (version unknown)";
-                    SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                    Dispatcher.Invoke(() =>
+                    {
+                        SptVersionText.Text = "Installed (version unknown)";
+                        SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        if (SptUpdateStatusPanel != null)
+                        {
+                            SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                        }
+                    });
+                    return;
                 }
-                else
+
+                // Update version display
+                Dispatcher.Invoke(() =>
                 {
                     SptVersionText.Text = version;
                     SptVersionText.Foreground = (Brush)FindResource("TextPrimaryColor");
-                }
+                    
+                    // Show checking status
+                    if (SptUpdateStatusPanel != null && SptUpdateStatusText != null)
+                    {
+                        SptUpdateStatusPanel.Visibility = Visibility.Visible;
+                        SptUpdateStatusText.Text = "Checking for updates...";
+                        SptUpdateStatusText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                    }
+                });
+
+                // Check for updates asynchronously
+                var updateInfo = await SptDetectionService.Instance.CheckForUpdatesAsync(version);
+                
+                Dispatcher.Invoke(() =>
+                {
+                    if (SptUpdateStatusPanel == null || SptUpdateStatusText == null)
+                    {
+                        return;
+                    }
+
+                    if (updateInfo == null)
+                    {
+                        // Check failed (network error, etc.) - hide update status
+                        SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                    }
+                    else if (updateInfo.IsUpdateAvailable)
+                    {
+                        // Update available
+                        SptUpdateStatusPanel.Visibility = Visibility.Visible;
+                        SptUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion}";
+                        SptUpdateStatusText.Foreground = new SolidColorBrush(Color.FromRgb(34, 197, 94)); // Green
+                    }
+                    else
+                    {
+                        // Up to date
+                        SptUpdateStatusPanel.Visibility = Visibility.Visible;
+                        SptUpdateStatusText.Text = "Up to date";
+                        SptUpdateStatusText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                    }
+                });
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[UpdateSptVersionDisplay] Error: {ex.Message}");
-                if (SptVersionText != null)
+                Dispatcher.Invoke(() =>
                 {
-                    SptVersionText.Text = "Error detecting version";
-                    SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
-                }
+                    if (SptVersionText != null)
+                    {
+                        SptVersionText.Text = "Error detecting version";
+                        SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                    }
+                    if (SptUpdateStatusPanel != null)
+                    {
+                        SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                    }
+                });
             }
         }
 
