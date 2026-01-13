@@ -169,6 +169,9 @@ namespace SptLauncherWpf.Pages
             
             // Simple, direct UI update (same as Launch button approach)
             UpdateLauncherUI();
+            
+            // Update SPT version display
+            UpdateSptVersionDisplay();
         }
 
         private void LauncherPage_Unloaded(object sender, RoutedEventArgs e)
@@ -238,6 +241,9 @@ namespace SptLauncherWpf.Pages
             
             // Update path status after loading
             UpdatePathStatus();
+            
+            // Update SPT version display
+            UpdateSptVersionDisplay();
             
             // Load FIKA enabled state but not the IP address
             _fikaEnabled = SettingsService.Instance.FikaEnabled;
@@ -317,12 +323,14 @@ namespace SptLauncherWpf.Pages
                 LauncherPathTextBox.Text = openFileDialog.FileName;
                 SaveSettings();
                 UpdatePathStatus();
+                UpdateSptVersionDisplay();
             }
         }
 
         private void LauncherPathTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             UpdatePathStatus();
+            UpdateSptVersionDisplay();
         }
 
         private void UpdatePathStatus()
@@ -1404,6 +1412,61 @@ namespace SptLauncherWpf.Pages
             catch
             {
                 return string.Empty;
+            }
+        }
+
+        private void UpdateSptVersionDisplay()
+        {
+            try
+            {
+                if (SptVersionText == null)
+                {
+                    return;
+                }
+
+                // Get launcher path from text box or settings
+                var launcherPath = LauncherPathTextBox.Text;
+                if (string.IsNullOrWhiteSpace(launcherPath))
+                {
+                    launcherPath = SettingsService.Instance.LauncherPath;
+                }
+
+                if (string.IsNullOrWhiteSpace(launcherPath))
+                {
+                    SptVersionText.Text = "Not detected";
+                    SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                    return;
+                }
+
+                // Check if SPT is installed and get version
+                var isInstalled = SptDetectionService.Instance.IsSptInstalled(launcherPath);
+                if (!isInstalled)
+                {
+                    SptVersionText.Text = "Not detected";
+                    SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                    return;
+                }
+
+                var version = SptDetectionService.Instance.GetSptVersion(launcherPath);
+                if (string.IsNullOrEmpty(version))
+                {
+                    SptVersionText.Text = "Installed (version unknown)";
+                    SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                }
+                else
+                {
+                    SptVersionText.Text = version;
+                    SptVersionText.Foreground = (Brush)FindResource("TextPrimaryColor");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UpdateSptVersionDisplay] Error: {ex.Message}");
+                if (SptVersionText != null)
+                {
+                    SptVersionText.Text = "Error detecting version";
+                    SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                }
             }
         }
 

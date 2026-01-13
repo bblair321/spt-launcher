@@ -40,7 +40,22 @@
                     <Button Name="InstallSptButton" Content="📥 Install Latest SPT Version" 
                             Style="{StaticResource ModernButtonStyle}" 
                             Click="InstallSptButton_Click"
-                            HorizontalAlignment="Left"/>
+                            HorizontalAlignment="Left"
+                            Margin="0,0,0,12"/>
+                    
+                    <!-- SPT Version Display -->
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="Installed SPT Version: " 
+                                   FontSize="14" 
+                                   Foreground="{DynamicResource TextSecondaryColor}"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Name="SptVersionText" 
+                                   Text="Not detected" 
+                                   FontSize="14" 
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryColor}"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
