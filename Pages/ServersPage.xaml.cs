@@ -96,7 +96,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to load servers: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show($"Failed to load servers: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -110,7 +110,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to save servers: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show($"Failed to save servers: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -143,7 +143,7 @@ namespace SptLauncherWpf.Pages
             // Server name and type
             var headerPanel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Margin = new Thickness(0, 0, 0, 8)
             };
 
@@ -152,7 +152,7 @@ namespace SptLauncherWpf.Pages
                 Text = server.Name,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 16,
-                Foreground = (Brush)FindResource("TextPrimaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor"),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -160,7 +160,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"({server.ServerType.ToUpper()})",
                 FontSize = 12,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0)
             };
@@ -173,7 +173,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"Path: {server.Path}\nPort: {server.Port}",
                 FontSize = 12,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
             };
@@ -181,36 +181,36 @@ namespace SptLauncherWpf.Pages
             // Action buttons
             var buttonPanel = new StackPanel
             {
-                Orientation = Orientation.Horizontal
+                Orientation = System.Windows.Controls.Orientation.Horizontal
             };
 
-            var launchButton = new Button
+            var launchButton = new System.Windows.Controls.Button
             {
                 Content = "Launch",
                 Style = (Style)FindResource("ModernButtonStyle"),
-                Background = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)),
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)),
                 Margin = new Thickness(0, 0, 8, 0),
                 Padding = new Thickness(12, 6, 12, 6),
                 FontSize = 12
             };
             launchButton.Click += (s, e) => LaunchServer(server);
 
-            var stopButton = new Button
+            var stopButton = new System.Windows.Controls.Button
             {
                 Content = "Stop",
                 Style = (Style)FindResource("ModernButtonStyle"),
-                Background = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B)),
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B)),
                 Margin = new Thickness(0, 0, 8, 0),
                 Padding = new Thickness(12, 6, 12, 6),
                 FontSize = 12
             };
             stopButton.Click += (s, e) => StopServer(server);
 
-            var deleteButton = new Button
+            var deleteButton = new System.Windows.Controls.Button
             {
                 Content = "Delete",
                 Style = (Style)FindResource("ModernButtonStyle"),
-                Background = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44)),
+                Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44)),
                 Padding = new Thickness(12, 6, 12, 6),
                 FontSize = 12
             };
@@ -230,7 +230,7 @@ namespace SptLauncherWpf.Pages
 
         private void DeleteServer(ServerInfo server)
         {
-            var result = MessageBox.Show($"Are you sure you want to delete '{server.Name}'?", 
+            var result = System.Windows.MessageBox.Show($"Are you sure you want to delete '{server.Name}'?", 
                 "Delete Server", MessageBoxButton.YesNo, MessageBoxImage.Question);
             
             if (result == MessageBoxResult.Yes)
@@ -309,7 +309,7 @@ namespace SptLauncherWpf.Pages
 
         private void BrowseServerButton_Click(object sender, RoutedEventArgs e)
         {
-            var openFileDialog = new OpenFileDialog
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Select SPT-AKI Server Executable",
                 Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
@@ -344,7 +344,7 @@ namespace SptLauncherWpf.Pages
             
             if (runningProcesses.Length == 0)
             {
-                MessageBox.Show($"No SPT.Server processes are currently running.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show($"No SPT.Server processes are currently running.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -383,7 +383,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to stop server: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show($"Failed to stop server: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -457,7 +457,7 @@ namespace SptLauncherWpf.Pages
         {
             if (_runningServers.ContainsKey(server.Id))
             {
-                MessageBox.Show("Server is already running.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show("Server is already running.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -470,7 +470,7 @@ namespace SptLauncherWpf.Pages
 
             if (string.IsNullOrEmpty(serverPath) || !File.Exists(serverPath))
             {
-                MessageBox.Show($"Server executable not found at: {serverPath}\n\nPlease use the Browse button to select the correct server executable.", 
+                System.Windows.MessageBox.Show($"Server executable not found at: {serverPath}\n\nPlease use the Browse button to select the correct server executable.", 
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
@@ -513,7 +513,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to launch server: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show($"Failed to launch server: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 _runningServers.Remove(server.Id);
                 UpdateServersList();
             }

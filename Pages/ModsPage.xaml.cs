@@ -52,7 +52,7 @@ namespace SptLauncherWpf.Pages
         {
             if (string.IsNullOrEmpty(EmailTextBox.Text) || string.IsNullOrEmpty(PasswordBox.Password))
             {
-                MessageBox.Show("Please enter both email and password.", "Invalid Input", 
+                System.Windows.MessageBox.Show("Please enter both email and password.", "Invalid Input", 
                               MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -81,7 +81,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Login failed: {ex.Message}", "Login Error", 
+                System.Windows.MessageBox.Show($"Login failed: {ex.Message}", "Login Error", 
                               MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
@@ -118,7 +118,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to load mods: {ex.Message}", "Load Error", 
+                System.Windows.MessageBox.Show($"Failed to load mods: {ex.Message}", "Load Error", 
                               MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -181,10 +181,10 @@ namespace SptLauncherWpf.Pages
 
             if (_mods.Count == 0)
             {
-                var emptyPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-                emptyPanel.Children.Add(new Ellipse { Width = 64, Height = 64, Fill = new SolidColorBrush(Color.FromRgb(156, 163, 175)), Margin = new Thickness(0, 0, 0, 16) });
-                emptyPanel.Children.Add(new TextBlock { Text = "No mods found", FontSize = 18, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(Color.FromRgb(17, 24, 39)), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) });
-                emptyPanel.Children.Add(new TextBlock { Text = "Try adjusting your search or filter criteria", FontSize = 14, Foreground = new SolidColorBrush(Color.FromRgb(107, 114, 128)), HorizontalAlignment = HorizontalAlignment.Center });
+                var emptyPanel = new StackPanel { HorizontalAlignment = System.Windows.HorizontalAlignment.Center };
+                emptyPanel.Children.Add(new Ellipse { Width = 64, Height = 64, Fill = new SolidColorBrush(System.Windows.Media.Color.FromRgb(156, 163, 175)), Margin = new Thickness(0, 0, 0, 16) });
+                emptyPanel.Children.Add(new TextBlock { Text = "No mods found", FontSize = 18, FontWeight = FontWeights.Medium, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(17, 24, 39)), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) });
+                emptyPanel.Children.Add(new TextBlock { Text = "Try adjusting your search or filter criteria", FontSize = 14, Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(107, 114, 128)), HorizontalAlignment = System.Windows.HorizontalAlignment.Center });
                 
                 ModsListPanel.Children.Add(emptyPanel);
                 return;
@@ -204,7 +204,7 @@ namespace SptLauncherWpf.Pages
                 Style = (Style)FindResource("ModernCardStyle"),
                 Padding = new Thickness(16),
                 Margin = new Thickness(0, 0, 0, 12),
-                Cursor = Cursors.Hand
+                Cursor = System.Windows.Input.Cursors.Hand
             };
 
             var panel = new StackPanel();
@@ -215,7 +215,7 @@ namespace SptLauncherWpf.Pages
                 Text = mod.Name,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 16,
-                Foreground = (Brush)FindResource("TextPrimaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor"),
                 Margin = new Thickness(0, 0, 0, 8)
             };
             panel.Children.Add(nameText);
@@ -225,7 +225,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = mod.Description,
                 FontSize = 14,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 TextWrapping = TextWrapping.Wrap,
                 MaxHeight = 40,
                 Margin = new Thickness(0, 0, 0, 12)
@@ -233,13 +233,13 @@ namespace SptLauncherWpf.Pages
             panel.Children.Add(descText);
 
             // Stats
-            var statsPanel = new StackPanel { Orientation = Orientation.Horizontal };
+            var statsPanel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
             
             var downloadsText = new TextBlock
             {
                 Text = $"⬇ {mod.Downloads}",
                 FontSize = 12,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(downloadsText);
@@ -248,7 +248,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"⭐ {mod.Rating}",
                 FontSize = 12,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(ratingText);
@@ -257,7 +257,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"📅 {mod.CreatedAt:MMM dd, yyyy}",
                 FontSize = 12,
-                Foreground = (Brush)FindResource("TextSecondaryColor")
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor")
             };
             statsPanel.Children.Add(dateText);
 
@@ -266,11 +266,11 @@ namespace SptLauncherWpf.Pages
             // Add hover effect
             card.MouseEnter += (s, e) =>
             {
-                card.Background = (Brush)FindResource("HoverColor");
+                card.Background = (System.Windows.Media.Brush)FindResource("HoverColor");
             };
             card.MouseLeave += (s, e) =>
             {
-                card.Background = (Brush)FindResource("CardBackgroundColor");
+                card.Background = (System.Windows.Media.Brush)FindResource("CardBackgroundColor");
             };
 
             card.Child = panel;
@@ -291,9 +291,9 @@ namespace SptLauncherWpf.Pages
 
             if (_selectedMod == null)
             {
-                var emptyPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 32, 0, 16) };
-                emptyPanel.Children.Add(new Ellipse { Width = 48, Height = 48, Fill = (Brush)FindResource("TextSecondaryColor"), Margin = new Thickness(0, 0, 0, 8) });
-                emptyPanel.Children.Add(new TextBlock { Text = "Select a mod to view details", FontSize = 14, Foreground = (Brush)FindResource("TextSecondaryColor"), HorizontalAlignment = HorizontalAlignment.Center });
+                var emptyPanel = new StackPanel { HorizontalAlignment = System.Windows.HorizontalAlignment.Center, Margin = new Thickness(0, 32, 0, 16) };
+                emptyPanel.Children.Add(new Ellipse { Width = 48, Height = 48, Fill = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"), Margin = new Thickness(0, 0, 0, 8) });
+                emptyPanel.Children.Add(new TextBlock { Text = "Select a mod to view details", FontSize = 14, Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"), HorizontalAlignment = System.Windows.HorizontalAlignment.Center });
                 ModDetailsPanel.Children.Add(emptyPanel);
                 return;
             }
@@ -306,7 +306,7 @@ namespace SptLauncherWpf.Pages
                 Text = _selectedMod.Name,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 18,
-                Foreground = (Brush)FindResource("TextPrimaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor"),
                 Margin = new Thickness(0, 0, 0, 8)
             };
             detailsPanel.Children.Add(nameText);
@@ -316,20 +316,20 @@ namespace SptLauncherWpf.Pages
             {
                 Text = _selectedMod.Description,
                 FontSize = 14,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 16)
             };
             detailsPanel.Children.Add(descText);
 
             // Stats
-            var statsPanel = new StackPanel { Orientation = Orientation.Horizontal };
+            var statsPanel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
             
             var downloadsText = new TextBlock
             {
                 Text = $"⬇ {_selectedMod.Downloads} downloads",
                 FontSize = 14,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(downloadsText);
@@ -338,7 +338,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"⭐ {_selectedMod.Rating} rating",
                 FontSize = 14,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(ratingText);
@@ -347,7 +347,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"📅 {_selectedMod.CreatedAt:MMM dd, yyyy}",
                 FontSize = 14,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(dateText);
@@ -356,7 +356,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"👤 {_selectedMod.Author}",
                 FontSize = 14,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 16, 0)
             };
             statsPanel.Children.Add(authorText);
@@ -365,19 +365,19 @@ namespace SptLauncherWpf.Pages
             {
                 Text = $"🔢 Version {_selectedMod.Version}",
                 FontSize = 14,
-                Foreground = (Brush)FindResource("TextSecondaryColor")
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor")
             };
             statsPanel.Children.Add(versionText);
 
             detailsPanel.Children.Add(statsPanel);
 
             // Download button
-            var downloadButton = new Button
+            var downloadButton = new System.Windows.Controls.Button
             {
                 Content = "Download",
                 Style = (Style)FindResource("ModernButtonStyle"),
                 Margin = new Thickness(0, 16, 0, 0),
-                Cursor = Cursors.Hand
+                Cursor = System.Windows.Input.Cursors.Hand
             };
             downloadButton.Click += (s, e) => DownloadMod(_selectedMod);
             detailsPanel.Children.Add(downloadButton);
@@ -387,7 +387,7 @@ namespace SptLauncherWpf.Pages
 
         private void DownloadMod(ModInfo mod)
         {
-            MessageBox.Show($"Downloading {mod.Name}...\n\nThis is a demo - actual download functionality would be implemented here.", 
+            System.Windows.MessageBox.Show($"Downloading {mod.Name}...\n\nThis is a demo - actual download functionality would be implemented here.", 
                           "Download", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 

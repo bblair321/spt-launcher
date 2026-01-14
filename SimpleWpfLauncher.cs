@@ -12,11 +12,11 @@ namespace SptLauncherWpf
     public partial class SimpleWpfLauncher : Window
     {
         private Process? _serverProcess;
-        private TextBox _consoleOutput = null!;
-        private Button _startButton = null!;
-        private Button _stopButton = null!;
-        private TextBox _serverPathTextBox = null!;
-        private Label _statusLabel = null!;
+        private System.Windows.Controls.TextBox _consoleOutput = null!;
+        private System.Windows.Controls.Button _startButton = null!;
+        private System.Windows.Controls.Button _stopButton = null!;
+        private System.Windows.Controls.TextBox _serverPathTextBox = null!;
+        private System.Windows.Controls.Label _statusLabel = null!;
 
         public SimpleWpfLauncher()
         {
@@ -41,20 +41,20 @@ namespace SptLauncherWpf
             // Controls panel
             var controlsPanel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Margin = new Thickness(10),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            var pathLabel = new Label { Content = "Server Path:", VerticalAlignment = VerticalAlignment.Center };
-            _serverPathTextBox = new TextBox
+            var pathLabel = new System.Windows.Controls.Label { Content = "Server Path:", VerticalAlignment = VerticalAlignment.Center };
+            _serverPathTextBox = new System.Windows.Controls.TextBox
             {
                 Text = "",
                 Width = 400,
                 Margin = new Thickness(5, 0, 5, 0)
             };
 
-            _startButton = new Button
+            _startButton = new System.Windows.Controls.Button
             {
                 Content = "Start Server",
                 Width = 100,
@@ -65,7 +65,7 @@ namespace SptLauncherWpf
             };
             _startButton.Click += StartButton_Click;
 
-            _stopButton = new Button
+            _stopButton = new System.Windows.Controls.Button
             {
                 Content = "Stop Server",
                 Width = 100,
@@ -90,7 +90,7 @@ namespace SptLauncherWpf
             consolePanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(30) });
             consolePanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var consoleLabel = new Label
+            var consoleLabel = new System.Windows.Controls.Label
             {
                 Content = "Server Output:",
                 FontWeight = FontWeights.Bold,
@@ -100,9 +100,9 @@ namespace SptLauncherWpf
             Grid.SetRow(consoleLabel, 0);
             consolePanel.Children.Add(consoleLabel);
 
-            _consoleOutput = new TextBox
+            _consoleOutput = new System.Windows.Controls.TextBox
             {
-                FontFamily = new FontFamily("Consolas"),
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
                 FontSize = 12,
                 Background = new SolidColorBrush(Colors.Black),
                 Foreground = new SolidColorBrush(Colors.LimeGreen),
@@ -119,7 +119,7 @@ namespace SptLauncherWpf
             mainGrid.Children.Add(consolePanel);
 
             // Status bar
-            _statusLabel = new Label
+            _statusLabel = new System.Windows.Controls.Label
             {
                 Content = "Ready",
                 VerticalAlignment = VerticalAlignment.Center,
@@ -135,7 +135,7 @@ namespace SptLauncherWpf
         {
             if (string.IsNullOrEmpty(_serverPathTextBox.Text))
             {
-                MessageBox.Show("Please enter a server path.", "Invalid Path", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show("Please enter a server path.", "Invalid Path", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -231,7 +231,7 @@ namespace SptLauncherWpf
             });
         }
 
-        private void AddOutput(string text, Color color)
+        private void AddOutput(string text, System.Windows.Media.Color color)
         {
             Dispatcher.Invoke(() =>
             {

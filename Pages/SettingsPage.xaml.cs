@@ -42,12 +42,12 @@ namespace SptLauncherWpf.Pages
                 }
                 
                 SettingsService.Instance.SaveSettings();
-                MessageBox.Show("Settings saved successfully!", "Success", 
+                System.Windows.MessageBox.Show("Settings saved successfully!", "Success", 
                               MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to save settings: {ex.Message}", "Save Error", 
+                System.Windows.MessageBox.Show($"Failed to save settings: {ex.Message}", "Save Error", 
                               MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -65,7 +65,7 @@ namespace SptLauncherWpf.Pages
                 if (updateInfo != null)
                 {
                     // Update is available - the banner will be shown automatically via the event
-                    MessageBox.Show(
+                    System.Windows.MessageBox.Show(
                         $"A new version ({updateInfo.Version}) is available!\n\n" +
                         $"Current version: {UpdateService.Instance.GetCurrentVersion()}\n\n" +
                         $"The update notification banner has been displayed at the top of the window.",
@@ -75,13 +75,13 @@ namespace SptLauncherWpf.Pages
                 }
                 else
                 {
-                    MessageBox.Show("You are running the latest version.", 
+                    System.Windows.MessageBox.Show("You are running the latest version.", 
                         "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to check for updates: {ex.Message}", 
+                System.Windows.MessageBox.Show($"Failed to check for updates: {ex.Message}", 
                     "Update Check Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
@@ -94,7 +94,7 @@ namespace SptLauncherWpf.Pages
 
         private void ResetSettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show("Are you sure you want to reset all settings to their default values?", 
+            var result = System.Windows.MessageBox.Show("Are you sure you want to reset all settings to their default values?", 
                                        "Confirm Reset", MessageBoxButton.YesNo, MessageBoxImage.Question);
             
             if (result == MessageBoxResult.Yes)
@@ -107,14 +107,14 @@ namespace SptLauncherWpf.Pages
                 SettingsService.Instance.SaveSettings();
                 
                 LoadSettings();
-                MessageBox.Show("Settings have been reset to defaults.", "Reset Complete", 
+                System.Windows.MessageBox.Show("Settings have been reset to defaults.", "Reset Complete", 
                               MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
         private void ExportSettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            var saveFileDialog = new SaveFileDialog
+            var saveFileDialog = new Microsoft.Win32.SaveFileDialog
             {
                 Title = "Export Settings",
                 Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
@@ -137,12 +137,12 @@ namespace SptLauncherWpf.Pages
                     var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
                     File.WriteAllText(saveFileDialog.FileName, json);
                     
-                    MessageBox.Show("Settings exported successfully!", "Export Complete", 
+                    System.Windows.MessageBox.Show("Settings exported successfully!", "Export Complete", 
                                   MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Failed to export settings: {ex.Message}", "Export Error", 
+                    System.Windows.MessageBox.Show($"Failed to export settings: {ex.Message}", "Export Error", 
                                   MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
@@ -150,7 +150,7 @@ namespace SptLauncherWpf.Pages
 
         private void ImportSettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            var openFileDialog = new OpenFileDialog
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Import Settings",
                 Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
@@ -181,12 +181,12 @@ namespace SptLauncherWpf.Pages
                     SettingsService.Instance.SaveSettings();
                     LoadSettings();
                     
-                    MessageBox.Show("Settings imported successfully!", "Import Complete", 
+                    System.Windows.MessageBox.Show("Settings imported successfully!", "Import Complete", 
                                   MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Failed to import settings: {ex.Message}", "Import Error", 
+                    System.Windows.MessageBox.Show($"Failed to import settings: {ex.Message}", "Import Error", 
                                   MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }

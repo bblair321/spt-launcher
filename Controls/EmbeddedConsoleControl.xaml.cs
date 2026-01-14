@@ -12,7 +12,7 @@ using System.Windows.Media;
 
 namespace SptLauncherWpf.Controls
 {
-    public partial class EmbeddedConsoleControl : UserControl
+    public partial class EmbeddedConsoleControl : System.Windows.Controls.UserControl
     {
         private Process? process;
         private bool isProcessRunning = false;

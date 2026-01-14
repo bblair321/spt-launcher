@@ -154,7 +154,7 @@ namespace SptLauncherWpf.Pages
             
             if (selectedProcess != null)
             {
-                var result = MessageBox.Show($"Are you sure you want to kill process '{selectedProcess.ProcessName}' (PID: {selectedProcess.Id})?", 
+                var result = System.Windows.MessageBox.Show($"Are you sure you want to kill process '{selectedProcess.ProcessName}' (PID: {selectedProcess.Id})?", 
                                            "Confirm Kill", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 
                 if (result == MessageBoxResult.Yes)
@@ -175,14 +175,14 @@ namespace SptLauncherWpf.Pages
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Failed to kill process: {ex.Message}", "Error", 
+                        System.Windows.MessageBox.Show($"Failed to kill process: {ex.Message}", "Error", 
                                       MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
             }
             else
             {
-                MessageBox.Show("Please select a process to kill.", "No Selection", 
+                System.Windows.MessageBox.Show("Please select a process to kill.", "No Selection", 
                               MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
@@ -203,7 +203,7 @@ namespace SptLauncherWpf.Pages
             // Header with process name and status indicator
             var headerPanel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Margin = new Thickness(0, 0, 0, 8)
             };
 
@@ -211,7 +211,7 @@ namespace SptLauncherWpf.Pages
             {
                 Width = 8,
                 Height = 8,
-                Fill = (Brush)FindResource("PrimaryColor"),
+                Fill = (System.Windows.Media.Brush)FindResource("PrimaryColor"),
                 Margin = new Thickness(0, 0, 8, 0),
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -222,7 +222,7 @@ namespace SptLauncherWpf.Pages
                 Text = process.ProcessName,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 16,
-                Foreground = (Brush)FindResource("TextPrimaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor"),
                 VerticalAlignment = VerticalAlignment.Center
             };
             headerPanel.Children.Add(nameText);
@@ -241,7 +241,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = "PID:",
                 FontSize = 12,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(0, 0, 8, 0)
             };
             Grid.SetColumn(pidLabel, 0);
@@ -250,9 +250,9 @@ namespace SptLauncherWpf.Pages
             var pidValue = new TextBlock
             {
                 Text = process.Id.ToString(),
-                FontFamily = new FontFamily("Consolas"),
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
                 FontSize = 13,
-                Foreground = (Brush)FindResource("TextPrimaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor"),
                 FontWeight = FontWeights.Medium
             };
             Grid.SetColumn(pidValue, 1);
@@ -263,7 +263,7 @@ namespace SptLauncherWpf.Pages
             {
                 Text = "Memory:",
                 FontSize = 12,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
                 Margin = new Thickness(16, 0, 8, 0)
             };
             Grid.SetColumn(memoryLabel, 2);
@@ -272,9 +272,9 @@ namespace SptLauncherWpf.Pages
             var memoryValue = new TextBlock
             {
                 Text = process.Memory,
-                FontFamily = new FontFamily("Consolas"),
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
                 FontSize = 13,
-                Foreground = (Brush)FindResource("TextPrimaryColor"),
+                Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor"),
                 FontWeight = FontWeights.Medium
             };
             Grid.SetColumn(memoryValue, 3);
@@ -287,7 +287,7 @@ namespace SptLauncherWpf.Pages
             {
                 if (card != _selectedProcessCard)
                 {
-                    card.Background = (Brush)FindResource("HoverColor");
+                    card.Background = (System.Windows.Media.Brush)FindResource("HoverColor");
                 }
             };
             card.MouseLeave += (s, e) =>
@@ -295,12 +295,12 @@ namespace SptLauncherWpf.Pages
                 // Only reset background if this card is not selected
                 if (card != _selectedProcessCard)
                 {
-                    card.Background = (Brush)FindResource("CardBackgroundColor");
+                    card.Background = (System.Windows.Media.Brush)FindResource("CardBackgroundColor");
                 }
                 else
                 {
                     // Keep selected card highlighted
-                    card.Background = (Brush)FindResource("HoverColor");
+                    card.Background = (System.Windows.Media.Brush)FindResource("HoverColor");
                 }
             };
 
@@ -310,12 +310,12 @@ namespace SptLauncherWpf.Pages
                 // Deselect previous card
                 if (_selectedProcessCard != null && _selectedProcessCard != card)
                 {
-                    _selectedProcessCard.Background = (Brush)FindResource("CardBackgroundColor");
+                    _selectedProcessCard.Background = (System.Windows.Media.Brush)FindResource("CardBackgroundColor");
                 }
                 
                 // Select this card
                 _selectedProcessCard = card;
-                card.Background = (Brush)FindResource("HoverColor");
+                card.Background = (System.Windows.Media.Brush)FindResource("HoverColor");
             };
 
             card.Child = stackPanel;

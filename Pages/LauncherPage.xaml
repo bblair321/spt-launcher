@@ -58,11 +58,36 @@
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                         <!-- Update Status -->
-                        <StackPanel Name="SptUpdateStatusPanel" Orientation="Horizontal" Margin="0,4,0,0" Visibility="Collapsed">
-                            <TextBlock Name="SptUpdateStatusText" 
-                                       FontSize="13" 
+                        <StackPanel Name="SptUpdateStatusPanel" Margin="0,4,0,0" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Name="SptUpdateStatusText" 
+                                           FontSize="13" 
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <!-- Update Now Button (shown when update available) -->
+                            <Button Name="UpdateNowButton" 
+                                    Content="Update Now" 
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{DynamicResource PrimaryColor}"
+                                    Padding="12,8" FontSize="13" FontWeight="SemiBold"
+                                    HorizontalAlignment="Left"
+                                    Visibility="Collapsed"
+                                    Click="UpdateNowButton_Click"
+                                    Margin="0,4,0,0"/>
+                            <!-- Progress Bar (shown during update) -->
+                            <ProgressBar Name="SptUpdateProgressBar" 
+                                         Height="6" 
+                                         Margin="0,8,0,0"
+                                         Visibility="Collapsed"
+                                         Minimum="0" Maximum="100"/>
+                            <!-- Progress Status Text -->
+                            <TextBlock Name="SptUpdateProgressText" 
+                                       FontSize="12" 
                                        Foreground="{DynamicResource TextSecondaryColor}"
-                                       VerticalAlignment="Center"/>
+                                       Margin="0,4,0,0"
+                                       Visibility="Collapsed"
+                                       TextWrapping="Wrap"/>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>

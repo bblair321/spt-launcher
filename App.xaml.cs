@@ -8,7 +8,7 @@ using SptLauncherWpf.Services;
 
 namespace SptLauncherWpf
 {
-    public partial class App : Application
+    public partial class App : System.Windows.Application
     {
         [DllImport("user32.dll")]
         private static extern bool SetProcessDPIAware();
@@ -84,7 +84,7 @@ namespace SptLauncherWpf
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to start application: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to start application: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Startup Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown();
             }
@@ -92,7 +92,7 @@ namespace SptLauncherWpf
         
         private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            MessageBox.Show($"Unhandled exception: {e.Exception.Message}\n\nStack trace:\n{e.Exception.StackTrace}", 
+            System.Windows.MessageBox.Show($"Unhandled exception: {e.Exception.Message}\n\nStack trace:\n{e.Exception.StackTrace}", 
                 "Unhandled Exception", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         }
@@ -101,7 +101,7 @@ namespace SptLauncherWpf
         {
             if (e.ExceptionObject is Exception ex)
             {
-                MessageBox.Show($"Fatal exception: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Fatal exception: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Fatal Exception", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

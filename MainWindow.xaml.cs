@@ -71,7 +71,7 @@ namespace SptLauncherWpf
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to initialize MainWindow: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to initialize MainWindow: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 throw;
             }
@@ -124,7 +124,7 @@ namespace SptLauncherWpf
             {
                 // Re-enable button on error
                 ThemeToggleButton.IsEnabled = true;
-                MessageBox.Show($"Failed to toggle theme: {ex.Message}", "Theme Error", 
+                System.Windows.MessageBox.Show($"Failed to toggle theme: {ex.Message}", "Theme Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -154,16 +154,16 @@ namespace SptLauncherWpf
             ApplyTabButtonStyle(DevToolsTabButton);
         }
 
-        private void ApplyTabButtonStyle(Button button)
+        private void ApplyTabButtonStyle(System.Windows.Controls.Button button)
         {
-            button.Background = Brushes.Transparent;
+            button.Background = System.Windows.Media.Brushes.Transparent;
             button.BorderThickness = new Thickness(0);
             button.Padding = new Thickness(20, 12, 20, 12);
             button.Margin = new Thickness(0, 0, 2, 0);
-            button.Cursor = Cursors.Hand;
+            button.Cursor = System.Windows.Input.Cursors.Hand;
             button.FontSize = 14.0;
             button.FontWeight = FontWeights.Normal;
-            button.Foreground = Brushes.White; // White text for better visibility on blue background
+            button.Foreground = System.Windows.Media.Brushes.White; // White text for better visibility on blue background
         }
 
         private void SetActiveTab(string tabId)
@@ -201,22 +201,22 @@ namespace SptLauncherWpf
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to set active tab '{tabId}': {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to set active tab '{tabId}': {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Navigation Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void UpdateTabButtonStyle(Button button, bool isActive)
+        private void UpdateTabButtonStyle(System.Windows.Controls.Button button, bool isActive)
         {
             if (isActive)
             {
-                button.Background = new SolidColorBrush(Color.FromRgb(59, 130, 246)); // #3B82F6 - brighter blue
+                button.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 130, 246)); // #3B82F6 - brighter blue
                 button.FontWeight = FontWeights.SemiBold;
                 button.Opacity = 1.0;
             }
             else
             {
-                button.Background = Brushes.Transparent;
+                button.Background = System.Windows.Media.Brushes.Transparent;
                 button.FontWeight = FontWeights.Normal;
                 button.Opacity = 0.9;
             }
@@ -224,7 +224,7 @@ namespace SptLauncherWpf
 
         private void TabButton_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is Button button && button.Tag is string tabId)
+            if (sender is System.Windows.Controls.Button button && button.Tag is string tabId)
             {
                 SetActiveTab(tabId);
             }
@@ -318,13 +318,13 @@ namespace SptLauncherWpf
 
                 if (success)
                 {
-                    MessageBox.Show("Update downloaded successfully. The installer will launch shortly.", 
+                    System.Windows.MessageBox.Show("Update downloaded successfully. The installer will launch shortly.", 
                         "Update Ready", MessageBoxButton.OK, MessageBoxImage.Information);
                     UpdateNotificationBanner.Visibility = Visibility.Collapsed;
                 }
                 else
                 {
-                    MessageBox.Show("Failed to download the update. Please try again later.", 
+                    System.Windows.MessageBox.Show("Failed to download the update. Please try again later.", 
                         "Download Failed", MessageBoxButton.OK, MessageBoxImage.Error);
                     UpdateDownloadButton.IsEnabled = true;
                     UpdateDownloadButton.Content = "Download";
@@ -332,7 +332,7 @@ namespace SptLauncherWpf
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error downloading update: {ex.Message}", 
+                System.Windows.MessageBox.Show($"Error downloading update: {ex.Message}", 
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 UpdateDownloadButton.IsEnabled = true;
                 UpdateDownloadButton.Content = "Download";

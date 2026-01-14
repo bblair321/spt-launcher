@@ -86,7 +86,7 @@ namespace SptLauncherWpf.Services
             try
             {
                 // Force refresh of all windows
-                foreach (Window window in Application.Current.Windows)
+                foreach (Window window in System.Windows.Application.Current.Windows)
                 {
                     if (window != null)
                     {
@@ -104,10 +104,10 @@ namespace SptLauncherWpf.Services
                 }
                 
                 // Force application-level refresh
-                Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
                     // Force all windows to refresh
-                    foreach (Window window in Application.Current.Windows)
+                    foreach (Window window in System.Windows.Application.Current.Windows)
                     {
                         if (window != null)
                         {
@@ -138,11 +138,11 @@ namespace SptLauncherWpf.Services
                         element.UpdateLayout();
                         
                         // Force re-evaluation of StaticResource bindings for common properties
-                        if (child is Control control)
+                        if (child is System.Windows.Controls.Control control)
                         {
-                            control.InvalidateProperty(Control.BackgroundProperty);
-                            control.InvalidateProperty(Control.ForegroundProperty);
-                            control.InvalidateProperty(Control.BorderBrushProperty);
+                            control.InvalidateProperty(System.Windows.Controls.Control.BackgroundProperty);
+                            control.InvalidateProperty(System.Windows.Controls.Control.ForegroundProperty);
+                            control.InvalidateProperty(System.Windows.Controls.Control.BorderBrushProperty);
                         }
                         else if (child is Border border)
                         {
@@ -173,18 +173,18 @@ namespace SptLauncherWpf.Services
             Console.WriteLine("Applying light theme colors...");
             
             // Light theme colors - make them very different from dark theme
-            Application.Current.Resources["BackgroundColor"] = new SolidColorBrush(Color.FromRgb(255, 255, 255)); // Pure white
-            Application.Current.Resources["SurfaceColor"] = new SolidColorBrush(Color.FromRgb(240, 240, 240)); // Light gray
-            Application.Current.Resources["PrimaryColor"] = new SolidColorBrush(Color.FromRgb(0, 100, 200)); // Bright blue
-            Application.Current.Resources["TextPrimaryColor"] = new SolidColorBrush(Color.FromRgb(0, 0, 0)); // Pure black
-            Application.Current.Resources["TextSecondaryColor"] = new SolidColorBrush(Color.FromRgb(100, 100, 100)); // Dark gray
-            Application.Current.Resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(200, 200, 200)); // Light gray border
-            Application.Current.Resources["CardBackgroundColor"] = new SolidColorBrush(Color.FromRgb(250, 250, 250)); // Very light gray
-            Application.Current.Resources["HoverColor"] = new SolidColorBrush(Color.FromRgb(220, 220, 220)); // Medium gray
+            System.Windows.Application.Current.Resources["BackgroundColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 255, 255)); // Pure white
+            System.Windows.Application.Current.Resources["SurfaceColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(240, 240, 240)); // Light gray
+            System.Windows.Application.Current.Resources["PrimaryColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 100, 200)); // Bright blue
+            System.Windows.Application.Current.Resources["TextPrimaryColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0, 0, 0)); // Pure black
+            System.Windows.Application.Current.Resources["TextSecondaryColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 100, 100)); // Dark gray
+            System.Windows.Application.Current.Resources["BorderColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(200, 200, 200)); // Light gray border
+            System.Windows.Application.Current.Resources["CardBackgroundColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 250, 250)); // Very light gray
+            System.Windows.Application.Current.Resources["HoverColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220)); // Medium gray
             
             // Force resource refresh
-            Application.Current.Resources.MergedDictionaries.Clear();
-            Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary());
+            System.Windows.Application.Current.Resources.MergedDictionaries.Clear();
+            System.Windows.Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary());
             
             // Force a complete UI refresh
             ForceCompleteUIRefresh();
@@ -197,18 +197,18 @@ namespace SptLauncherWpf.Services
             Console.WriteLine("Applying dark theme colors...");
             
             // Dark theme colors - replace entire brushes
-            Application.Current.Resources["BackgroundColor"] = new SolidColorBrush(Color.FromRgb(17, 24, 39));
-            Application.Current.Resources["SurfaceColor"] = new SolidColorBrush(Color.FromRgb(31, 41, 55));
-            Application.Current.Resources["PrimaryColor"] = new SolidColorBrush(Color.FromRgb(59, 130, 246));
-            Application.Current.Resources["TextPrimaryColor"] = new SolidColorBrush(Color.FromRgb(249, 250, 251));
-            Application.Current.Resources["TextSecondaryColor"] = new SolidColorBrush(Color.FromRgb(156, 163, 175));
-            Application.Current.Resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(55, 65, 81));
-            Application.Current.Resources["CardBackgroundColor"] = new SolidColorBrush(Color.FromRgb(31, 41, 55));
-            Application.Current.Resources["HoverColor"] = new SolidColorBrush(Color.FromRgb(55, 65, 81));
+            System.Windows.Application.Current.Resources["BackgroundColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(17, 24, 39));
+            System.Windows.Application.Current.Resources["SurfaceColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(31, 41, 55));
+            System.Windows.Application.Current.Resources["PrimaryColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 130, 246));
+            System.Windows.Application.Current.Resources["TextPrimaryColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(249, 250, 251));
+            System.Windows.Application.Current.Resources["TextSecondaryColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(156, 163, 175));
+            System.Windows.Application.Current.Resources["BorderColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(55, 65, 81));
+            System.Windows.Application.Current.Resources["CardBackgroundColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(31, 41, 55));
+            System.Windows.Application.Current.Resources["HoverColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(55, 65, 81));
             
             // Force resource refresh
-            Application.Current.Resources.MergedDictionaries.Clear();
-            Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary());
+            System.Windows.Application.Current.Resources.MergedDictionaries.Clear();
+            System.Windows.Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary());
             
             // Force a complete UI refresh
             ForceCompleteUIRefresh();

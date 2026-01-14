@@ -17,6 +17,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using SptLauncherWpf.Services;
+using WinForms = System.Windows.Forms;
 
 namespace SptLauncherWpf.Pages
 {
@@ -89,6 +90,9 @@ namespace SptLauncherWpf.Pages
         // Fika Co-op configuration
         private bool _fikaEnabled = false;
         private const string _defaultIp = "127.0.0.1";
+        
+        // SPT Update tracking
+        private SptUpdateInfo? _currentUpdateInfo = null;
 
         public LauncherPage()
         {
@@ -99,7 +103,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to initialize LauncherPage XAML: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to initialize LauncherPage XAML: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "XAML Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 throw;
             }
@@ -110,7 +114,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to load settings: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to load settings: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Load Settings Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             
@@ -120,7 +124,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to restore launcher state: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to restore launcher state: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Restore State Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             
@@ -130,7 +134,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to update launcher UI: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to update launcher UI: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Update UI Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             
@@ -140,7 +144,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to setup UI timer: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to setup UI timer: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Timer Setup Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             
@@ -150,7 +154,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to start process monitoring: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
+                System.Windows.MessageBox.Show($"Failed to start process monitoring: {ex.Message}\n\nStack trace:\n{ex.StackTrace}", 
                     "Process Monitoring Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -234,9 +238,19 @@ namespace SptLauncherWpf.Pages
         {
             // Load launcher path from settings
             var savedPath = SettingsService.Instance.LauncherPath;
-            if (!string.IsNullOrEmpty(savedPath))
+            if (!string.IsNullOrEmpty(savedPath) && File.Exists(savedPath))
             {
                 LauncherPathTextBox.Text = savedPath;
+            }
+            else
+            {
+                // Try to auto-detect SPT launcher if not saved or if saved path doesn't exist
+                var detectedPath = AutoDetectSptLauncher();
+                if (!string.IsNullOrEmpty(detectedPath))
+                {
+                    LauncherPathTextBox.Text = detectedPath;
+                    SaveSettings(); // Save the auto-detected path
+                }
             }
             
             // Update path status after loading
@@ -309,7 +323,7 @@ namespace SptLauncherWpf.Pages
 
         private void BrowseButton_Click(object sender, RoutedEventArgs e)
         {
-            var openFileDialog = new OpenFileDialog
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Select SPT Launcher Executable",
                 Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*",
@@ -338,7 +352,7 @@ namespace SptLauncherWpf.Pages
             if (string.IsNullOrWhiteSpace(LauncherPathTextBox.Text))
             {
                 PathStatusText.Text = "Please select your SPT Launcher executable using the Browse button.";
-                PathStatusText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                PathStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
             }
             else
             {
@@ -348,18 +362,18 @@ namespace SptLauncherWpf.Pages
                     if (path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                     {
                         PathStatusText.Text = "✓ Valid launcher path selected.";
-                        PathStatusText.Foreground = new SolidColorBrush(Color.FromRgb(34, 197, 94)); // Green
+                        PathStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
                     }
                     else
                     {
                         PathStatusText.Text = "⚠ Selected file is not an executable (.exe).";
-                        PathStatusText.Foreground = new SolidColorBrush(Color.FromRgb(234, 179, 8)); // Yellow
+                        PathStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Yellow
                     }
                 }
                 else
                 {
                     PathStatusText.Text = "✗ File not found. Please check the path.";
-                    PathStatusText.Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)); // Red
+                    PathStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)); // Red
                 }
             }
         }
@@ -430,7 +444,7 @@ namespace SptLauncherWpf.Pages
             if (!LaunchButton.IsEnabled)
             {
                 System.Diagnostics.Debug.WriteLine("[LaunchButton_Click] WARNING: Button is disabled but click was received!");
-                MessageBox.Show("The Launch button is currently disabled. Please wait a moment and try again.", 
+                System.Windows.MessageBox.Show("The Launch button is currently disabled. Please wait a moment and try again.", 
                     "Button Disabled", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -439,7 +453,7 @@ namespace SptLauncherWpf.Pages
             if (string.IsNullOrWhiteSpace(LauncherPathTextBox.Text))
             {
                 System.Diagnostics.Debug.WriteLine("[LaunchButton_Click] Path is empty");
-                MessageBox.Show("Please select a launcher path first.\n\nUse the 'Browse' button to locate your SPT Launcher executable.", 
+                System.Windows.MessageBox.Show("Please select a launcher path first.\n\nUse the 'Browse' button to locate your SPT Launcher executable.", 
                     "Invalid Path", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -451,7 +465,7 @@ namespace SptLauncherWpf.Pages
             if (!File.Exists(launcherPath))
             {
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] File does not exist: {launcherPath}");
-                MessageBox.Show($"The specified launcher path does not exist:\n\n{launcherPath}\n\nPlease use the 'Browse' button to select the correct SPT Launcher executable.", 
+                System.Windows.MessageBox.Show($"The specified launcher path does not exist:\n\n{launcherPath}\n\nPlease use the 'Browse' button to select the correct SPT Launcher executable.", 
                     "File Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
@@ -460,7 +474,7 @@ namespace SptLauncherWpf.Pages
             if (!launcherPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             {
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] File is not an .exe: {launcherPath}");
-                MessageBox.Show("The selected file is not an executable (.exe file).\n\nPlease select a valid SPT Launcher executable.", 
+                System.Windows.MessageBox.Show("The selected file is not an executable (.exe file).\n\nPlease select a valid SPT Launcher executable.", 
                     "Invalid File Type", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
@@ -571,7 +585,7 @@ namespace SptLauncherWpf.Pages
                 errorMsg += $"\n\nPath: {launcherPath}";
                 errorMsg += solution;
                 
-                MessageBox.Show(errorMsg, "Launch Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(errorMsg, "Launch Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] Win32Exception: {winEx.Message} (Error Code: {winEx.NativeErrorCode})");
                 
                 LaunchButton.IsEnabled = true;
@@ -590,7 +604,7 @@ namespace SptLauncherWpf.Pages
                 }
                 errorMsg += $"\n\nPath: {launcherPath}";
                 
-                MessageBox.Show(errorMsg, "Launch Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(errorMsg, "Launch Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] Exception: {ex.Message}\nStack trace: {ex.StackTrace}");
                 
                 LaunchButton.IsEnabled = true;
@@ -604,21 +618,21 @@ namespace SptLauncherWpf.Pages
 
 
 
-        private void StopButtonBorder_MouseEnter(object sender, MouseEventArgs e)
+        private void StopButtonBorder_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("[StopButtonBorder_MouseEnter] Mouse entered stop button border");
             if (StopButtonBorder != null)
             {
-                StopButtonBorder.Background = new SolidColorBrush(Color.FromRgb(0x5B, 0x62, 0x70)); // Slightly darker on hover
+                StopButtonBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x5B, 0x62, 0x70)); // Slightly darker on hover
             }
         }
 
-        private void StopButtonBorder_MouseLeave(object sender, MouseEventArgs e)
+        private void StopButtonBorder_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("[StopButtonBorder_MouseLeave] Mouse left stop button border");
             if (StopButtonBorder != null)
             {
-                StopButtonBorder.Background = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80)); // Original color
+                StopButtonBorder.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6B, 0x72, 0x80)); // Original color
             }
         }
 
@@ -643,7 +657,7 @@ namespace SptLauncherWpf.Pages
             if (sptLauncherProcesses.Length == 0 && akiLauncherProcesses.Length == 0)
             {
                 System.Diagnostics.Debug.WriteLine("[StopButtonBorder_MouseDown] No processes to stop");
-                MessageBox.Show("No SPT launcher processes are currently running.", 
+                System.Windows.MessageBox.Show("No SPT launcher processes are currently running.", 
                     "No Processes", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -935,13 +949,13 @@ namespace SptLauncherWpf.Pages
                     
                     Dispatcher.Invoke(() =>
                     {
-                        var result = MessageBox.Show(failedMessage, "Stop Processes", 
+                        var result = System.Windows.MessageBox.Show(failedMessage, "Stop Processes", 
                                       MessageBoxButton.OKCancel, MessageBoxImage.Warning);
                         
                         if (result == MessageBoxResult.OK && !IsRunningAsAdministrator())
                         {
                             // Offer to open Task Manager
-                            var taskMgrResult = MessageBox.Show(
+                            var taskMgrResult = System.Windows.MessageBox.Show(
                                 "Would you like to open Task Manager to manually close the processes?",
                                 "Open Task Manager?",
                                 MessageBoxButton.YesNo,
@@ -1021,7 +1035,7 @@ namespace SptLauncherWpf.Pages
                 System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Error: {ex.Message}\n{ex.StackTrace}");
                 Dispatcher.Invoke(() =>
                 {
-                MessageBox.Show($"Error stopping processes: {ex.Message}", "Error", 
+                System.Windows.MessageBox.Show($"Error stopping processes: {ex.Message}", "Error", 
                               MessageBoxButton.OK, MessageBoxImage.Error);
                     UpdateLauncherUI();
                 });
@@ -1120,7 +1134,7 @@ namespace SptLauncherWpf.Pages
                 Dispatcher.Invoke(() =>
                 {
                     ResetLauncherState();
-                    MessageBox.Show($"Process monitoring error: {ex.Message}", "Monitor Error", 
+                    System.Windows.MessageBox.Show($"Process monitoring error: {ex.Message}", "Monitor Error", 
                                   MessageBoxButton.OK, MessageBoxImage.Warning);
                 });
             }
@@ -1145,7 +1159,7 @@ namespace SptLauncherWpf.Pages
                 Dispatcher.Invoke(() =>
                 {
                     ResetLauncherState();
-                    MessageBox.Show($"Server monitoring error: {ex.Message}", "Monitor Error", 
+                    System.Windows.MessageBox.Show($"Server monitoring error: {ex.Message}", "Monitor Error", 
                                   MessageBoxButton.OK, MessageBoxImage.Warning);
                 });
             }
@@ -1347,28 +1361,28 @@ namespace SptLauncherWpf.Pages
                 InstallSptButton.Content = "📥 Install Latest SPT Version";
                 InstallSptButton.IsEnabled = true;
                 
-                MessageBox.Show("SPT installer has been launched. Please follow the installation wizard.", 
+                System.Windows.MessageBox.Show("SPT installer has been launched. Please follow the installation wizard.", 
                     "Installer Launched", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (HttpRequestException ex)
             {
                 InstallSptButton.Content = "📥 Install Latest SPT Version";
                 InstallSptButton.IsEnabled = true;
-                MessageBox.Show($"Failed to download the SPT installer.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.", 
+                System.Windows.MessageBox.Show($"Failed to download the SPT installer.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.", 
                     "Download Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (TaskCanceledException ex)
             {
                 InstallSptButton.Content = "📥 Install Latest SPT Version";
                 InstallSptButton.IsEnabled = true;
-                MessageBox.Show($"Download timed out.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.", 
+                System.Windows.MessageBox.Show($"Download timed out.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.", 
                     "Download Timeout", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
                 InstallSptButton.Content = "📥 Install Latest SPT Version";
                 InstallSptButton.IsEnabled = true;
-                MessageBox.Show($"An error occurred while installing SPT.\n\nError: {ex.Message}", 
+                System.Windows.MessageBox.Show($"An error occurred while installing SPT.\n\nError: {ex.Message}", 
                     "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -1388,13 +1402,153 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to open FIKA releases page.\n\nError: {ex.Message}", 
+                System.Windows.MessageBox.Show($"Failed to open FIKA releases page.\n\nError: {ex.Message}", 
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         // Fika Co-op Configuration Methods
         
+        /// <summary>
+        /// Auto-detects SPT.Launcher.exe in common installation locations
+        /// </summary>
+        private string AutoDetectSptLauncher()
+        {
+            try
+            {
+                // First, check if there's a running SPT.Launcher process and get its path
+                var launcherProcesses = Process.GetProcessesByName("SPT.Launcher");
+                if (launcherProcesses.Length > 0)
+                {
+                    try
+                    {
+                        var processPath = TryGetProcessPath(launcherProcesses[0]);
+                        if (!string.IsNullOrEmpty(processPath) && File.Exists(processPath))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found running process: {processPath}");
+                            return processPath;
+                        }
+                    }
+                    catch
+                    {
+                        // Continue with file system search if process path fails
+                    }
+                }
+
+                // Get all drive letters
+                var drives = DriveInfo.GetDrives()
+                    .Where(d => d.IsReady && d.DriveType == DriveType.Fixed)
+                    .Select(d => d.RootDirectory.FullName)
+                    .ToList();
+
+                // Common SPT folder names to check
+                var folderNames = new[] { "SPT", "SPT-AKI", "SinglePlayerTarkov", "spt" };
+
+                // Search in common locations
+                foreach (var drive in drives)
+                {
+                    foreach (var folderName in folderNames)
+                    {
+                        // Check root level (e.g., D:\SPT\SPT.Launcher.exe)
+                        var rootPath = Path.Combine(drive, folderName, "SPT.Launcher.exe");
+                        if (File.Exists(rootPath))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found at root: {rootPath}");
+                            return rootPath;
+                        }
+
+                        // Check nested structure (e.g., D:\SPT\SPT\SPT.Launcher.exe)
+                        var nestedPath = Path.Combine(drive, folderName, folderName, "SPT.Launcher.exe");
+                        if (File.Exists(nestedPath))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found nested: {nestedPath}");
+                            return nestedPath;
+                        }
+
+                        // Also check in SPT subdirectory (e.g., D:\SPT\SPT\SPT.Launcher.exe)
+                        var subDirPath = Path.Combine(drive, folderName, "SPT", "SPT.Launcher.exe");
+                        if (File.Exists(subDirPath))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found in subdirectory: {subDirPath}");
+                            return subDirPath;
+                        }
+                    }
+                }
+
+                // If not found in common locations, do a limited recursive search
+                foreach (var drive in drives.Take(3)) // Limit to first 3 drives for performance
+                {
+                    var found = SearchForLauncherRecursive(drive, maxDepth: 2);
+                    if (!string.IsNullOrEmpty(found))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found via recursive search: {found}");
+                        return found;
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine("[AutoDetectSptLauncher] No launcher found");
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Error: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Recursively searches for SPT.Launcher.exe (with depth limit for performance)
+        /// </summary>
+        private string SearchForLauncherRecursive(string directory, int maxDepth, int currentDepth = 0)
+        {
+            if (currentDepth >= maxDepth)
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                if (!Directory.Exists(directory))
+                {
+                    return string.Empty;
+                }
+
+                // Check current directory
+                var launcherPath = Path.Combine(directory, "SPT.Launcher.exe");
+                if (File.Exists(launcherPath))
+                {
+                    return launcherPath;
+                }
+
+                // Search subdirectories (limit to avoid scanning system folders)
+                var skipFolders = new[] { "Windows", "Program Files", "Program Files (x86)", "ProgramData", 
+                                         "$Recycle.Bin", "System Volume Information", "PerfLogs", 
+                                         "Recovery", "Documents and Settings" };
+
+                var dirs = Directory.GetDirectories(directory);
+                foreach (var dir in dirs)
+                {
+                    var dirName = Path.GetFileName(dir);
+                    if (skipFolders.Contains(dirName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        continue; // Skip system folders
+                    }
+
+                    var found = SearchForLauncherRecursive(dir, maxDepth, currentDepth + 1);
+                    if (!string.IsNullOrEmpty(found))
+                    {
+                        return found;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore errors (permissions, etc.)
+            }
+
+            return string.Empty;
+        }
+
         private string GetSptInstallPath()
         {
             try
@@ -1405,9 +1559,50 @@ namespace SptLauncherWpf.Pages
                     return string.Empty;
                 }
                 
-                // Extract directory from launcher path (e.g., C:\Path\To\SPT\SPT.Launcher.exe -> C:\Path\To\SPT)
+                // Extract directory from launcher path (e.g., D:\SPT\SPT\SPT.Launcher.exe -> D:\SPT\SPT)
                 var launcherDir = Path.GetDirectoryName(launcherPath);
-                return launcherDir ?? string.Empty;
+                if (string.IsNullOrEmpty(launcherDir))
+                {
+                    return string.Empty;
+                }
+                
+                // Check if the parent directory exists and has more files/subdirectories than just the nested SPT folder
+                // This handles cases where SPT is in a nested structure like D:\SPT\SPT\SPT.Launcher.exe
+                // In this case, we want to back up the entire D:\SPT directory, not just D:\SPT\SPT
+                var parentDir = Path.GetDirectoryName(launcherDir);
+                if (!string.IsNullOrEmpty(parentDir) && Directory.Exists(parentDir))
+                {
+                    // Get the name of the launcher directory (e.g., "SPT" from "D:\SPT\SPT")
+                    var launcherDirName = Path.GetFileName(launcherDir);
+                    // Get the name of the parent directory (e.g., "SPT" from "D:\SPT")
+                    var parentDirName = Path.GetFileName(parentDir);
+                    
+                    // If the parent and launcher directories have the same name (e.g., both are "SPT"),
+                    // this suggests a nested structure like D:\SPT\SPT\ where we should use the parent
+                    if (string.Equals(launcherDirName, parentDirName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Also check if parent has multiple items (not just the nested directory)
+                        var parentItems = Directory.GetFileSystemEntries(parentDir);
+                        if (parentItems.Length > 1)
+                        {
+                            // Parent directory is the root SPT directory
+                            return parentDir;
+                        }
+                    }
+                    else
+                    {
+                        // Check if parent directory contains SPT-related files
+                        var serverExePath = Path.Combine(parentDir, "SPT.Server.exe");
+                        var sptDataPath = Path.Combine(parentDir, "SPT_Data");
+                        if (File.Exists(serverExePath) || Directory.Exists(sptDataPath))
+                        {
+                            // Parent directory contains SPT files, so use it as the root SPT directory
+                            return parentDir;
+                        }
+                    }
+                }
+                
+                return launcherDir;
             }
             catch
             {
@@ -1441,7 +1636,7 @@ namespace SptLauncherWpf.Pages
                     Dispatcher.Invoke(() =>
                     {
                         SptVersionText.Text = "Not detected";
-                        SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                         if (SptUpdateStatusPanel != null)
                         {
                             SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
@@ -1457,7 +1652,7 @@ namespace SptLauncherWpf.Pages
                     Dispatcher.Invoke(() =>
                     {
                         SptVersionText.Text = "Not detected";
-                        SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                         if (SptUpdateStatusPanel != null)
                         {
                             SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
@@ -1472,7 +1667,7 @@ namespace SptLauncherWpf.Pages
                     Dispatcher.Invoke(() =>
                     {
                         SptVersionText.Text = "Installed (version unknown)";
-                        SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                         if (SptUpdateStatusPanel != null)
                         {
                             SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
@@ -1485,19 +1680,20 @@ namespace SptLauncherWpf.Pages
                 Dispatcher.Invoke(() =>
                 {
                     SptVersionText.Text = version;
-                    SptVersionText.Foreground = (Brush)FindResource("TextPrimaryColor");
+                    SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor");
                     
                     // Show checking status
                     if (SptUpdateStatusPanel != null && SptUpdateStatusText != null)
                     {
                         SptUpdateStatusPanel.Visibility = Visibility.Visible;
                         SptUpdateStatusText.Text = "Checking for updates...";
-                        SptUpdateStatusText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                     }
                 });
 
                 // Check for updates asynchronously
                 var updateInfo = await SptDetectionService.Instance.CheckForUpdatesAsync(version);
+                _currentUpdateInfo = updateInfo;
                 
                 Dispatcher.Invoke(() =>
                 {
@@ -1510,20 +1706,40 @@ namespace SptLauncherWpf.Pages
                     {
                         // Check failed (network error, etc.) - hide update status
                         SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                        if (UpdateNowButton != null)
+                        {
+                            UpdateNowButton.Visibility = Visibility.Collapsed;
+                        }
                     }
                     else if (updateInfo.IsUpdateAvailable)
                     {
                         // Update available
                         SptUpdateStatusPanel.Visibility = Visibility.Visible;
-                        SptUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion}";
-                        SptUpdateStatusText.Foreground = new SolidColorBrush(Color.FromRgb(34, 197, 94)); // Green
+                        if (string.IsNullOrWhiteSpace(updateInfo.InstallerDownloadUrl))
+                        {
+                            // No installer available - show manual download message
+                            SptUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion} (Manual download required)";
+                        }
+                        else
+                        {
+                            SptUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion}";
+                        }
+                        SptUpdateStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
+                        if (UpdateNowButton != null)
+                        {
+                            UpdateNowButton.Visibility = Visibility.Visible;
+                        }
                     }
                     else
                     {
                         // Up to date
                         SptUpdateStatusPanel.Visibility = Visibility.Visible;
                         SptUpdateStatusText.Text = "Up to date";
-                        SptUpdateStatusText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                        if (UpdateNowButton != null)
+                        {
+                            UpdateNowButton.Visibility = Visibility.Collapsed;
+                        }
                     }
                 });
             }
@@ -1535,13 +1751,310 @@ namespace SptLauncherWpf.Pages
                     if (SptVersionText != null)
                     {
                         SptVersionText.Text = "Error detecting version";
-                        SptVersionText.Foreground = (Brush)FindResource("TextSecondaryColor");
+                        SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                     }
                     if (SptUpdateStatusPanel != null)
                     {
                         SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
                     }
                 });
+            }
+        }
+
+        private async void UpdateNowButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentUpdateInfo == null || !_currentUpdateInfo.IsUpdateAvailable)
+            {
+                System.Windows.MessageBox.Show("No update information available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Get SPT path using GetSptInstallPath which handles nested directories
+            var sptPath = GetSptInstallPath();
+            if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
+            {
+                System.Windows.MessageBox.Show("SPT installation directory not found. Please set the SPT launcher path in settings first.", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            // Check if installer download URL is available
+            if (string.IsNullOrWhiteSpace(_currentUpdateInfo.InstallerDownloadUrl))
+            {
+                var releaseUrl = _currentUpdateInfo.ReleaseUrl ?? "https://github.com/sp-tarkov/build/releases/latest";
+                var result = System.Windows.MessageBox.Show(
+                    $"Automatic update is not available for this release.\n\n" +
+                    $"The GitHub release does not include a downloadable installer.\n\n" +
+                    $"You can download the update manually from the GitHub releases page.\n\n" +
+                    $"Would you like to open the releases page now?",
+                    "Manual Update Required",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+                
+                if (result == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = releaseUrl,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Windows.MessageBox.Show($"Failed to open browser: {ex.Message}", "Error", 
+                            MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                return;
+            }
+
+            // Ask about backup
+            var backupResult = System.Windows.MessageBox.Show(
+                "Would you like to backup your current SPT folder before updating?\n\n" +
+                "This may take a long time and consume large amounts of storage space.\n\n" +
+                "Click Yes to create a backup, or No to skip backup.",
+                "Backup SPT Folder?",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            bool createBackup = backupResult == MessageBoxResult.Yes;
+            string? backupPath = null;
+
+            if (createBackup)
+            {
+                // Show folder browser for backup location
+                var folderDialog = new WinForms.FolderBrowserDialog
+                {
+                    Description = "Select where to save the SPT backup",
+                    ShowNewFolderButton = true
+                };
+
+                if (folderDialog.ShowDialog() == WinForms.DialogResult.OK)
+                {
+                    backupPath = Path.Combine(folderDialog.SelectedPath, $"SPT_Backup_{DateTime.Now:yyyyMMdd_HHmmss}");
+                }
+                else
+                {
+                    // User cancelled folder selection, ask if they want to continue without backup
+                    var continueResult = System.Windows.MessageBox.Show(
+                        "No backup location selected. Continue without backup?",
+                        "No Backup",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (continueResult == MessageBoxResult.No)
+                    {
+                        return; // User cancelled
+                    }
+                    createBackup = false;
+                }
+            }
+
+            // Disable button during update
+            if (UpdateNowButton != null)
+            {
+                UpdateNowButton.IsEnabled = false;
+            }
+
+            try
+            {
+                // Show progress UI
+                Dispatcher.Invoke(() =>
+                {
+                    if (SptUpdateProgressBar != null)
+                    {
+                        SptUpdateProgressBar.Visibility = Visibility.Visible;
+                        SptUpdateProgressBar.Value = 0;
+                    }
+                    if (SptUpdateProgressText != null)
+                    {
+                        SptUpdateProgressText.Visibility = Visibility.Visible;
+                        SptUpdateProgressText.Text = "Starting update...";
+                    }
+                    if (UpdateNowButton != null)
+                    {
+                        UpdateNowButton.Visibility = Visibility.Collapsed;
+                    }
+                });
+
+                // Step 1: Download installer
+                var tempPath = Path.GetTempPath();
+                var installerFileName = "SPTInstaller.exe";
+                var installerPath = Path.Combine(tempPath, installerFileName);
+
+                var downloadProgress = new Progress<double>(percent =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (SptUpdateProgressBar != null)
+                        {
+                            SptUpdateProgressBar.Value = percent;
+                        }
+                        if (SptUpdateProgressText != null)
+                        {
+                            SptUpdateProgressText.Text = $"Downloading installer... {percent:F0}%";
+                        }
+                    });
+                });
+
+                await SptUpdateService.Instance.DownloadInstallerAsync(
+                    _currentUpdateInfo.InstallerDownloadUrl,
+                    installerPath,
+                    downloadProgress);
+
+                // Step 2: Run update process
+                var statusProgress = new Progress<string>(status =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (SptUpdateProgressText != null)
+                        {
+                            SptUpdateProgressText.Text = status;
+                        }
+                    });
+                });
+
+                var progressProgress = new Progress<double>(percent =>
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (SptUpdateProgressBar != null)
+                        {
+                            SptUpdateProgressBar.Value = percent;
+                        }
+                    });
+                });
+
+                await SptUpdateService.Instance.UpdateSptAsync(
+                    sptPath,
+                    installerPath,
+                    createBackup,
+                    backupPath,
+                    statusProgress,
+                    progressProgress);
+
+                // Update completed successfully
+                Dispatcher.Invoke(() =>
+                {
+                    if (SptUpdateProgressText != null)
+                    {
+                        SptUpdateProgressText.Text = "Update completed successfully!";
+                        SptUpdateProgressText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
+                    }
+                    if (SptUpdateProgressBar != null)
+                    {
+                        SptUpdateProgressBar.Value = 100;
+                    }
+                });
+
+                System.Windows.MessageBox.Show(
+                    "SPT has been updated successfully!\n\nThe version display will refresh automatically.",
+                    "Update Complete",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+
+                // Refresh version display with retry logic
+                // The installer may need time to finish writing all files
+                for (int retry = 0; retry < 5; retry++)
+                {
+                    await Task.Delay(2000); // Wait 2 seconds between retries
+                    UpdateSptVersionDisplay();
+                    
+                    // Check if we got a valid version (not empty and not "Not detected")
+                    await Task.Delay(500); // Small delay to let UI update
+                    var currentVersion = Dispatcher.Invoke(() => SptVersionText?.Text);
+                    if (!string.IsNullOrWhiteSpace(currentVersion) && 
+                        currentVersion != "Not detected" && 
+                        currentVersion != "Error detecting version")
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[UpdateNowButton] Version detected after {retry + 1} retries: {currentVersion}");
+                        break;
+                    }
+                    System.Diagnostics.Debug.WriteLine($"[UpdateNowButton] Retry {retry + 1}/5: Version not yet detected");
+                }
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    if (SptUpdateProgressText != null)
+                    {
+                        SptUpdateProgressText.Text = $"Update failed: {ex.Message}";
+                        SptUpdateProgressText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)); // Red
+                    }
+                    if (UpdateNowButton != null)
+                    {
+                        UpdateNowButton.IsEnabled = true;
+                        UpdateNowButton.Visibility = Visibility.Visible;
+                    }
+                });
+
+                System.Windows.MessageBox.Show(
+                    $"Update failed: {ex.Message}\n\n" +
+                    (createBackup && !string.IsNullOrEmpty(backupPath) 
+                        ? $"A backup was created at: {backupPath}\nYou can restore from there if needed."
+                        : "No backup was created."),
+                    "Update Failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                // Hide progress UI after a delay
+                await Task.Delay(3000);
+                Dispatcher.Invoke(() =>
+                {
+                    if (SptUpdateProgressBar != null)
+                    {
+                        SptUpdateProgressBar.Visibility = Visibility.Collapsed;
+                    }
+                    if (SptUpdateProgressText != null)
+                    {
+                        SptUpdateProgressText.Visibility = Visibility.Collapsed;
+                    }
+                    if (UpdateNowButton != null && _currentUpdateInfo != null && _currentUpdateInfo.IsUpdateAvailable)
+                    {
+                        UpdateNowButton.Visibility = Visibility.Visible;
+                        UpdateNowButton.IsEnabled = true;
+                    }
+                });
+                
+                // Force refresh version display after update completes
+                // Wait a bit more to ensure all files are written
+                await Task.Delay(2000);
+                UpdateSptVersionDisplay();
+                
+                // Also refresh the update check to see if we're now up to date
+                await Task.Delay(1000);
+                var currentVersion = SptDetectionService.Instance.GetSptVersion(SettingsService.Instance.LauncherPath);
+                if (!string.IsNullOrWhiteSpace(currentVersion))
+                {
+                    var updateInfo = await SptDetectionService.Instance.CheckForUpdatesAsync(currentVersion);
+                    _currentUpdateInfo = updateInfo;
+                    
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (updateInfo == null || !updateInfo.IsUpdateAvailable)
+                        {
+                            // Up to date now
+                            if (SptUpdateStatusPanel != null)
+                            {
+                                SptUpdateStatusPanel.Visibility = Visibility.Visible;
+                            }
+                            if (SptUpdateStatusText != null)
+                            {
+                                SptUpdateStatusText.Text = "Up to date";
+                                SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                            }
+                            if (UpdateNowButton != null)
+                            {
+                                UpdateNowButton.Visibility = Visibility.Collapsed;
+                            }
+                        }
+                    });
+                }
             }
         }
 
@@ -1602,7 +2115,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to load http.json: {ex.Message}", "Error", 
+                System.Windows.MessageBox.Show($"Failed to load http.json: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return null;
             }
@@ -1615,7 +2128,7 @@ namespace SptLauncherWpf.Pages
                 // Validate IP address format first
                 if (!System.Net.IPAddress.TryParse(ip, out _))
                 {
-                    MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
+                    System.Windows.MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
                         "Invalid IP", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
@@ -1624,7 +2137,7 @@ namespace SptLauncherWpf.Pages
                 var launcherPath = LauncherPathTextBox.Text;
                 if (string.IsNullOrWhiteSpace(launcherPath) || !File.Exists(launcherPath))
                 {
-                    MessageBox.Show("Please set a valid SPT Launcher path first using the Browse button.", 
+                    System.Windows.MessageBox.Show("Please set a valid SPT Launcher path first using the Browse button.", 
                         "Invalid Path", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
@@ -1632,7 +2145,7 @@ namespace SptLauncherWpf.Pages
                 var httpJsonPath = GetHttpJsonPath();
                 if (string.IsNullOrEmpty(httpJsonPath))
                 {
-                    MessageBox.Show("Unable to determine SPT installation path. Please check your launcher path.", 
+                    System.Windows.MessageBox.Show("Unable to determine SPT installation path. Please check your launcher path.", 
                         "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     return false;
                 }
@@ -1716,7 +2229,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to save http.json: {ex.Message}\n\nMake sure SPT is not running and try again.", "Error", 
+                System.Windows.MessageBox.Show($"Failed to save http.json: {ex.Message}\n\nMake sure SPT is not running and try again.", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
@@ -1730,7 +2243,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to revert IP address: {ex.Message}", "Error", 
+                System.Windows.MessageBox.Show($"Failed to revert IP address: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -1894,7 +2407,7 @@ namespace SptLauncherWpf.Pages
         {
             try
             {
-                var checkBox = sender as CheckBox;
+                var checkBox = sender as System.Windows.Controls.CheckBox;
                 if (checkBox == null) return;
                 
                 _fikaEnabled = checkBox.IsChecked == true;
@@ -1959,7 +2472,7 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error updating Fika Co-op configuration: {ex.Message}", "Error", 
+                System.Windows.MessageBox.Show($"Error updating Fika Co-op configuration: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -1972,7 +2485,7 @@ namespace SptLauncherWpf.Pages
                 
                 if (string.IsNullOrEmpty(ipAddress))
                 {
-                    MessageBox.Show("Please enter an IP address.", "Invalid Input", 
+                    System.Windows.MessageBox.Show("Please enter an IP address.", "Invalid Input", 
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
                 }
@@ -1980,7 +2493,7 @@ namespace SptLauncherWpf.Pages
                 // Validate IP address format
                 if (!System.Net.IPAddress.TryParse(ipAddress, out _))
                 {
-                    MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
+                    System.Windows.MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
                         "Invalid IP", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
@@ -2004,7 +2517,7 @@ namespace SptLauncherWpf.Pages
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Error: {ex.Message}\n{ex.StackTrace}");
-                MessageBox.Show($"Error saving IP address: {ex.Message}", "Error", 
+                System.Windows.MessageBox.Show($"Error saving IP address: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
