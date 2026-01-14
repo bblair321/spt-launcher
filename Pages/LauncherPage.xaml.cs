@@ -259,6 +259,59 @@ namespace SptLauncherWpf.Pages
                 }
             }
             
+            // Load Fika Co-op settings
+            _fikaEnabled = SettingsService.Instance.FikaEnabled;
+            if (EnableFikaCheckBox != null)
+            {
+                EnableFikaCheckBox.IsChecked = _fikaEnabled;
+                
+                if (_fikaEnabled)
+                {
+                    // Show IP editor
+                    FikaIpEditorPanel.Visibility = Visibility.Visible;
+                    
+                    // Load saved IP address
+                    var savedIp = SettingsService.Instance.FikaIpAddress;
+                    if (!string.IsNullOrEmpty(savedIp))
+                    {
+                        FikaIpTextBox.Text = savedIp;
+                    }
+                    else
+                    {
+                        // Try to load from config.json
+                        var launcherConfig = LoadLauncherConfig();
+                        if (launcherConfig != null && launcherConfig.Server != null && !string.IsNullOrEmpty(launcherConfig.Server.Url))
+                        {
+                            try
+                            {
+                                var uri = new Uri(launcherConfig.Server.Url);
+                                var ipFromConfig = uri.Host;
+                                if (!string.IsNullOrEmpty(ipFromConfig))
+                                {
+                                    FikaIpTextBox.Text = ipFromConfig;
+                                }
+                                else
+                                {
+                                    FikaIpTextBox.Text = _defaultIp;
+                                }
+                            }
+                            catch
+                            {
+                                FikaIpTextBox.Text = _defaultIp;
+                            }
+                        }
+                        else
+                        {
+                            FikaIpTextBox.Text = _defaultIp;
+                        }
+                    }
+                }
+                else
+                {
+                    FikaIpEditorPanel.Visibility = Visibility.Collapsed;
+                }
+            }
+            
             // Update path status after loading
             UpdatePathStatus();
             
@@ -2880,16 +2933,62 @@ namespace SptLauncherWpf.Pages
         {
             try
             {
-                var sptPath = GetSptInstallPath();
-                if (string.IsNullOrEmpty(sptPath))
+                var launcherPath = LauncherPathTextBox.Text;
+                if (string.IsNullOrEmpty(launcherPath) || !File.Exists(launcherPath))
                 {
                     return string.Empty;
                 }
                 
-                return Path.Combine(sptPath, "user", "launcher", "config.json");
+                // First, try the launcher executable directory (newer SPT versions)
+                // config.json is now in the same directory as SPT.Launcher.exe
+                var launcherDir = Path.GetDirectoryName(launcherPath);
+                if (!string.IsNullOrEmpty(launcherDir))
+                {
+                    var configInLauncherDir = Path.Combine(launcherDir, "user", "launcher", "config.json");
+                    if (File.Exists(configInLauncherDir))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetLauncherConfigJsonPath] Found config in launcher directory: {configInLauncherDir}");
+                        return configInLauncherDir;
+                    }
+                }
+                
+                // Fallback: try the SPT root directory (older SPT versions)
+                var sptPath = GetSptInstallPath();
+                if (!string.IsNullOrEmpty(sptPath))
+                {
+                    var configInSptRoot = Path.Combine(sptPath, "user", "launcher", "config.json");
+                    if (File.Exists(configInSptRoot))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetLauncherConfigJsonPath] Found config in SPT root: {configInSptRoot}");
+                        return configInSptRoot;
+                    }
+                    
+                    // If file doesn't exist yet, prefer launcher directory for new files
+                    if (!string.IsNullOrEmpty(launcherDir))
+                    {
+                        var newConfigPath = Path.Combine(launcherDir, "user", "launcher", "config.json");
+                        System.Diagnostics.Debug.WriteLine($"[GetLauncherConfigJsonPath] Using launcher directory for new config: {newConfigPath}");
+                        return newConfigPath;
+                    }
+                    
+                    // Last resort: use SPT root
+                    System.Diagnostics.Debug.WriteLine($"[GetLauncherConfigJsonPath] Using SPT root for new config: {configInSptRoot}");
+                    return configInSptRoot;
+                }
+                
+                // If we can't determine SPT path, use launcher directory
+                if (!string.IsNullOrEmpty(launcherDir))
+                {
+                    var fallbackPath = Path.Combine(launcherDir, "user", "launcher", "config.json");
+                    System.Diagnostics.Debug.WriteLine($"[GetLauncherConfigJsonPath] Fallback to launcher directory: {fallbackPath}");
+                    return fallbackPath;
+                }
+                
+                return string.Empty;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[GetLauncherConfigJsonPath] Error: {ex.Message}");
                 return string.Empty;
             }
         }
@@ -3089,9 +3188,12 @@ namespace SptLauncherWpf.Pages
                 var configJsonPath = GetLauncherConfigJsonPath();
                 if (string.IsNullOrEmpty(configJsonPath))
                 {
-                    System.Diagnostics.Debug.WriteLine("[SaveLauncherConfig] Unable to determine config.json path");
+                    var sptPath = GetSptInstallPath();
+                    System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Unable to determine config.json path. SPT path: '{sptPath}'");
                     return false;
                 }
+                
+                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Config.json path: {configJsonPath}");
                 
                 // Load existing config or create default
                 LauncherConfig? config = null;
@@ -3130,6 +3232,7 @@ namespace SptLauncherWpf.Pages
                 
                 // Update IsDevMode
                 config.IsDevMode = isDevMode;
+                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Setting IsDevMode to {isDevMode}");
                 
                 // If dev mode is enabled and IP is provided, update the Server URL
                 if (isDevMode && !string.IsNullOrEmpty(ipAddress))
@@ -3141,16 +3244,25 @@ namespace SptLauncherWpf.Pages
                         if (config.Server == null)
                         {
                             config.Server = new LauncherServerConfig();
+                            System.Diagnostics.Debug.WriteLine("[SaveLauncherConfig] Created new Server config object");
                         }
                         
+                        // Store old URL for logging
+                        var oldUrl = config.Server.Url;
+                        
                         // Update URL with the provided IP
-                        config.Server.Url = $"https://{ipAddress}:6969";
-                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Updated Server.Url to {config.Server.Url}");
+                        var newUrl = $"https://{ipAddress}:6969";
+                        config.Server.Url = newUrl;
+                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Updated Server.Url from '{oldUrl}' to '{newUrl}'");
                     }
                     else
                     {
                         System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Invalid IP address format: {ipAddress}");
                     }
+                }
+                else if (isDevMode && string.IsNullOrEmpty(ipAddress))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] WARNING: Dev mode enabled but no IP address provided!");
                 }
                 
                 // Ensure directory exists
@@ -3158,6 +3270,7 @@ namespace SptLauncherWpf.Pages
                 if (!string.IsNullOrEmpty(configDir) && !Directory.Exists(configDir))
                 {
                     Directory.CreateDirectory(configDir);
+                    System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Created directory: {configDir}");
                 }
                 
                 // Save JSON with retry logic
@@ -3167,14 +3280,59 @@ namespace SptLauncherWpf.Pages
                 };
                 var jsonContent = JsonSerializer.Serialize(config, options);
                 
-                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Attempting to save IsDevMode={isDevMode} to {configJsonPath}");
+                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Attempting to save IsDevMode={isDevMode}, IP={ipAddress ?? "null"} to {configJsonPath}");
+                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Config JSON preview: IsDevMode={config.IsDevMode}, Server.Url={config.Server?.Url ?? "null"}");
                 
                 for (int i = 0; i < retries; i++)
                 {
                     try
                     {
+                        // Directory should already exist from above, but double-check
+                        if (!string.IsNullOrEmpty(configDir) && !Directory.Exists(configDir))
+                        {
+                            Directory.CreateDirectory(configDir);
+                            System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Created directory on retry: {configDir}");
+                        }
+                        
                         File.WriteAllText(configJsonPath, jsonContent);
-                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Successfully saved IsDevMode={isDevMode} to config.json");
+                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Successfully saved config.json to: {configJsonPath}");
+                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Final values: IsDevMode={config.IsDevMode}, Server.Url={config.Server?.Url ?? "null"}");
+                        
+                        // Verify the file was written correctly
+                        if (File.Exists(configJsonPath))
+                        {
+                            var savedContent = File.ReadAllText(configJsonPath);
+                            var savedConfig = JsonSerializer.Deserialize<LauncherConfig>(savedContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            if (savedConfig != null)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] Verification - IsDevMode={savedConfig.IsDevMode}, Server.Url={savedConfig.Server?.Url ?? "null"}");
+                                
+                                // Double-check that the values match what we intended
+                                if (savedConfig.IsDevMode != isDevMode)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] WARNING: IsDevMode mismatch! Expected {isDevMode}, got {savedConfig.IsDevMode}");
+                                }
+                                
+                                if (isDevMode && !string.IsNullOrEmpty(ipAddress))
+                                {
+                                    var expectedUrl = $"https://{ipAddress}:6969";
+                                    if (savedConfig.Server?.Url != expectedUrl)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] WARNING: Server.Url mismatch! Expected {expectedUrl}, got {savedConfig.Server?.Url ?? "null"}");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] WARNING: Could not deserialize saved config.json");
+                            }
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[SaveLauncherConfig] ERROR: File was not created at {configJsonPath}");
+                            return false;
+                        }
+                        
                         return true;
                     }
                     catch (IOException) when (i < retries - 1)
@@ -3216,48 +3374,147 @@ namespace SptLauncherWpf.Pages
                 SettingsService.Instance.FikaEnabled = _fikaEnabled;
                 SettingsService.Instance.SaveSettings();
                 
-                // Enable/disable developer mode in config.json based on FIKA state
-                SaveLauncherConfig(_fikaEnabled);
-                
                 if (_fikaEnabled)
                 {
                     // Show IP editor
                     FikaIpEditorPanel.Visibility = Visibility.Visible;
                     
-                    // Load current IP - try saved IP first, then config.json, then default
-                    var savedIp = SettingsService.Instance.FikaIpAddress;
-                    if (!string.IsNullOrEmpty(savedIp) && savedIp != _defaultIp)
+                    // Determine IP to use - prioritize textbox value if user has entered one,
+                    // then saved IP, then config.json, then default
+                    string ipToUse = _defaultIp;
+                    
+                    // First, check if user has entered an IP in the textbox
+                    if (FikaIpTextBox != null && !string.IsNullOrWhiteSpace(FikaIpTextBox.Text))
                     {
-                        FikaIpTextBox.Text = savedIp;
+                        var textboxIp = FikaIpTextBox.Text.Trim();
+                        if (System.Net.IPAddress.TryParse(textboxIp, out _))
+                        {
+                            ipToUse = textboxIp;
+                            System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Using IP from textbox: {ipToUse}");
+                        }
                     }
-                    else
+                    
+                    // If textbox is empty or invalid, try saved IP
+                    if (ipToUse == _defaultIp)
                     {
-                        // Try to load from config.json Server.Url
+                        var savedIp = SettingsService.Instance.FikaIpAddress;
+                        if (!string.IsNullOrEmpty(savedIp) && System.Net.IPAddress.TryParse(savedIp, out _))
+                        {
+                            if (FikaIpTextBox != null)
+                            {
+                                FikaIpTextBox.Text = savedIp;
+                            }
+                            ipToUse = savedIp;
+                            System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Using saved IP: {ipToUse}");
+                        }
+                    }
+                    
+                    // If still default, try loading from config.json
+                    if (ipToUse == _defaultIp)
+                    {
                         var launcherConfig = LoadLauncherConfig();
                         if (launcherConfig != null && launcherConfig.Server != null && !string.IsNullOrEmpty(launcherConfig.Server.Url))
                         {
-                            // Extract IP from URL (format: https://IP:PORT)
                             try
                             {
                                 var uri = new Uri(launcherConfig.Server.Url);
                                 var ipFromConfig = uri.Host;
-                                if (!string.IsNullOrEmpty(ipFromConfig))
+                                if (!string.IsNullOrEmpty(ipFromConfig) && System.Net.IPAddress.TryParse(ipFromConfig, out _))
                                 {
-                                    FikaIpTextBox.Text = ipFromConfig;
+                                    if (FikaIpTextBox != null)
+                                    {
+                                        FikaIpTextBox.Text = ipFromConfig;
+                                    }
+                                    ipToUse = ipFromConfig;
+                                    System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Using IP from config.json: {ipToUse}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Error parsing URL from config: {ex.Message}");
+                            }
+                        }
+                    }
+                    
+                    // If still default, set textbox to default
+                    if (ipToUse == _defaultIp && FikaIpTextBox != null)
+                    {
+                        FikaIpTextBox.Text = _defaultIp;
+                        System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Using default IP: {ipToUse}");
+                    }
+                    
+                    // Enable developer mode in config.json AND save the IP address
+                    // This ensures both IsDevMode and Server.Url are updated when enabling Fika
+                    var configPath = GetLauncherConfigJsonPath();
+                    var sptPath = GetSptInstallPath();
+                    
+                    System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] SPT Path: {sptPath}");
+                    System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Config Path: {configPath}");
+                    System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] IP to save: {ipToUse}");
+                    
+                    bool saved = SaveLauncherConfig(true, ipToUse);
+                    System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Enabled Fika with IP: {ipToUse}, SaveLauncherConfig returned: {saved}");
+                    
+                    if (!saved)
+                    {
+                        System.Windows.MessageBox.Show(
+                            $"Failed to save Fika configuration to config.json.\n\n" +
+                            $"SPT Path: {sptPath}\n" +
+                            $"Config path: {configPath}\n" +
+                            $"IP Address: {ipToUse}\n\n" +
+                            $"Please ensure:\n" +
+                            $"1. The SPT launcher path is set correctly\n" +
+                            $"2. You have write permissions to the SPT directory\n" +
+                            $"3. The config.json file is not locked by another process\n" +
+                            $"4. Check the Debug output for more details",
+                            "Configuration Error",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
+                    else
+                    {
+                        // Verify the file was actually written
+                        if (File.Exists(configPath))
+                        {
+                            try
+                            {
+                                var savedConfig = LoadLauncherConfig();
+                                if (savedConfig != null)
+                                {
+                                    var actualUrl = savedConfig.Server?.Url ?? "null";
+                                    System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Verification - IsDevMode: {savedConfig.IsDevMode}, Server.Url: {actualUrl}");
+                                    
+                                    // Show success message with details
+                                    ShowToastNotification($"Fika Co-op enabled with IP: {ipToUse}");
+                                    
+                                    // Also show a detailed message in debug
+                                    System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] SUCCESS - Config saved to: {configPath}");
+                                    System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Config contents - IsDevMode: {savedConfig.IsDevMode}, Server.Url: {actualUrl}");
                                 }
                                 else
                                 {
-                                    FikaIpTextBox.Text = _defaultIp;
+                                    System.Windows.MessageBox.Show(
+                                        $"Warning: Config file was created but could not be verified.\n\n" +
+                                        $"Path: {configPath}\n\n" +
+                                        $"Please check the file manually to ensure it contains the correct settings.",
+                                        "Verification Warning",
+                                        MessageBoxButton.OK,
+                                        MessageBoxImage.Warning);
                                 }
                             }
-                            catch
+                            catch (Exception ex)
                             {
-                                FikaIpTextBox.Text = _defaultIp;
+                                System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Error verifying saved config: {ex.Message}");
                             }
                         }
                         else
                         {
-                            FikaIpTextBox.Text = _defaultIp;
+                            System.Windows.MessageBox.Show(
+                                $"Warning: SaveLauncherConfig returned true, but config file was not found at:\n\n{configPath}\n\n" +
+                                $"Please check the Debug output for more details.",
+                                "File Not Found",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
                         }
                     }
                 }
@@ -3266,14 +3523,16 @@ namespace SptLauncherWpf.Pages
                     // Hide IP editor
                     FikaIpEditorPanel.Visibility = Visibility.Collapsed;
                     
-                    // Only revert to default IP if user explicitly unchecks (don't auto-revert on load)
-                    // This allows users to disable FIKA without losing their IP setting
+                    // Disable developer mode in config.json
+                    SaveLauncherConfig(false);
+                    System.Diagnostics.Debug.WriteLine("[EnableFikaCheckBox_Changed] Disabled Fika");
                 }
             }
             catch (Exception ex)
             {
                 System.Windows.MessageBox.Show($"Error updating Fika Co-op configuration: {ex.Message}", "Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Error: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -3305,14 +3564,102 @@ namespace SptLauncherWpf.Pages
                 
                 // Save to config.json with dev mode enabled and IP address
                 // When dev mode is true, the URL in config.json will be updated with the user's IP
+                var configPath = GetLauncherConfigJsonPath();
+                var sptPath = GetSptInstallPath();
+                
+                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] SPT Path: {sptPath}");
+                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Config Path: {configPath}");
+                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Fika Enabled: {_fikaEnabled}");
+                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] IP to save: {ipAddress}");
+                
                 if (_fikaEnabled)
                 {
                     bool configJsonSaved = SaveLauncherConfig(true, ipAddress);
-                    System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Attempted to save IsDevMode and IP to config.json: {configJsonSaved}");
+                    System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] SaveLauncherConfig returned: {configJsonSaved}");
+                    
+                    if (!configJsonSaved)
+                    {
+                        System.Windows.MessageBox.Show(
+                            $"Failed to save IP address to config.json.\n\n" +
+                            $"SPT Path: {sptPath}\n" +
+                            $"Config path: {configPath}\n" +
+                            $"IP Address: {ipAddress}\n\n" +
+                            $"IP was saved to settings, but config.json could not be updated.\n" +
+                            $"Please ensure:\n" +
+                            $"1. Fika Co-op is enabled\n" +
+                            $"2. The SPT launcher path is correct\n" +
+                            $"3. You have write permissions\n" +
+                            $"4. Check the Debug output for more details",
+                            "Configuration Warning",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                        return;
+                    }
+                    
+                    // Verify the save
+                    if (File.Exists(configPath))
+                    {
+                        var savedConfig = LoadLauncherConfig();
+                        if (savedConfig != null)
+                        {
+                            var actualUrl = savedConfig.Server?.Url ?? "null";
+                            System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Verification - IsDevMode: {savedConfig.IsDevMode}, Server.Url: {actualUrl}");
+                            
+                            var expectedUrl = $"https://{ipAddress}:6969";
+                            if (actualUrl != expectedUrl)
+                            {
+                                System.Windows.MessageBox.Show(
+                                    $"Warning: IP address may not have been saved correctly.\n\n" +
+                                    $"Expected URL: {expectedUrl}\n" +
+                                    $"Actual URL: {actualUrl}\n\n" +
+                                    $"Please check the config.json file manually at:\n{configPath}",
+                                    "Verification Warning",
+                                    MessageBoxButton.OK,
+                                    MessageBoxImage.Warning);
+                            }
+                            else
+                            {
+                                // Show toast notification
+                                ShowToastNotification($"IP address saved: {ipAddress}");
+                            }
+                        }
+                        else
+                        {
+                            System.Windows.MessageBox.Show(
+                                $"Warning: Config file exists but could not be read.\n\n" +
+                                $"Path: {configPath}\n\n" +
+                                $"Please check the file manually.",
+                                "Verification Warning",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                        }
+                    }
+                    else
+                    {
+                        System.Windows.MessageBox.Show(
+                            $"Warning: SaveLauncherConfig returned true, but config file was not found.\n\n" +
+                            $"Expected path: {configPath}\n\n" +
+                            $"Please check the Debug output for more details.",
+                            "File Not Found",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
                 }
-                
-                // Show toast notification
-                ShowToastNotification("IP was applied");
+                else
+                {
+                    // If Fika is not enabled, enable it first
+                    if (EnableFikaCheckBox != null)
+                    {
+                        EnableFikaCheckBox.IsChecked = true;
+                        // The checkbox change handler will save the config with the IP
+                        System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Fika was not enabled, enabling it now (checkbox handler will save config)");
+                        ShowToastNotification($"IP address saved: {ipAddress}");
+                    }
+                    else
+                    {
+                        ShowToastNotification("IP was applied");
+                    }
+                }
             }
             catch (Exception ex)
             {

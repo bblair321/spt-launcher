@@ -27,15 +27,25 @@
 
   <!-- Single-file & self-contained settings -->
   <PropertyGroup>
-    <!-- Framework-dependent single-file (requires .NET 8.0 Runtime) -->
+    <!-- Self-contained single-file (includes .NET runtime - no external dependencies) -->
     <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>false</SelfContained>
+    <SelfContained>true</SelfContained>
 
     <!-- WPF apps must not be trimmed -->
     <PublishTrimmed>false</PublishTrimmed>
 
     <!-- Embed native DLLs properly for single-file -->
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    
+    <!-- Include all content files in the single executable -->
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    
+    <!-- Enable compression for self-contained single-file (reduces size) -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    
+    <!-- Don't include PDB files in publish (optional - remove if you want debug symbols) -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
@@ -44,9 +54,16 @@
 
   <ItemGroup>
     <Resource Include="spt_rpg_icon.ico" />
-    <None Include="spt_rpg_icon.ico">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <!-- Icon is embedded in the executable, no need to copy separately -->
   </ItemGroup>
+  
+  <!-- Remove JSON files after publish (not needed for self-contained single-file) -->
+  <Target Name="RemoveJsonFilesAfterPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <JsonFilesToDelete Include="$(PublishDir)$(AssemblyName).deps.json" />
+      <JsonFilesToDelete Include="$(PublishDir)$(AssemblyName).runtimeconfig.json" />
+    </ItemGroup>
+    <Delete Files="@(JsonFilesToDelete)" ContinueOnError="true" />
+  </Target>
 
 </Project>
