@@ -469,7 +469,6 @@ namespace SptLauncherWpf.Pages
             try
             {
                 LaunchButton.IsEnabled = false;
-                StatusText.Text = "Starting launcher...";
                 System.Diagnostics.Debug.WriteLine("[LaunchButton_Click] Starting launch process...");
 
                 // Try to unblock the file if it was downloaded from the internet
@@ -534,7 +533,6 @@ namespace SptLauncherWpf.Pages
                         StopButtonBorder.IsHitTestVisible = true;
                         StopButtonBorder.Visibility = Visibility.Visible;
                     }
-                    StatusText.Text = $"Launcher started (PID: {_launcherPid})";
                     
                     System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] StopButtonBorder configured");
                 });
@@ -580,7 +578,6 @@ namespace SptLauncherWpf.Pages
                 {
                     StopButtonBorder.Opacity = 0.6;
                 }
-                StatusText.Text = "Failed to start launcher";
             }
             catch (Exception ex)
             {
@@ -599,7 +596,6 @@ namespace SptLauncherWpf.Pages
                 {
                     StopButtonBorder.Opacity = 0.6;
                 }
-                StatusText.Text = "Failed to start launcher";
             }
         }
 
@@ -994,22 +990,15 @@ namespace SptLauncherWpf.Pages
                 {
                     if (stoppedCount > 0)
                     {
-                        if (failedCount > 0)
-                        {
-                            StatusText.Text = $"Stopped {stoppedCount} process(es), {failedCount} failed";
-                        }
-                        else
-                        {
-                            StatusText.Text = $"Stopped {stoppedCount} launcher process(es)";
-                        }
+                        // Status messages removed - StatusText element was removed from UI
                     }
                     else if (failedCount > 0)
                     {
-                        StatusText.Text = $"Failed to stop {failedCount} process(es)";
+                        // Status messages removed - StatusText element was removed from UI
                     }
                     else
                     {
-                        StatusText.Text = "No launcher processes were running";
+                        // Status messages removed - StatusText element was removed from UI
                     }
                 });
                 
@@ -1049,7 +1038,7 @@ namespace SptLauncherWpf.Pages
                         // Update UI on main thread
                         Dispatcher.Invoke(() =>
                         {
-                            StatusText.Text = $"Server detected (PID: {_serverPid})";
+                            // Status messages removed - StatusText element was removed from UI
                         });
                         
                         // Monitor the server process
@@ -1062,7 +1051,7 @@ namespace SptLauncherWpf.Pages
                                 _serverProcess = null;
                                 if (!_isLauncherRunning)
                                 {
-                                    StatusText.Text = "Server stopped";
+                                    // Status messages removed - StatusText element was removed from UI
                                 }
                             });
                         };
@@ -1079,7 +1068,7 @@ namespace SptLauncherWpf.Pages
             // If we get here, no server was found
             Dispatcher.Invoke(() =>
             {
-                StatusText.Text = "Launcher running (no server detected)";
+                // Status messages removed - StatusText element was removed from UI
             });
         }
 
@@ -1101,7 +1090,7 @@ namespace SptLauncherWpf.Pages
                     _serverProcess = serverProcess;
                     Dispatcher.Invoke(() =>
                     {
-                        StatusText.Text = $"SPT Server running (Launcher PID: {_launcherPid}, Server PID: {_serverProcess.Id})";
+                        // Status messages removed - StatusText element was removed from UI
                     });
                     
                     // Monitor the server process instead
@@ -1112,7 +1101,7 @@ namespace SptLauncherWpf.Pages
                     Dispatcher.Invoke(() =>
                     {
                         ResetLauncherState();
-                        StatusText.Text = "Launcher exited but server not found";
+                        // Status messages removed - StatusText element was removed from UI
                     });
                 }
             }
@@ -1138,7 +1127,7 @@ namespace SptLauncherWpf.Pages
                 Dispatcher.Invoke(() =>
                 {
                     ResetLauncherState();
-                    StatusText.Text = "SPT Server stopped";
+                    // Status messages removed - StatusText element was removed from UI
                 });
             }
             catch (Exception ex)
@@ -1176,7 +1165,6 @@ namespace SptLauncherWpf.Pages
             {
                 StopButtonBorder.Opacity = 0.6;
             }
-            StatusText.Text = "Ready";
         }
 
         private void UpdateLauncherUI()
@@ -1252,7 +1240,6 @@ namespace SptLauncherWpf.Pages
                             StopButtonBorder.Opacity = 1.0;
                         }
                         var processId = hasTrackedLauncher && _launcherProcess != null && !_launcherProcess.HasExited ? _launcherPid : (sptLauncherProcesses.Length > 0 ? sptLauncherProcesses[0].Id : akiLauncherProcesses[0].Id);
-                    StatusText.Text = $"SPT Launcher running (PID: {processId})";
                     System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] Launcher running - Launch button DISABLED, Stop button ENABLED");
                 }
                 else if (hasAnySptProcesses)
@@ -1262,7 +1249,6 @@ namespace SptLauncherWpf.Pages
                         {
                             StopButtonBorder.Opacity = 1.0;
                         }
-                    StatusText.Text = $"SPT process running (PID: {sptProcesses[0].Id})";
                     System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] SPT process running - Launch button ENABLED, Stop button ENABLED");
                 }
                 else
@@ -1272,7 +1258,6 @@ namespace SptLauncherWpf.Pages
                         {
                             StopButtonBorder.Opacity = 0.6; // Slightly dim when no processes, but still clickable
                         }
-                    StatusText.Text = "Ready";
                         System.Diagnostics.Debug.WriteLine("[UpdateLauncherUI] No processes - Launch button ENABLED, Stop button dimmed but clickable");
                     }
                     
@@ -1295,7 +1280,6 @@ namespace SptLauncherWpf.Pages
                     {
                         StopButtonBorder.Opacity = 0.6;
                     }
-                StatusText.Text = "Ready";
                 });
                 System.Diagnostics.Debug.WriteLine($"[UpdateLauncherUI] Error: {ex.Message}\n{ex.StackTrace}");
             }

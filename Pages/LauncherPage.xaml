@@ -139,38 +139,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- Modern Status Card -->
-            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
-                        <TextBlock Text="Status" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        
-                        <!-- Status Icon -->
-                        <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{DynamicResource PrimaryColor}" 
-                                 VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        
-                        <!-- Status Text -->
-                        <TextBlock Grid.Column="1" Name="StatusText" Text="Ready" 
-                                   FontSize="14" Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                        
-                        <!-- Refresh Button -->
-                        <Button Grid.Column="2" Name="RefreshButton" Content="Refresh" 
-                                Background="{DynamicResource HoverColor}" Foreground="{DynamicResource TextPrimaryColor}" BorderThickness="0"
-                                Padding="12,6" FontSize="12" Click="RefreshButton_Click"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
-
             <!-- Fika Co-op Configuration -->
             <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
                 <StackPanel>
