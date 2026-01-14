@@ -109,7 +109,33 @@
                     <Button Name="InstallFikaButton" Content="📥 Install Latest FIKA Version" 
                             Style="{StaticResource ModernButtonStyle}" 
                             Click="InstallFikaButton_Click"
-                            HorizontalAlignment="Left"/>
+                            HorizontalAlignment="Left"
+                            Margin="0,0,0,12"/>
+                    
+                    <!-- Fika Version Display -->
+                    <StackPanel Margin="0,8,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Installed Fika Version: " 
+                                       FontSize="14" 
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Name="FikaVersionText" 
+                                       Text="Not detected" 
+                                       FontSize="14" 
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- Fika Update Status -->
+                        <StackPanel Name="FikaUpdateStatusPanel" Margin="0,4,0,0" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Name="FikaUpdateStatusText" 
+                                           FontSize="13" 
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

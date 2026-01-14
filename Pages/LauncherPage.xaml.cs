@@ -93,6 +93,9 @@ namespace SptLauncherWpf.Pages
         
         // SPT Update tracking
         private SptUpdateInfo? _currentUpdateInfo = null;
+        
+        // Fika Update tracking
+        private FikaUpdateInfo? _currentFikaUpdateInfo = null;
 
         public LauncherPage()
         {
@@ -176,6 +179,9 @@ namespace SptLauncherWpf.Pages
             
             // Update SPT version display
             UpdateSptVersionDisplay();
+            
+            // Update Fika version display
+            UpdateFikaVersionDisplay();
         }
 
         private void LauncherPage_Unloaded(object sender, RoutedEventArgs e)
@@ -259,27 +265,8 @@ namespace SptLauncherWpf.Pages
             // Update SPT version display
             UpdateSptVersionDisplay();
             
-            // Load FIKA enabled state but not the IP address
-            _fikaEnabled = SettingsService.Instance.FikaEnabled;
-            if (EnableFikaCheckBox != null)
-            {
-                EnableFikaCheckBox.IsChecked = _fikaEnabled;
-                
-                if (_fikaEnabled)
-                {
-                    // Show IP editor
-                    FikaIpEditorPanel.Visibility = Visibility.Visible;
-                    // Only set default IP if text box is empty
-                    if (string.IsNullOrWhiteSpace(FikaIpTextBox.Text))
-                    {
-                        FikaIpTextBox.Text = _defaultIp;
-                    }
-                }
-                else
-                {
-                    FikaIpEditorPanel.Visibility = Visibility.Collapsed;
-                }
-            }
+            // Check if Fika mod is installed and update version display
+            UpdateFikaVersionDisplay();
         }
 
         private void RestoreLauncherState()
@@ -1387,23 +1374,305 @@ namespace SptLauncherWpf.Pages
             }
         }
 
-        private void InstallFikaButton_Click(object sender, RoutedEventArgs e)
+        private async void InstallFikaButton_Click(object sender, RoutedEventArgs e)
         {
-            const string fikaReleasesUrl = "https://github.com/project-fika/Fika-Installer/releases";
+            // First check if Fika is already installed
+            var fikaModPath = AutoDetectFikaMod();
+            if (!string.IsNullOrEmpty(fikaModPath))
+            {
+                var result = System.Windows.MessageBox.Show(
+                    $"Fika mod appears to be already installed at:\n{fikaModPath}\n\n" +
+                    "Do you want to reinstall it anyway?",
+                    "Fika Already Installed",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                
+                if (result == MessageBoxResult.No)
+                {
+                    return;
+                }
+            }
+
+            // Check if SPT path is set
+            var sptPath = GetSptInstallPath();
+            if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
+            {
+                System.Windows.MessageBox.Show(
+                    "SPT installation path is not set. Please set the SPT launcher path first.",
+                    "SPT Path Required",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            const string fikaReleasesApi = "https://api.github.com/repos/project-fika/Fika-Installer/releases/latest";
+            const string installerFileName = "FikaInstaller.exe";
             
             try
             {
-                // Open the releases page in the default browser
-                Process.Start(new ProcessStartInfo
+                // Disable button during download
+                if (InstallFikaButton != null)
                 {
-                    FileName = fikaReleasesUrl,
-                    UseShellExecute = true
+                    InstallFikaButton.IsEnabled = false;
+                    InstallFikaButton.Content = "⏳ Checking for latest version...";
+                }
+
+                // Get latest release from GitHub API
+                string? installerDownloadUrl = null;
+                try
+                {
+                    using (var client = new HttpClient())
+                    {
+                        client.DefaultRequestHeaders.Add("User-Agent", "SPT-Launcher-WPF");
+                        client.Timeout = TimeSpan.FromSeconds(30);
+                        
+                        var response = await client.GetStringAsync(fikaReleasesApi);
+                        var jsonDoc = JsonDocument.Parse(response);
+                        
+                        // Look for installer assets in the release
+                        if (jsonDoc.RootElement.TryGetProperty("assets", out var assets))
+                        {
+                            foreach (var asset in assets.EnumerateArray())
+                            {
+                                if (asset.TryGetProperty("name", out var nameElement))
+                                {
+                                    var fileName = nameElement.GetString() ?? "";
+                                    // Look for .exe files, preferably installer or setup
+                                    if (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        if (asset.TryGetProperty("browser_download_url", out var urlElement))
+                                        {
+                                            installerDownloadUrl = urlElement.GetString();
+                                            // Prefer installer or setup files
+                                            if (fileName.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
+                                                fileName.Contains("setup", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (HttpRequestException ex) when (ex.Message.Contains("403") || ex.Message.Contains("rate limit"))
+                {
+                    // GitHub API rate limit exceeded - fallback to manual download
+                    var result = System.Windows.MessageBox.Show(
+                        "GitHub API rate limit exceeded. Cannot automatically download the installer.\n\n" +
+                        "Would you like to open the GitHub releases page to download it manually?\n\n" +
+                        "After downloading, place the installer in your SPT directory and run it from there.",
+                        "Rate Limit Exceeded",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+                    
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "https://github.com/project-fika/Fika-Installer/releases",
+                            UseShellExecute = true
+                        });
+                    }
+                    
+                    if (InstallFikaButton != null)
+                    {
+                        InstallFikaButton.Content = "📥 Install Latest FIKA Version";
+                        InstallFikaButton.IsEnabled = true;
+                    }
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    // Other API errors - fallback to manual download
+                    System.Diagnostics.Debug.WriteLine($"[InstallFikaButton] Error fetching release info: {ex.Message}");
+                }
+
+                // If no installer found, fallback to opening releases page
+                if (string.IsNullOrEmpty(installerDownloadUrl))
+                {
+                    var result = System.Windows.MessageBox.Show(
+                        "Could not automatically find the Fika installer download link.\n\n" +
+                        "Would you like to open the GitHub releases page to download it manually?\n\n" +
+                        "After downloading, place the installer in your SPT directory and run it from there.",
+                        "Manual Download Required",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Information);
+                    
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "https://github.com/project-fika/Fika-Installer/releases",
+                            UseShellExecute = true
+                        });
+                    }
+                    
+                    if (InstallFikaButton != null)
+                    {
+                        InstallFikaButton.Content = "📥 Install Latest FIKA Version";
+                        InstallFikaButton.IsEnabled = true;
+                    }
+                    return;
+                }
+
+                // Update button text
+                if (InstallFikaButton != null)
+                {
+                    InstallFikaButton.Content = "⏳ Downloading installer...";
+                }
+
+                // Place installer in SPT directory (required for Fika installer to work)
+                string installerPath = Path.Combine(sptPath, installerFileName);
+                
+                // Download the installer with progress
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromMinutes(5);
+                    
+                    using (var response = await client.GetAsync(installerDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        
+                        var totalBytes = response.Content.Headers.ContentLength ?? 0;
+                        using (var contentStream = await response.Content.ReadAsStreamAsync())
+                        using (var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            var buffer = new byte[8192];
+                            long totalBytesRead = 0;
+                            int bytesRead;
+                            
+                            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                            {
+                                await fileStream.WriteAsync(buffer, 0, bytesRead);
+                                totalBytesRead += bytesRead;
+                                
+                                // Update button text with progress if we have total size
+                                if (totalBytes > 0 && InstallFikaButton != null)
+                                {
+                                    var percent = (double)totalBytesRead / totalBytes * 100;
+                                    Dispatcher.Invoke(() =>
+                                    {
+                                        InstallFikaButton.Content = $"⏳ Downloading... {percent:F0}%";
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Update button text
+                if (InstallFikaButton != null)
+                {
+                    InstallFikaButton.Content = "🚀 Launching installer...";
+                }
+
+                // Execute the installer from SPT directory (required for Fika installer)
+                var processInfo = new ProcessStartInfo
+                {
+                    FileName = installerPath,
+                    UseShellExecute = true,
+                    CreateNoWindow = false,
+                    WorkingDirectory = sptPath
+                };
+
+                Process.Start(processInfo);
+
+                // Reset button state
+                if (InstallFikaButton != null)
+                {
+                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
+                    InstallFikaButton.IsEnabled = true;
+                }
+
+                System.Windows.MessageBox.Show(
+                    "Fika installer has been launched. Please follow the installation wizard.\n\n" +
+                    "Make sure to install Fika to your SPT installation directory.\n\n" +
+                    "The version will be detected automatically after installation completes.",
+                    "Installer Launched",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                
+                // Refresh Fika detection after a delay (to allow installer to complete)
+                _ = Task.Run(async () =>
+                {
+                    // Wait a bit for installer to potentially complete
+                    await Task.Delay(5000);
+                    Dispatcher.Invoke(() =>
+                    {
+                        UpdateFikaVersionDisplay();
+                    });
                 });
+            }
+            catch (HttpRequestException ex)
+            {
+                if (InstallFikaButton != null)
+                {
+                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
+                    InstallFikaButton.IsEnabled = true;
+                }
+                
+                string errorMessage = $"Failed to download the Fika installer.\n\nError: {ex.Message}";
+                string suggestion = "Please check your internet connection and try again.";
+                
+                // Check if it's a rate limit error
+                if (ex.Message.Contains("403") || ex.Message.Contains("rate limit"))
+                {
+                    errorMessage = "GitHub rate limit exceeded. Cannot download the installer automatically.";
+                    suggestion = "Would you like to open the GitHub releases page to download it manually?\n\n" +
+                                "After downloading, place the installer in your SPT directory and run it from there.";
+                    
+                    var result = System.Windows.MessageBox.Show(
+                        $"{errorMessage}\n\n{suggestion}",
+                        "Rate Limit Exceeded",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+                    
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "https://github.com/project-fika/Fika-Installer/releases",
+                            UseShellExecute = true
+                        });
+                    }
+                }
+                else
+                {
+                    System.Windows.MessageBox.Show(
+                        $"{errorMessage}\n\n{suggestion}",
+                        "Download Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+            catch (TaskCanceledException ex)
+            {
+                if (InstallFikaButton != null)
+                {
+                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
+                    InstallFikaButton.IsEnabled = true;
+                }
+                System.Windows.MessageBox.Show(
+                    $"Download timed out.\n\nError: {ex.Message}\n\n" +
+                    "Please check your internet connection and try again.",
+                    "Download Timeout",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show($"Failed to open FIKA releases page.\n\nError: {ex.Message}", 
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                if (InstallFikaButton != null)
+                {
+                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
+                    InstallFikaButton.IsEnabled = true;
+                }
+                System.Windows.MessageBox.Show(
+                    $"An error occurred while installing Fika.\n\nError: {ex.Message}",
+                    "Installation Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 
@@ -1610,9 +1879,556 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        /// <summary>
+        /// Auto-detects if Fika mod is installed in the SPT mods directory
+        /// </summary>
+        private string AutoDetectFikaMod()
+        {
+            try
+            {
+                var sptPath = GetSptInstallPath();
+                return AutoDetectFikaModWithPath(sptPath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaMod] Error: {ex.Message}\n{ex.StackTrace}");
+                return string.Empty;
+            }
+        }
+
+        private string AutoDetectFikaModWithPath(string sptPath)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] SPT Path: {sptPath}");
+                
+                if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
+                {
+                    System.Diagnostics.Debug.WriteLine("[AutoDetectFikaModWithPath] SPT path is invalid or doesn't exist");
+                    return string.Empty;
+                }
+
+                // Common Fika mod names and locations
+                var fikaModNames = new[] { "Fika", "Fika-Coop", "FikaCoop", "FIKA", "fika" };
+                var modsDirectories = new[]
+                {
+                    Path.Combine(sptPath, "user", "mods"),           // Standard SPT mods location
+                    Path.Combine(sptPath, "BepInEx", "plugins"),     // BepInEx plugins location
+                    Path.Combine(sptPath, "mods"),                   // Alternative mods location
+                    Path.Combine(sptPath, "SPT", "user", "mods"),    // Nested SPT structure
+                    Path.Combine(sptPath, "SPT", "BepInEx", "plugins") // Nested BepInEx structure
+                };
+
+                System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Checking {modsDirectories.Length} mod directories");
+
+                // Check each mods directory
+                foreach (var modsDir in modsDirectories)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Checking directory: {modsDir}");
+                    
+                    if (!Directory.Exists(modsDir))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Directory does not exist: {modsDir}");
+                        continue;
+                    }
+
+                    // List all subdirectories for debugging
+                    try
+                    {
+                        var subDirs = Directory.GetDirectories(modsDir);
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Found {subDirs.Length} subdirectories in {modsDir}");
+                        foreach (var subDir in subDirs)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath]   - {Path.GetFileName(subDir)}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Error listing subdirectories: {ex.Message}");
+                    }
+
+                    // Check for each Fika mod name
+                    foreach (var modName in fikaModNames)
+                    {
+                        var fikaModPath = Path.Combine(modsDir, modName);
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Checking: {fikaModPath}");
+                        
+                        if (Directory.Exists(fikaModPath))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Directory exists: {fikaModPath}");
+                            
+                            // Verify it's actually Fika by checking for common Fika files
+                            var fikaDll = Path.Combine(fikaModPath, "Fika.dll");
+                            var fikaCoreDll = Path.Combine(fikaModPath, "Fika.Core.dll");
+                            var packageJson = Path.Combine(fikaModPath, "package.json");
+                            
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath]   Fika.dll: {File.Exists(fikaDll)}");
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath]   Fika.Core.dll: {File.Exists(fikaCoreDll)}");
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath]   package.json: {File.Exists(packageJson)}");
+                            
+                            if (File.Exists(fikaDll) || File.Exists(fikaCoreDll) || 
+                                (File.Exists(packageJson) && CheckIfFikaPackageJson(packageJson)))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Found Fika mod at: {fikaModPath}");
+                                return fikaModPath;
+                            }
+                        }
+                    }
+
+                    // Also search for Fika in subdirectories (some mods might be in version folders)
+                    // Also search for any directory containing Fika DLLs (broader search)
+                    try
+                    {
+                        var allDirs = Directory.GetDirectories(modsDir, "*", SearchOption.AllDirectories);
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Searching {allDirs.Length} subdirectories recursively");
+                        
+                        foreach (var subDir in allDirs)
+                        {
+                            // Check if this directory contains Fika DLLs
+                            var fikaDll = Path.Combine(subDir, "Fika.dll");
+                            var fikaCoreDll = Path.Combine(subDir, "Fika.Core.dll");
+                            var packageJson = Path.Combine(subDir, "package.json");
+                            
+                            if (File.Exists(fikaDll) || File.Exists(fikaCoreDll) || 
+                                (File.Exists(packageJson) && CheckIfFikaPackageJson(packageJson)))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Found Fika mod at (recursive search): {subDir}");
+                                return subDir;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Error in recursive search: {ex.Message}");
+                    }
+                }
+
+                // Last resort: search entire SPT directory for Fika DLLs
+                System.Diagnostics.Debug.WriteLine("[AutoDetectFikaModWithPath] Performing broad search for Fika DLLs in SPT directory");
+                try
+                {
+                    var allFikaDlls = Directory.GetFiles(sptPath, "Fika*.dll", SearchOption.AllDirectories);
+                    System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Found {allFikaDlls.Length} Fika DLL files");
+                    
+                    foreach (var dllPath in allFikaDlls)
+                    {
+                        var dir = Path.GetDirectoryName(dllPath);
+                        if (!string.IsNullOrEmpty(dir))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Found Fika DLL at: {dllPath}, returning directory: {dir}");
+                            return dir;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Error in broad search: {ex.Message}");
+                }
+
+                System.Diagnostics.Debug.WriteLine("[AutoDetectFikaModWithPath] Fika mod not found");
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Error: {ex.Message}\n{ex.StackTrace}");
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a package.json file belongs to Fika mod
+        /// </summary>
+        private bool CheckIfFikaPackageJson(string packageJsonPath)
+        {
+            try
+            {
+                var jsonContent = File.ReadAllText(packageJsonPath);
+                var json = JsonDocument.Parse(jsonContent);
+                
+                // Check if it's a Fika package by looking for "fika" in name or id
+                if (json.RootElement.TryGetProperty("name", out var nameElement))
+                {
+                    var name = nameElement.GetString() ?? "";
+                    if (name.Contains("fika", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                
+                if (json.RootElement.TryGetProperty("id", out var idElement))
+                {
+                    var id = idElement.GetString() ?? "";
+                    if (id.Contains("fika", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore errors
+            }
+
+            return false;
+        }
+
         private void UpdateSptVersionDisplay()
         {
             _ = UpdateSptVersionDisplayAsync();
+        }
+
+        private void UpdateFikaVersionDisplay()
+        {
+            _ = UpdateFikaVersionDisplayAsync();
+        }
+
+        private async Task UpdateFikaVersionDisplayAsync()
+        {
+            try
+            {
+                if (FikaVersionText == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[UpdateFikaVersionDisplayAsync] FikaVersionText is null");
+                    return;
+                }
+
+                // Get SPT path on UI thread first (before going to background thread)
+                string sptPath = string.Empty;
+                Dispatcher.Invoke(() =>
+                {
+                    sptPath = GetSptInstallPath();
+                });
+                
+                System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] SPT Path from UI thread: {sptPath}");
+
+                // Detect Fika mod and get version on background thread
+                string? version = null;
+                bool fikaInstalled = false;
+                string? fikaModPath = null;
+                
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        // Detect Fika mod using the captured SPT path
+                        fikaModPath = AutoDetectFikaModWithPath(sptPath);
+                        fikaInstalled = !string.IsNullOrEmpty(fikaModPath);
+                        
+                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Fika mod detected: {fikaInstalled}, Path: {fikaModPath}");
+                        
+                        // Get Fika version if installed
+                        if (fikaInstalled)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Getting version from: {fikaModPath}");
+                            version = GetFikaVersion(fikaModPath);
+                            System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Version result: {version ?? "(null)"}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Error in background task: {ex.Message}");
+                    }
+                });
+                
+                // Check for updates if version is available (outside Task.Run since it's async)
+                FikaUpdateInfo? updateInfo = null;
+                if (!string.IsNullOrEmpty(version))
+                {
+                    try
+                    {
+                        updateInfo = await SptDetectionService.Instance.CheckForFikaUpdatesAsync(version);
+                        _currentFikaUpdateInfo = updateInfo;
+                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Update check result: {(updateInfo?.IsUpdateAvailable == true ? $"Update available: {updateInfo.LatestVersion}" : "Up to date")}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Error checking for updates: {ex.Message}");
+                    }
+                }
+                
+                // Update UI on UI thread
+                Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        if (FikaVersionText == null)
+                        {
+                            return;
+                        }
+
+                        // Show/hide install button based on whether Fika is installed
+                        if (InstallFikaButton != null)
+                        {
+                            InstallFikaButton.Visibility = fikaInstalled ? Visibility.Collapsed : Visibility.Visible;
+                        }
+
+                        if (!fikaInstalled)
+                        {
+                            FikaVersionText.Text = "Not detected";
+                            FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                            
+                            // Hide update status if not installed
+                            if (FikaUpdateStatusPanel != null)
+                            {
+                                FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                            }
+                            
+                            // Disable Fika checkbox if not installed
+                            if (EnableFikaCheckBox != null)
+                            {
+                                EnableFikaCheckBox.IsEnabled = false;
+                                if (_fikaEnabled)
+                                {
+                                    _fikaEnabled = false;
+                                    EnableFikaCheckBox.IsChecked = false;
+                                    SettingsService.Instance.FikaEnabled = false;
+                                    SettingsService.Instance.SaveSettings();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Update version display
+                            if (string.IsNullOrEmpty(version))
+                            {
+                                FikaVersionText.Text = "Installed (version unknown)";
+                                FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                            }
+                            else
+                            {
+                                FikaVersionText.Text = version;
+                                FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor");
+                            }
+                            
+                            // Update update status display
+                            if (FikaUpdateStatusPanel != null && FikaUpdateStatusText != null)
+                            {
+                                if (updateInfo == null)
+                                {
+                                    // Check failed (network error, etc.) - hide update status
+                                    FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                                }
+                                else if (updateInfo.IsUpdateAvailable)
+                                {
+                                    // Update available
+                                    FikaUpdateStatusPanel.Visibility = Visibility.Visible;
+                                    FikaUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion}";
+                                    FikaUpdateStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
+                                }
+                                else
+                                {
+                                    // Up to date
+                                    FikaUpdateStatusPanel.Visibility = Visibility.Visible;
+                                    FikaUpdateStatusText.Text = "Up to date";
+                                    FikaUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                                }
+                            }
+                            
+                            // Enable Fika checkbox if installed
+                            if (EnableFikaCheckBox != null)
+                            {
+                                EnableFikaCheckBox.IsEnabled = true;
+                                EnableFikaCheckBox.IsChecked = _fikaEnabled;
+                                
+                                if (_fikaEnabled)
+                                {
+                                    // Show IP editor
+                                    if (FikaIpEditorPanel != null)
+                                    {
+                                        FikaIpEditorPanel.Visibility = Visibility.Visible;
+                                    }
+                                    // Only set default IP if text box is empty
+                                    if (FikaIpTextBox != null && string.IsNullOrWhiteSpace(FikaIpTextBox.Text))
+                                    {
+                                        FikaIpTextBox.Text = _defaultIp;
+                                    }
+                                }
+                                else
+                                {
+                                    if (FikaIpEditorPanel != null)
+                                    {
+                                        FikaIpEditorPanel.Visibility = Visibility.Collapsed;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Error updating UI: {ex.Message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Outer exception: {ex.Message}\n{ex.StackTrace}");
+            }
+        }
+
+        /// <summary>
+        /// Gets the Fika mod version from the mod directory
+        /// </summary>
+        private string GetFikaVersion(string fikaModPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(fikaModPath) || !Directory.Exists(fikaModPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Invalid path: {fikaModPath}");
+                    return string.Empty;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Searching for version in: {fikaModPath}");
+
+                // Try to read version from package.json first
+                var packageJsonPath = Path.Combine(fikaModPath, "package.json");
+                if (File.Exists(packageJsonPath))
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found package.json: {packageJsonPath}");
+                        var jsonContent = File.ReadAllText(packageJsonPath);
+                        var jsonDoc = JsonDocument.Parse(jsonContent);
+                        
+                        if (jsonDoc.RootElement.TryGetProperty("version", out var versionElement))
+                        {
+                            var version = versionElement.GetString();
+                            if (!string.IsNullOrEmpty(version))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found version in package.json: {version}");
+                                // Normalize version (strip commit hash and suffixes)
+                                version = NormalizeVersion(version);
+                                return version;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Error reading package.json: {ex.Message}");
+                        // Continue to try DLL version
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] package.json not found at: {packageJsonPath}");
+                }
+
+                // Search for DLL files in the mod directory and subdirectories
+                var dllFiles = Directory.GetFiles(fikaModPath, "*.dll", SearchOption.AllDirectories);
+                System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found {dllFiles.Length} DLL files in mod directory");
+
+                // Try to read version from Fika.Core.dll (most reliable)
+                var fikaCoreDll = dllFiles.FirstOrDefault(f => Path.GetFileName(f).Equals("Fika.Core.dll", StringComparison.OrdinalIgnoreCase))
+                    ?? Path.Combine(fikaModPath, "Fika.Core.dll");
+                
+                if (File.Exists(fikaCoreDll))
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found Fika.Core.dll: {fikaCoreDll}");
+                        var versionInfo = FileVersionInfo.GetVersionInfo(fikaCoreDll);
+                        var version = versionInfo.ProductVersion ?? versionInfo.FileVersion;
+                        if (!string.IsNullOrEmpty(version))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found version in Fika.Core.dll: {version}");
+                            version = NormalizeVersion(version);
+                            return version;
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Fika.Core.dll exists but version is empty");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Error reading Fika.Core.dll: {ex.Message}");
+                        // Continue to try Fika.dll
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Fika.Core.dll not found at: {fikaCoreDll}");
+                }
+
+                // Try to read version from Fika.dll
+                var fikaDll = dllFiles.FirstOrDefault(f => Path.GetFileName(f).Equals("Fika.dll", StringComparison.OrdinalIgnoreCase))
+                    ?? Path.Combine(fikaModPath, "Fika.dll");
+                
+                if (File.Exists(fikaDll))
+                {
+                    try
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found Fika.dll: {fikaDll}");
+                        var versionInfo = FileVersionInfo.GetVersionInfo(fikaDll);
+                        var version = versionInfo.ProductVersion ?? versionInfo.FileVersion;
+                        if (!string.IsNullOrEmpty(version))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found version in Fika.dll: {version}");
+                            version = NormalizeVersion(version);
+                            return version;
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Fika.dll exists but version is empty");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Error reading Fika.dll: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Fika.dll not found at: {fikaDll}");
+                }
+
+                // List all files in the directory for debugging
+                try
+                {
+                    var allFiles = Directory.GetFiles(fikaModPath, "*", SearchOption.TopDirectoryOnly);
+                    System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Files in mod directory: {string.Join(", ", allFiles.Select(Path.GetFileName))}");
+                }
+                catch { }
+
+                System.Diagnostics.Debug.WriteLine("[GetFikaVersion] No version found");
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Exception: {ex.Message}\n{ex.StackTrace}");
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Normalizes version string by removing commit hashes and common suffixes
+        /// </summary>
+        private string NormalizeVersion(string version)
+        {
+            if (string.IsNullOrEmpty(version))
+            {
+                return version;
+            }
+
+            // Strip commit hash if present (format: "version+commithash")
+            var plusIndex = version.IndexOf('+');
+            if (plusIndex > 0)
+            {
+                version = version.Substring(0, plusIndex);
+            }
+
+            // Strip common suffixes like "-RELEASE", "-DEV", "-ALPHA", "-BETA"
+            var dashIndex = version.IndexOf('-');
+            if (dashIndex > 0)
+            {
+                var suffix = version.Substring(dashIndex).ToUpperInvariant();
+                if (suffix == "-RELEASE" || suffix == "-DEV" || suffix == "-ALPHA" || suffix == "-BETA" || suffix.StartsWith("-RC"))
+                {
+                    version = version.Substring(0, dashIndex);
+                }
+            }
+
+            return version.Trim();
         }
 
         private async Task UpdateSptVersionDisplayAsync()

@@ -17,6 +17,14 @@ namespace SptLauncherWpf.Services
         public string? InstallerDownloadUrl { get; set; }
     }
 
+    public class FikaUpdateInfo
+    {
+        public string LatestVersion { get; set; } = "";
+        public bool IsUpdateAvailable { get; set; }
+        public string? ReleaseUrl { get; set; }
+        public string? InstallerDownloadUrl { get; set; }
+    }
+
     public class SptGitHubRelease
     {
         [JsonPropertyName("tag_name")]
@@ -48,6 +56,7 @@ namespace SptLauncherWpf.Services
 
         private const string SptReleasesApiUrl = "https://api.github.com/repos/sp-tarkov/build/releases/latest";
         private const string ForgeInstallerPageUrl = "https://forge.sp-tarkov.com/installer";
+        private const string FikaReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Installer/releases/latest";
         private HttpClient? _httpClient;
 
         private SptDetectionService()
@@ -555,6 +564,86 @@ namespace SptLauncherWpf.Services
             catch
             {
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Checks for Fika updates by comparing current version with latest GitHub release
+        /// </summary>
+        public async Task<FikaUpdateInfo?> CheckForFikaUpdatesAsync(string currentVersion)
+        {
+            if (string.IsNullOrWhiteSpace(currentVersion))
+            {
+                return null;
+            }
+
+            try
+            {
+                var response = await _httpClient!.GetStringAsync(FikaReleasesApiUrl);
+                var release = JsonSerializer.Deserialize<SptGitHubRelease>(response, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = false
+                });
+
+                if (release == null || string.IsNullOrWhiteSpace(release.TagName))
+                {
+                    return null;
+                }
+
+                // Extract version from tag (remove 'v' prefix if present)
+                var latestVersion = release.TagName.TrimStart('v', 'V');
+                
+                // Normalize both versions for comparison
+                var normalizedLatest = NormalizeVersion(latestVersion);
+                var normalizedCurrent = NormalizeVersion(currentVersion);
+
+                // Compare versions
+                var isUpdateAvailable = IsNewerVersion(normalizedLatest, normalizedCurrent);
+
+                // Find installer download URL from release assets
+                string? installerUrl = null;
+                if (release.Assets != null && release.Assets.Count > 0)
+                {
+                    // Look for installer/setup exe files first
+                    var installerAsset = release.Assets.FirstOrDefault(a => 
+                        a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                        (a.Name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
+                         a.Name.Contains("setup", StringComparison.OrdinalIgnoreCase) ||
+                         a.Name.Contains("install", StringComparison.OrdinalIgnoreCase) ||
+                         a.Name.Contains("Fika", StringComparison.OrdinalIgnoreCase)));
+
+                    // Fallback to any .exe file
+                    if (installerAsset == null)
+                    {
+                        installerAsset = release.Assets.FirstOrDefault(a => 
+                            a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+                    }
+
+                    if (installerAsset != null && !string.IsNullOrEmpty(installerAsset.BrowserDownloadUrl))
+                    {
+                        installerUrl = installerAsset.BrowserDownloadUrl;
+                        System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Found Fika installer URL: {installerUrl}");
+                    }
+                }
+
+                return new FikaUpdateInfo
+                {
+                    LatestVersion = latestVersion,
+                    IsUpdateAvailable = isUpdateAvailable,
+                    ReleaseUrl = release.HtmlUrl,
+                    InstallerDownloadUrl = installerUrl
+                };
+            }
+            catch (HttpRequestException)
+            {
+                // Network error - return null to indicate check failed
+                return null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Error checking Fika updates: {ex.Message}");
+                // Other errors - return null
+                return null;
             }
         }
     }
