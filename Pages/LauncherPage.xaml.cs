@@ -706,356 +706,27 @@ namespace SptLauncherWpf.Pages
             try
             {
                 System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Starting stop process...");
-                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] StopButtonBorder configured");
-                
-                // Get current process ID and name to exclude it from stopping
                 int currentProcessId = Process.GetCurrentProcess().Id;
                 string currentProcessName = Process.GetCurrentProcess().ProcessName;
                 System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Current process: {currentProcessName} (PID: {currentProcessId})");
-                
-                // Build list of processes to stop - prioritize tracked processes we started
-                List<Process> launcherProcesses = new List<Process>();
-                
-                // First, add the tracked launcher process if we have one
-                if (_launcherProcess != null && !_launcherProcess.HasExited && _launcherProcess.Id != currentProcessId)
-                {
-                    try
-                    {
-                        // Verify the process still exists
-                        var checkProcess = Process.GetProcessById(_launcherProcess.Id);
-                        if (!checkProcess.HasExited)
-                        {
-                            launcherProcesses.Add(checkProcess);
-                            System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Adding tracked launcher process: {_launcherProcess.ProcessName} (PID: {_launcherProcess.Id})");
-                        }
-                    }
-                    catch (ArgumentException)
-                    {
-                        // Process doesn't exist anymore, skip it
-                        System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Tracked launcher process no longer exists");
-                    }
-                }
-                
-                // If we don't have a tracked process, look for running SPT/Aki launcher processes
-                // (but only if we don't have a tracked one - this handles cases where the process was started outside our app)
-                if (launcherProcesses.Count == 0)
-                {
-                    var sptLauncherProcesses = Process.GetProcessesByName("SPT.Launcher")
-                        .Where(p => p.Id != currentProcessId && !p.HasExited)
-                        .ToArray();
-                    var akiLauncherProcesses = Process.GetProcessesByName("Aki.Launcher")
-                        .Where(p => p.Id != currentProcessId && !p.HasExited)
-                        .ToArray();
-                    
-                    launcherProcesses.AddRange(sptLauncherProcesses);
-                    launcherProcesses.AddRange(akiLauncherProcesses);
-                }
-                
-                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Found {launcherProcesses.Count} SPT launcher process(es) to stop:");
-                foreach (var proc in launcherProcesses)
-                {
-                    System.Diagnostics.Debug.WriteLine($"  - {proc.ProcessName} (PID: {proc.Id}, HasExited: {proc.HasExited})");
-                }
-                
-                int stoppedCount = 0;
-                int failedCount = 0;
-                List<string> failedProcesses = new List<string>();
-                
+
+                var launcherProcesses = GetLauncherProcessesToStop(currentProcessId);
+                LogLauncherProcessesToStop(launcherProcesses);
+
+                var summary = new StopProcessSummary();
                 foreach (var process in launcherProcesses)
                 {
-                    try
-                    {
-                        // Double-check it hasn't exited
-                        if (process.HasExited)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process {process.ProcessName} (PID: {process.Id}) already exited");
-                            stoppedCount++;
-                            continue;
-                        }
-                        
-                        System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Attempting to stop {process.ProcessName} (PID: {process.Id})");
-                        
-                        // Try to close the main window gracefully first (if it has one)
-                        try
-                        {
-                            if (process.MainWindowHandle != IntPtr.Zero)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process has a window, attempting to close gracefully");
-                                process.CloseMainWindow();
-                                
-                                // Wait a bit for graceful shutdown
-                                if (process.WaitForExit(2000))
-                                {
-                                    System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process closed gracefully");
-                                    stoppedCount++;
-                                    continue;
-                                }
-                            }
-                        }
-                        catch (Exception closeEx)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Could not close window gracefully: {closeEx.Message}");
-                        }
-                        
-                        // If graceful close didn't work, try to kill the process
-                        try
-                        {
-                            process.Kill();
-                            if (process.WaitForExit(5000))
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Successfully killed {process.ProcessName} (PID: {process.Id})");
-                            stoppedCount++;
-                            }
-                            else
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process did not exit within timeout");
-                                failedCount++;
-                                failedProcesses.Add($"{process.ProcessName} (PID: {process.Id})");
-                            }
-                        }
-                        catch (System.ComponentModel.Win32Exception winEx) when (winEx.NativeErrorCode == 5) // Access Denied
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Access denied when killing {process.ProcessName} (PID: {process.Id})");
-                            
-                            bool terminated = false;
-                            int processId = process.Id; // Store ID before potential disposal
-                            string processName = process.ProcessName;
-                            
-                            // Try WMI termination first (sometimes works when Process.Kill() doesn't)
-                            try
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Attempting to use WMI to terminate process");
-                                if (TerminateProcessWithWmi(processId))
-                                {
-                                    System.Threading.Thread.Sleep(1000); // Give it a moment
-                                    // Re-check if process still exists
-                                    try
-                                    {
-                                        var checkProcess = Process.GetProcessById(processId);
-                                        if (checkProcess.HasExited)
-                                        {
-                                            terminated = true;
-                                        }
-                                        checkProcess.Dispose();
-                                    }
-                                    catch (ArgumentException)
-                                    {
-                                        // Process doesn't exist anymore - it was terminated!
-                                        terminated = true;
-                                    }
-                                    
-                                    if (terminated)
-                                    {
-                                        System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Successfully terminated using WMI");
-                                        stoppedCount++;
-                                    }
-                                }
-                            }
-                            catch (Exception wmiEx)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] WMI termination failed: {wmiEx.Message}");
-                            }
-                            
-                            // If WMI didn't work, try taskkill
-                            if (!terminated)
-                            {
-                                try
-                                {
-                                    System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Attempting to use taskkill as fallback");
-                                    var taskkillInfo = new ProcessStartInfo
-                                    {
-                                        FileName = "taskkill",
-                                        Arguments = $"/F /PID {processId}",
-                                        UseShellExecute = false,
-                                        CreateNoWindow = true,
-                                        RedirectStandardOutput = true,
-                                        RedirectStandardError = true
-                                    };
-                                    
-                                    using (var taskkill = Process.Start(taskkillInfo))
-                                    {
-                                        if (taskkill != null)
-                                        {
-                                            taskkill.WaitForExit(5000);
-                                            System.Threading.Thread.Sleep(500); // Give it a moment
-                                            
-                                            // Re-check if process still exists
-                                            try
-                                            {
-                                                var checkProcess = Process.GetProcessById(processId);
-                                                if (checkProcess.HasExited)
-                                                {
-                                                    terminated = true;
-                                                }
-                                                checkProcess.Dispose();
-                                            }
-                                            catch (ArgumentException)
-                                            {
-                                                // Process doesn't exist anymore - it was terminated!
-                                                terminated = true;
-                                            }
-                                            
-                                            if (terminated)
-                                            {
-                                                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Successfully killed using taskkill");
-                                                stoppedCount++;
-                                            }
-                                        }
-                                    }
-                                }
-                                catch (Exception taskkillEx)
-                                {
-                                    System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] taskkill also failed: {taskkillEx.Message}");
-                                }
-                            }
-                            
-                            // Final check - maybe the process exited despite the error
-                            if (!terminated)
-                            {
-                                try
-                                {
-                                    var finalCheck = Process.GetProcessById(processId);
-                                    if (finalCheck.HasExited)
-                                    {
-                                        terminated = true;
-                                        stoppedCount++;
-                                        System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process actually exited (final check)");
-                                    }
-                                    finalCheck.Dispose();
-                                }
-                                catch (ArgumentException)
-                                {
-                                    // Process doesn't exist - it was terminated!
-                                    terminated = true;
-                                    stoppedCount++;
-                                    System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process doesn't exist anymore (final check)");
-                                }
-                            }
-                            
-                            if (!terminated)
-                            {
-                                failedCount++;
-                                string errorMsg = $"{processName} (PID: {processId}) - Access Denied";
-                                if (!IsRunningAsAdministrator())
-                                {
-                                    errorMsg += " (Try running this launcher as Administrator)";
-                                }
-                                failedProcesses.Add(errorMsg);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Error stopping {process.ProcessName} (PID: {process.Id}): {ex.Message}");
-                        failedCount++;
-                        failedProcesses.Add($"{process.ProcessName} (PID: {process.Id}) - {ex.Message}");
-                    }
+                    TryStopLauncherProcess(process, summary);
                 }
-                
-                // Show summary message
-                if (failedCount > 0)
+
+                if (summary.FailedCount > 0)
                 {
-                    string failedMessage = stoppedCount > 0 
-                        ? $"Successfully stopped {stoppedCount} process(es).\n\n"
-                        : "";
-                    
-                    failedMessage += $"Failed to stop {failedCount} process(es):\n";
-                    failedMessage += string.Join("\n", failedProcesses);
-                    
-                    if (!IsRunningAsAdministrator())
-                    {
-                        failedMessage += "\n\n📌 This is normal - Windows requires Administrator privileges to stop some processes.";
-                        failedMessage += "\n\nTo stop these processes, you have two options:";
-                        failedMessage += "\n\nOption 1 - Run as Administrator (Recommended):";
-                        failedMessage += "\n  1. Close this launcher";
-                        failedMessage += "\n  2. Right-click 'SPT Launcher.exe'";
-                        failedMessage += "\n  3. Select 'Run as administrator'";
-                        failedMessage += "\n  4. Try stopping again";
-                        failedMessage += "\n\nOption 2 - Use Task Manager:";
-                        failedMessage += "\n  Press Ctrl+Shift+Esc, find the process(es) above, and click 'End Task'";
-                    }
-                    else
-                    {
-                        failedMessage += "\n\n⚠ Even with Administrator privileges, some processes could not be stopped.";
-                        failedMessage += "\n\nYou may need to manually close them from Task Manager:";
-                        failedMessage += "\n1. Press Ctrl+Shift+Esc to open Task Manager";
-                        failedMessage += "\n2. Find the process(es) listed above";
-                        failedMessage += "\n3. Right-click and select 'End Task'";
-                    }
-                    
-                    Dispatcher.Invoke(() =>
-                    {
-                        var result = System.Windows.MessageBox.Show(failedMessage, "Stop Processes", 
-                                      MessageBoxButton.OKCancel, MessageBoxImage.Warning);
-                        
-                        if (result == MessageBoxResult.OK && !IsRunningAsAdministrator())
-                        {
-                            // Offer to open Task Manager
-                            var taskMgrResult = System.Windows.MessageBox.Show(
-                                "Would you like to open Task Manager to manually close the processes?",
-                                "Open Task Manager?",
-                                MessageBoxButton.YesNo,
-                                MessageBoxImage.Question);
-                            
-                            if (taskMgrResult == MessageBoxResult.Yes)
-                            {
-                                try
-                                {
-                                    Process.Start(new ProcessStartInfo
-                                    {
-                                        FileName = "taskmgr.exe",
-                                        UseShellExecute = true
-                                    });
-                                }
-                                catch
-                                {
-                                    // Ignore if we can't open Task Manager
-                                }
-                            }
-                        }
-                    });
+                    ShowStopFailureSummary(summary);
                 }
-                
-                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Stopped {stoppedCount} launcher processes, {failedCount} failed");
-                
-                // Clean up tracked process if it was stopped
-                if (stoppedCount > 0 && _launcherProcess != null)
-                {
-                    try
-                    {
-                        if (_launcherProcess.HasExited)
-                        {
-                            _launcherProcess.Dispose();
-                            _launcherProcess = null;
-                            _isLauncherRunning = false;
-                            _launcherPid = 0;
-                            System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Cleaned up tracked launcher process");
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore cleanup errors
-                    }
-                }
-                
-                // Update UI on UI thread
-                Dispatcher.Invoke(() =>
-                {
-                    if (stoppedCount > 0)
-                    {
-                        // Status messages removed - StatusText element was removed from UI
-                    }
-                    else if (failedCount > 0)
-                    {
-                        // Status messages removed - StatusText element was removed from UI
-                    }
-                    else
-                    {
-                        // Status messages removed - StatusText element was removed from UI
-                    }
-                });
-                
-                // Force UI refresh after a short delay to allow processes to fully exit
+
+                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Stopped {summary.StoppedCount} launcher processes, {summary.FailedCount} failed");
+                CleanupTrackedLauncherAfterStop(summary.StoppedCount);
+
                 await Task.Delay(500);
                 UpdateLauncherUI();
             }
@@ -1068,6 +739,322 @@ namespace SptLauncherWpf.Pages
                               MessageBoxButton.OK, MessageBoxImage.Error);
                     UpdateLauncherUI();
                 });
+            }
+        }
+
+        private sealed class StopProcessSummary
+        {
+            public int StoppedCount { get; set; }
+            public int FailedCount { get; set; }
+            public List<string> FailedProcesses { get; } = new();
+        }
+
+        private List<Process> GetLauncherProcessesToStop(int currentProcessId)
+        {
+            var launcherProcesses = new List<Process>();
+
+            if (_launcherProcess != null && !_launcherProcess.HasExited && _launcherProcess.Id != currentProcessId)
+            {
+                try
+                {
+                    var checkProcess = Process.GetProcessById(_launcherProcess.Id);
+                    if (!checkProcess.HasExited)
+                    {
+                        launcherProcesses.Add(checkProcess);
+                        System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Adding tracked launcher process: {_launcherProcess.ProcessName} (PID: {_launcherProcess.Id})");
+                    }
+                }
+                catch (ArgumentException)
+                {
+                    System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Tracked launcher process no longer exists");
+                }
+            }
+
+            if (launcherProcesses.Count == 0)
+            {
+                launcherProcesses.AddRange(Process.GetProcessesByName("SPT.Launcher")
+                    .Where(p => p.Id != currentProcessId && !p.HasExited));
+                launcherProcesses.AddRange(Process.GetProcessesByName("Aki.Launcher")
+                    .Where(p => p.Id != currentProcessId && !p.HasExited));
+            }
+
+            return launcherProcesses;
+        }
+
+        private static void LogLauncherProcessesToStop(IEnumerable<Process> launcherProcesses)
+        {
+            var processes = launcherProcesses.ToList();
+            System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Found {processes.Count} SPT launcher process(es) to stop:");
+            foreach (var proc in processes)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - {proc.ProcessName} (PID: {proc.Id}, HasExited: {proc.HasExited})");
+            }
+        }
+
+        private void TryStopLauncherProcess(Process process, StopProcessSummary summary)
+        {
+            try
+            {
+                if (process.HasExited)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process {process.ProcessName} (PID: {process.Id}) already exited");
+                    summary.StoppedCount++;
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Attempting to stop {process.ProcessName} (PID: {process.Id})");
+                if (TryCloseProcessGracefully(process))
+                {
+                    summary.StoppedCount++;
+                    return;
+                }
+
+                if (TryKillProcess(process, summary))
+                {
+                    return;
+                }
+
+                summary.FailedCount++;
+                summary.FailedProcesses.Add($"{process.ProcessName} (PID: {process.Id})");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Error stopping {process.ProcessName} (PID: {process.Id}): {ex.Message}");
+                summary.FailedCount++;
+                summary.FailedProcesses.Add($"{process.ProcessName} (PID: {process.Id}) - {ex.Message}");
+            }
+        }
+
+        private bool TryCloseProcessGracefully(Process process)
+        {
+            try
+            {
+                if (process.MainWindowHandle == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Process has a window, attempting to close gracefully");
+                process.CloseMainWindow();
+                if (process.WaitForExit(2000))
+                {
+                    System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Process closed gracefully");
+                    return true;
+                }
+            }
+            catch (Exception closeEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Could not close window gracefully: {closeEx.Message}");
+            }
+
+            return false;
+        }
+
+        private bool TryKillProcess(Process process, StopProcessSummary summary)
+        {
+            try
+            {
+                process.Kill();
+                if (process.WaitForExit(5000))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Successfully killed {process.ProcessName} (PID: {process.Id})");
+                    summary.StoppedCount++;
+                    return true;
+                }
+            }
+            catch (System.ComponentModel.Win32Exception winEx) when (winEx.NativeErrorCode == 5)
+            {
+                return HandleAccessDeniedStop(process, summary);
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process did not exit within timeout");
+            return false;
+        }
+
+        private bool HandleAccessDeniedStop(Process process, StopProcessSummary summary)
+        {
+            System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Access denied when killing {process.ProcessName} (PID: {process.Id})");
+
+            int processId = process.Id;
+            string processName = process.ProcessName;
+
+            if (TryTerminateWithWmi(processId) || TryTerminateWithTaskKill(processId) || IsProcessTerminated(processId, "final check"))
+            {
+                summary.StoppedCount++;
+                return true;
+            }
+
+            summary.FailedCount++;
+            string errorMsg = $"{processName} (PID: {processId}) - Access Denied";
+            if (!IsRunningAsAdministrator())
+            {
+                errorMsg += " (Try running this launcher as Administrator)";
+            }
+            summary.FailedProcesses.Add(errorMsg);
+            return true;
+        }
+
+        private bool TryTerminateWithWmi(int processId)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Attempting to use WMI to terminate process");
+                if (TerminateProcessWithWmi(processId))
+                {
+                    System.Threading.Thread.Sleep(1000);
+                    if (IsProcessTerminated(processId, "WMI"))
+                    {
+                        System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Successfully terminated using WMI");
+                        return true;
+                    }
+                }
+            }
+            catch (Exception wmiEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] WMI termination failed: {wmiEx.Message}");
+            }
+
+            return false;
+        }
+
+        private bool TryTerminateWithTaskKill(int processId)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Attempting to use taskkill as fallback");
+                var taskkillInfo = new ProcessStartInfo
+                {
+                    FileName = "taskkill",
+                    Arguments = $"/F /PID {processId}",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                using var taskkill = Process.Start(taskkillInfo);
+                if (taskkill == null)
+                {
+                    return false;
+                }
+
+                taskkill.WaitForExit(5000);
+                System.Threading.Thread.Sleep(500);
+                if (IsProcessTerminated(processId, "taskkill"))
+                {
+                    System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Successfully killed using taskkill");
+                    return true;
+                }
+            }
+            catch (Exception taskkillEx)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] taskkill also failed: {taskkillEx.Message}");
+            }
+
+            return false;
+        }
+
+        private bool IsProcessTerminated(int processId, string context)
+        {
+            try
+            {
+                using var checkProcess = Process.GetProcessById(processId);
+                if (checkProcess.HasExited)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process exited ({context})");
+                    return true;
+                }
+            }
+            catch (ArgumentException)
+            {
+                System.Diagnostics.Debug.WriteLine($"[StopSptProcessesAsync] Process doesn't exist anymore ({context})");
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ShowStopFailureSummary(StopProcessSummary summary)
+        {
+            string failedMessage = summary.StoppedCount > 0
+                ? $"Successfully stopped {summary.StoppedCount} process(es).\n\n"
+                : "";
+
+            failedMessage += $"Failed to stop {summary.FailedCount} process(es):\n";
+            failedMessage += string.Join("\n", summary.FailedProcesses);
+
+            if (!IsRunningAsAdministrator())
+            {
+                failedMessage += "\n\n📌 This is normal - Windows requires Administrator privileges to stop some processes.";
+                failedMessage += "\n\nTo stop these processes, you have two options:";
+                failedMessage += "\n\nOption 1 - Run as Administrator (Recommended):";
+                failedMessage += "\n  1. Close this launcher";
+                failedMessage += "\n  2. Right-click 'SPT Launcher.exe'";
+                failedMessage += "\n  3. Select 'Run as administrator'";
+                failedMessage += "\n  4. Try stopping again";
+                failedMessage += "\n\nOption 2 - Use Task Manager:";
+                failedMessage += "\n  Press Ctrl+Shift+Esc, find the process(es) above, and click 'End Task'";
+            }
+            else
+            {
+                failedMessage += "\n\n⚠ Even with Administrator privileges, some processes could not be stopped.";
+                failedMessage += "\n\nYou may need to manually close them from Task Manager:";
+                failedMessage += "\n1. Press Ctrl+Shift+Esc to open Task Manager";
+                failedMessage += "\n2. Find the process(es) listed above";
+                failedMessage += "\n3. Right-click and select 'End Task'";
+            }
+
+            Dispatcher.Invoke(() =>
+            {
+                var result = System.Windows.MessageBox.Show(failedMessage, "Stop Processes",
+                    MessageBoxButton.OKCancel, MessageBoxImage.Warning);
+
+                if (result == MessageBoxResult.OK && !IsRunningAsAdministrator())
+                {
+                    var taskMgrResult = System.Windows.MessageBox.Show(
+                        "Would you like to open Task Manager to manually close the processes?",
+                        "Open Task Manager?",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (taskMgrResult == MessageBoxResult.Yes)
+                    {
+                        try
+                        {
+                            Process.Start(new ProcessStartInfo
+                            {
+                                FileName = "taskmgr.exe",
+                                UseShellExecute = true
+                            });
+                        }
+                        catch
+                        {
+                        }
+                    }
+                }
+            });
+        }
+
+        private void CleanupTrackedLauncherAfterStop(int stoppedCount)
+        {
+            if (stoppedCount <= 0 || _launcherProcess == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (_launcherProcess.HasExited)
+                {
+                    _launcherProcess.Dispose();
+                    _launcherProcess = null;
+                    _isLauncherRunning = false;
+                    _launcherPid = 0;
+                    System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Cleaned up tracked launcher process");
+                }
+            }
+            catch
+            {
             }
         }
 
@@ -1413,24 +1400,21 @@ namespace SptLauncherWpf.Pages
 
         private async void InstallFikaButton_Click(object sender, RoutedEventArgs e)
         {
-            // First check if Fika is already installed
-            var fikaModPath = AutoDetectFikaMod();
-            if (!string.IsNullOrEmpty(fikaModPath))
+            if (!ShouldContinueWithFikaInstall())
             {
-                var result = System.Windows.MessageBox.Show(
-                    $"Fika mod appears to be already installed at:\n{fikaModPath}\n\n" +
-                    "Do you want to reinstall it anyway?",
-                    "Fika Already Installed",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
-                
-                if (result == MessageBoxResult.No)
-                {
-                    return;
-                }
+                return;
             }
 
-            // Check if SPT path is set
+            await RunFikaInstallerAsync(InstallFikaButton, ResetInstallFikaButton);
+        }
+
+        private async void UpdateFikaButton_Click(object sender, RoutedEventArgs e)
+        {
+            await RunFikaInstallerAsync(UpdateFikaButton, ResetUpdateFikaButton);
+        }
+
+        private async Task RunFikaInstallerAsync(System.Windows.Controls.Button? progressButton, Action resetButton)
+        {
             var sptPath = GetSptInstallPath();
             if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
             {
@@ -1442,255 +1426,29 @@ namespace SptLauncherWpf.Pages
                 return;
             }
 
-            const string fikaReleasesApi = "https://api.github.com/repos/project-fika/Fika-Installer/releases/latest";
-            const string installerFileName = "FikaInstaller.exe";
-            
+            var installerPath = Path.Combine(sptPath, FikaInstallUrls.InstallerFileName);
+
             try
             {
-                // Disable button during download
-                if (InstallFikaButton != null)
-                {
-                    InstallFikaButton.IsEnabled = false;
-                    InstallFikaButton.Content = "⏳ Checking for latest version...";
-                }
+                SetFikaButtonState(progressButton, "⏳ Downloading installer...", false);
 
-                // Get latest release from GitHub API
-                string? installerDownloadUrl = null;
-                try
-                {
-                    using (var client = new HttpClient())
-                    {
-                        client.DefaultRequestHeaders.Add("User-Agent", "SPT-Launcher-WPF");
-                        client.Timeout = TimeSpan.FromSeconds(30);
-                        
-                        var response = await client.GetStringAsync(fikaReleasesApi);
-                        var jsonDoc = JsonDocument.Parse(response);
-                        
-                        // Look for installer assets in the release
-                        if (jsonDoc.RootElement.TryGetProperty("assets", out var assets))
-                        {
-                            foreach (var asset in assets.EnumerateArray())
-                            {
-                                if (asset.TryGetProperty("name", out var nameElement))
-                                {
-                                    var fileName = nameElement.GetString() ?? "";
-                                    // Look for .exe files, preferably installer or setup
-                                    if (fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                                    {
-                                        if (asset.TryGetProperty("browser_download_url", out var urlElement))
-                                        {
-                                            installerDownloadUrl = urlElement.GetString();
-                                            // Prefer installer or setup files
-                                            if (fileName.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
-                                                fileName.Contains("setup", StringComparison.OrdinalIgnoreCase))
-                                            {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (HttpRequestException ex) when (ex.Message.Contains("403") || ex.Message.Contains("rate limit"))
-                {
-                    // GitHub API rate limit exceeded - fallback to manual download
-                    var result = System.Windows.MessageBox.Show(
-                        "GitHub API rate limit exceeded. Cannot automatically download the installer.\n\n" +
-                        "Would you like to open the GitHub releases page to download it manually?\n\n" +
-                        "After downloading, place the installer in your SPT directory and run it from there.",
-                        "Rate Limit Exceeded",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Warning);
-                    
-                    if (result == MessageBoxResult.Yes)
-                    {
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "https://github.com/project-fika/Fika-Installer/releases",
-                            UseShellExecute = true
-                        });
-                    }
-                    
-                    if (InstallFikaButton != null)
-                    {
-                        InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                        InstallFikaButton.IsEnabled = true;
-                    }
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    // Other API errors - fallback to manual download
-                    System.Diagnostics.Debug.WriteLine($"[InstallFikaButton] Error fetching release info: {ex.Message}");
-                }
+                await DownloadFikaInstallerAsync(FikaInstallUrls.InstallerDownloadUrl, installerPath, progressButton);
 
-                // If no installer found, fallback to opening releases page
-                if (string.IsNullOrEmpty(installerDownloadUrl))
-                {
-                    var result = System.Windows.MessageBox.Show(
-                        "Could not automatically find the Fika installer download link.\n\n" +
-                        "Would you like to open the GitHub releases page to download it manually?\n\n" +
-                        "After downloading, place the installer in your SPT directory and run it from there.",
-                        "Manual Download Required",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Information);
-                    
-                    if (result == MessageBoxResult.Yes)
-                    {
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "https://github.com/project-fika/Fika-Installer/releases",
-                            UseShellExecute = true
-                        });
-                    }
-                    
-                    if (InstallFikaButton != null)
-                    {
-                        InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                        InstallFikaButton.IsEnabled = true;
-                    }
-                    return;
-                }
+                SetFikaButtonState(progressButton, "🚀 Launching installer...", false);
+                LaunchFikaInstaller(installerPath, sptPath);
 
-                // Update button text
-                if (InstallFikaButton != null)
-                {
-                    InstallFikaButton.Content = "⏳ Downloading installer...";
-                }
-
-                // Place installer in SPT directory (required for Fika installer to work)
-                string installerPath = Path.Combine(sptPath, installerFileName);
-                
-                // Download the installer with progress
-                using (var client = new HttpClient())
-                {
-                    client.Timeout = TimeSpan.FromMinutes(5);
-                    
-                    using (var response = await client.GetAsync(installerDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
-                    {
-                        response.EnsureSuccessStatusCode();
-                        
-                        var totalBytes = response.Content.Headers.ContentLength ?? 0;
-                        using (var contentStream = await response.Content.ReadAsStreamAsync())
-                        using (var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                        {
-                            var buffer = new byte[8192];
-                            long totalBytesRead = 0;
-                            int bytesRead;
-                            
-                            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                            {
-                                await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                totalBytesRead += bytesRead;
-                                
-                                // Update button text with progress if we have total size
-                                if (totalBytes > 0 && InstallFikaButton != null)
-                                {
-                                    var percent = (double)totalBytesRead / totalBytes * 100;
-                                    Dispatcher.Invoke(() =>
-                                    {
-                                        InstallFikaButton.Content = $"⏳ Downloading... {percent:F0}%";
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Update button text
-                if (InstallFikaButton != null)
-                {
-                    InstallFikaButton.Content = "🚀 Launching installer...";
-                }
-
-                // Execute the installer from SPT directory (required for Fika installer)
-                var processInfo = new ProcessStartInfo
-                {
-                    FileName = installerPath,
-                    UseShellExecute = true,
-                    CreateNoWindow = false,
-                    WorkingDirectory = sptPath
-                };
-
-                Process.Start(processInfo);
-
-                // Reset button state
-                if (InstallFikaButton != null)
-                {
-                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                    InstallFikaButton.IsEnabled = true;
-                }
-
-                System.Windows.MessageBox.Show(
-                    "Fika installer has been launched. Please follow the installation wizard.\n\n" +
-                    "Make sure to install Fika to your SPT installation directory.\n\n" +
-                    "The version will be detected automatically after installation completes.",
-                    "Installer Launched",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-                
-                // Refresh Fika detection after a delay (to allow installer to complete)
-                _ = Task.Run(async () =>
-                {
-                    // Wait a bit for installer to potentially complete
-                    await Task.Delay(5000);
-                    Dispatcher.Invoke(() =>
-                    {
-                        UpdateFikaVersionDisplay();
-                    });
-                });
+                resetButton();
+                ShowFikaInstallerLaunchedMessage();
+                ScheduleFikaVersionRefresh();
             }
             catch (HttpRequestException ex)
             {
-                if (InstallFikaButton != null)
-                {
-                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                    InstallFikaButton.IsEnabled = true;
-                }
-                
-                string errorMessage = $"Failed to download the Fika installer.\n\nError: {ex.Message}";
-                string suggestion = "Please check your internet connection and try again.";
-                
-                // Check if it's a rate limit error
-                if (ex.Message.Contains("403") || ex.Message.Contains("rate limit"))
-                {
-                    errorMessage = "GitHub rate limit exceeded. Cannot download the installer automatically.";
-                    suggestion = "Would you like to open the GitHub releases page to download it manually?\n\n" +
-                                "After downloading, place the installer in your SPT directory and run it from there.";
-                    
-                    var result = System.Windows.MessageBox.Show(
-                        $"{errorMessage}\n\n{suggestion}",
-                        "Rate Limit Exceeded",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Warning);
-                    
-                    if (result == MessageBoxResult.Yes)
-                    {
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = "https://github.com/project-fika/Fika-Installer/releases",
-                            UseShellExecute = true
-                        });
-                    }
-                }
-                else
-                {
-                    System.Windows.MessageBox.Show(
-                        $"{errorMessage}\n\n{suggestion}",
-                        "Download Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
-                }
+                resetButton();
+                HandleFikaInstallHttpError(ex);
             }
             catch (TaskCanceledException ex)
             {
-                if (InstallFikaButton != null)
-                {
-                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                    InstallFikaButton.IsEnabled = true;
-                }
+                resetButton();
                 System.Windows.MessageBox.Show(
                     $"Download timed out.\n\nError: {ex.Message}\n\n" +
                     "Please check your internet connection and try again.",
@@ -1700,17 +1458,177 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                if (InstallFikaButton != null)
-                {
-                    InstallFikaButton.Content = "📥 Install Latest FIKA Version";
-                    InstallFikaButton.IsEnabled = true;
-                }
+                resetButton();
                 System.Windows.MessageBox.Show(
                     $"An error occurred while installing Fika.\n\nError: {ex.Message}",
                     "Installation Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
+        }
+
+        private bool ShouldContinueWithFikaInstall()
+        {
+            var fikaModPath = AutoDetectFikaMod();
+            if (string.IsNullOrEmpty(fikaModPath))
+            {
+                return true;
+            }
+
+            var result = System.Windows.MessageBox.Show(
+                $"Fika mod appears to be already installed at:\n{fikaModPath}\n\n" +
+                "Do you want to reinstall it anyway?",
+                "Fika Already Installed",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            return result == MessageBoxResult.Yes;
+        }
+
+        private void SetInstallFikaButtonState(string content, bool isEnabled)
+        {
+            SetFikaButtonState(InstallFikaButton, content, isEnabled);
+        }
+
+        private void ResetInstallFikaButton()
+        {
+            SetInstallFikaButtonState("📥 Install Latest FIKA Version", true);
+        }
+
+        private void ResetUpdateFikaButton()
+        {
+            SetFikaButtonState(UpdateFikaButton, "Update Now", true);
+        }
+
+        private void SetFikaButtonState(System.Windows.Controls.Button? button, string content, bool isEnabled)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.Content = content;
+            button.IsEnabled = isEnabled;
+        }
+
+        private void ShowFikaManualDownloadPrompt(string title)
+        {
+            var result = System.Windows.MessageBox.Show(
+                "Could not automatically download the Fika installer.\n\n" +
+                "Would you like to open the GitHub releases page to download it manually?\n\n" +
+                "After downloading, place the installer in your SPT directory and run it from there.",
+                title,
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = FikaInstallUrls.InstallerReleasesPageUrl,
+                    UseShellExecute = true
+                });
+            }
+        }
+
+        private static bool IsGitHubRateLimitError(HttpRequestException ex)
+        {
+            return ex.Message.Contains("403", StringComparison.OrdinalIgnoreCase) ||
+                   ex.Message.Contains("rate limit", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task DownloadFikaInstallerAsync(string installerDownloadUrl, string installerPath, System.Windows.Controls.Button? progressButton = null)
+        {
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromMinutes(5);
+
+            using var response = await client.GetAsync(installerDownloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength ?? 0;
+            await using var contentStream = await response.Content.ReadAsStreamAsync();
+            await using var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+            var buffer = new byte[8192];
+            long totalBytesRead = 0;
+            int bytesRead;
+
+            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                await fileStream.WriteAsync(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+
+                if (totalBytes > 0 && progressButton != null)
+                {
+                    var percent = (double)totalBytesRead / totalBytes * 100;
+                    var button = progressButton;
+                    Dispatcher.Invoke(() => button.Content = $"⏳ Downloading... {percent:F0}%");
+                }
+            }
+        }
+
+        private static void LaunchFikaInstaller(string installerPath, string sptPath)
+        {
+            var processInfo = new ProcessStartInfo
+            {
+                FileName = installerPath,
+                UseShellExecute = true,
+                CreateNoWindow = false,
+                WorkingDirectory = sptPath
+            };
+
+            Process.Start(processInfo);
+        }
+
+        private static void ShowFikaInstallerLaunchedMessage()
+        {
+            System.Windows.MessageBox.Show(
+                "Fika installer has been launched. Please follow the installation wizard.\n\n" +
+                "Make sure to install Fika to your SPT installation directory.\n\n" +
+                "The version will be detected automatically after installation completes.",
+                "Installer Launched",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+
+        private void ScheduleFikaVersionRefresh()
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(5000);
+                Dispatcher.Invoke(UpdateFikaVersionDisplay);
+            });
+        }
+
+        private void HandleFikaInstallHttpError(HttpRequestException ex)
+        {
+            if (IsGitHubRateLimitError(ex))
+            {
+                var result = System.Windows.MessageBox.Show(
+                    "GitHub rate limit exceeded. Cannot download the installer automatically.\n\n" +
+                    "Would you like to open the GitHub releases page to download it manually?\n\n" +
+                    "After downloading, place the installer in your SPT directory and run it from there.",
+                    "Rate Limit Exceeded",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = FikaInstallUrls.InstallerReleasesPageUrl,
+                        UseShellExecute = true
+                    });
+                }
+
+                return;
+            }
+
+            System.Windows.MessageBox.Show(
+                $"Failed to download the Fika installer.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.",
+                "Download Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
 
         // Fika Co-op Configuration Methods
@@ -1946,7 +1864,7 @@ namespace SptLauncherWpf.Pages
                 }
 
                 // Common Fika mod names and locations
-                var fikaModNames = new[] { "Fika", "Fika-Coop", "FikaCoop", "FIKA", "fika" };
+                var fikaModNames = new[] { "Fika", "Fika-Coop", "FikaCoop", "FIKA", "fika", "fika-server" };
                 var modsDirectories = new[]
                 {
                     Path.Combine(sptPath, "user", "mods"),           // Standard SPT mods location
@@ -2129,166 +2047,17 @@ namespace SptLauncherWpf.Pages
                     return;
                 }
 
-                // Get SPT path on UI thread first (before going to background thread)
-                string sptPath = string.Empty;
-                Dispatcher.Invoke(() =>
-                {
-                    sptPath = GetSptInstallPath();
-                });
-                
+                var sptPath = GetSptInstallPathOnUiThread();
                 System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] SPT Path from UI thread: {sptPath}");
 
-                // Detect Fika mod and get version on background thread
-                string? version = null;
-                bool fikaInstalled = false;
-                string? fikaModPath = null;
-                
-                await Task.Run(() =>
-                {
-                    try
-                    {
-                        // Detect Fika mod using the captured SPT path
-                        fikaModPath = AutoDetectFikaModWithPath(sptPath);
-                        fikaInstalled = !string.IsNullOrEmpty(fikaModPath);
-                        
-                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Fika mod detected: {fikaInstalled}, Path: {fikaModPath}");
-                        
-                        // Get Fika version if installed
-                        if (fikaInstalled)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Getting version from: {fikaModPath}");
-                            version = GetFikaVersion(fikaModPath);
-                            System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Version result: {version ?? "(null)"}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Error in background task: {ex.Message}");
-                    }
-                });
-                
-                // Check for updates if version is available (outside Task.Run since it's async)
-                FikaUpdateInfo? updateInfo = null;
-                if (!string.IsNullOrEmpty(version))
-                {
-                    try
-                    {
-                        updateInfo = await SptDetectionService.Instance.CheckForFikaUpdatesAsync(version);
-                        _currentFikaUpdateInfo = updateInfo;
-                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Update check result: {(updateInfo?.IsUpdateAvailable == true ? $"Update available: {updateInfo.LatestVersion}" : "Up to date")}");
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Error checking for updates: {ex.Message}");
-                    }
-                }
-                
-                // Update UI on UI thread
-                Dispatcher.Invoke(() =>
-                {
-                    try
-                    {
-                        if (FikaVersionText == null)
-                        {
-                            return;
-                        }
+                var fikaState = await DetectFikaStateAsync(sptPath);
+                var updateInfo = await TryGetFikaUpdateInfoAsync(fikaState.ClientVersion, fikaState.ServerVersion);
 
-                        // Show/hide install button based on whether Fika is installed
-                        if (InstallFikaButton != null)
-                        {
-                            InstallFikaButton.Visibility = fikaInstalled ? Visibility.Collapsed : Visibility.Visible;
-                        }
-
-                        if (!fikaInstalled)
-                        {
-                            FikaVersionText.Text = "Not detected";
-                            FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                            
-                            // Hide update status if not installed
-                            if (FikaUpdateStatusPanel != null)
-                            {
-                                FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
-                            }
-                            
-                            // Disable Fika checkbox if not installed
-                            if (EnableFikaCheckBox != null)
-                            {
-                                EnableFikaCheckBox.IsEnabled = false;
-                                if (_fikaEnabled)
-                                {
-                                    _fikaEnabled = false;
-                                    EnableFikaCheckBox.IsChecked = false;
-                                    SettingsService.Instance.FikaEnabled = false;
-                                    SettingsService.Instance.SaveSettings();
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // Update version display
-                            if (string.IsNullOrEmpty(version))
-                            {
-                                FikaVersionText.Text = "Installed (version unknown)";
-                                FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                            }
-                            else
-                            {
-                                FikaVersionText.Text = version;
-                                FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor");
-                            }
-                            
-                            // Update update status display
-                            if (FikaUpdateStatusPanel != null && FikaUpdateStatusText != null)
-                            {
-                                if (updateInfo == null)
-                                {
-                                    // Check failed (network error, etc.) - hide update status
-                                    FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
-                                }
-                                else if (updateInfo.IsUpdateAvailable)
-                                {
-                                    // Update available
-                                    FikaUpdateStatusPanel.Visibility = Visibility.Visible;
-                                    FikaUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion}";
-                                    FikaUpdateStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
-                                }
-                                else
-                                {
-                                    // Up to date
-                                    FikaUpdateStatusPanel.Visibility = Visibility.Visible;
-                                    FikaUpdateStatusText.Text = "Up to date";
-                                    FikaUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                                }
-                            }
-                            
-                            // Enable Fika checkbox if installed
-                            if (EnableFikaCheckBox != null)
-                            {
-                                EnableFikaCheckBox.IsEnabled = true;
-                                EnableFikaCheckBox.IsChecked = _fikaEnabled;
-                                
-                                if (_fikaEnabled)
-                                {
-                                    // Show IP editor
-                                    if (FikaIpEditorPanel != null)
-                                    {
-                                        FikaIpEditorPanel.Visibility = Visibility.Visible;
-                                    }
-                                    // Only set default IP if text box is empty
-                                    if (FikaIpTextBox != null && string.IsNullOrWhiteSpace(FikaIpTextBox.Text))
-                                    {
-                                        FikaIpTextBox.Text = _defaultIp;
-                                    }
-                                }
-                                else
-                                {
-                                    if (FikaIpEditorPanel != null)
-                                    {
-                                        FikaIpEditorPanel.Visibility = Visibility.Collapsed;
-                                    }
-                                }
-                            }
-                        }
+                InvokeOnUi(() =>
+                {
+                    try
+                    {
+                        ApplyFikaUiState(fikaState.Installed, fikaState.ClientVersion, fikaState.ServerVersion, updateInfo);
                     }
                     catch (Exception ex)
                     {
@@ -2300,6 +2069,253 @@ namespace SptLauncherWpf.Pages
             {
                 System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Outer exception: {ex.Message}\n{ex.StackTrace}");
             }
+        }
+
+        private string GetSptInstallPathOnUiThread()
+        {
+            return InvokeOnUi(GetSptInstallPath);
+        }
+
+        private async Task<(bool Installed, string? ClientVersion, string? ServerVersion)> DetectFikaStateAsync(string sptPath)
+        {
+            bool fikaInstalled = false;
+            string? clientVersion = null;
+            string? serverVersion = null;
+
+            await Task.Run(() =>
+            {
+                try
+                {
+                    var clientModPath = DetectFikaClientModPath(sptPath);
+                    var serverModPath = DetectFikaServerModPath(sptPath);
+                    fikaInstalled = !string.IsNullOrEmpty(clientModPath) || !string.IsNullOrEmpty(serverModPath);
+
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[UpdateFikaVersionDisplayAsync] Fika detected: {fikaInstalled}, clientPath: {clientModPath ?? "(none)"}, serverPath: {serverModPath ?? "(none)"}");
+
+                    if (!string.IsNullOrEmpty(clientModPath))
+                    {
+                        clientVersion = GetFikaVersion(clientModPath);
+                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Client version: {clientVersion ?? "(null)"}");
+                    }
+
+                    if (!string.IsNullOrEmpty(serverModPath))
+                    {
+                        serverVersion = GetFikaVersion(serverModPath);
+                        System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Server version: {serverVersion ?? "(null)"}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Error in background task: {ex.Message}");
+                }
+            });
+
+            return (fikaInstalled, clientVersion, serverVersion);
+        }
+
+        private string? DetectFikaClientModPath(string sptPath)
+        {
+            if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
+            {
+                return null;
+            }
+
+            var clientPaths = new[]
+            {
+                Path.Combine(sptPath, "BepInEx", "plugins", "Fika"),
+                Path.Combine(sptPath, "SPT", "BepInEx", "plugins", "Fika")
+            };
+
+            foreach (var clientPath in clientPaths)
+            {
+                if (Directory.Exists(clientPath) &&
+                    (File.Exists(Path.Combine(clientPath, "Fika.Core.dll")) ||
+                     File.Exists(Path.Combine(clientPath, "Fika.dll"))))
+                {
+                    return clientPath;
+                }
+            }
+
+            return null;
+        }
+
+        private string? DetectFikaServerModPath(string sptPath)
+        {
+            if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
+            {
+                return null;
+            }
+
+            var serverPaths = new[]
+            {
+                Path.Combine(sptPath, "user", "mods", "fika-server"),
+                Path.Combine(sptPath, "SPT", "user", "mods", "fika-server")
+            };
+
+            foreach (var serverPath in serverPaths)
+            {
+                if (!Directory.Exists(serverPath))
+                {
+                    continue;
+                }
+
+                var packageJsonPath = Path.Combine(serverPath, "package.json");
+                if (File.Exists(packageJsonPath) && CheckIfFikaPackageJson(packageJsonPath))
+                {
+                    return serverPath;
+                }
+            }
+
+            return null;
+        }
+
+        private async Task<FikaUpdateInfo?> TryGetFikaUpdateInfoAsync(string? clientVersion, string? serverVersion)
+        {
+            if (string.IsNullOrEmpty(clientVersion) && string.IsNullOrEmpty(serverVersion))
+            {
+                return null;
+            }
+
+            try
+            {
+                var updateInfo = await SptDetectionService.Instance.CheckForFikaUpdatesAsync(clientVersion, serverVersion);
+                _currentFikaUpdateInfo = updateInfo;
+                System.Diagnostics.Debug.WriteLine(
+                    $"[UpdateFikaVersionDisplayAsync] Update check result: {(updateInfo?.IsUpdateAvailable == true ? $"Update available: {updateInfo.LatestVersion}" : "Up to date")}");
+                return updateInfo;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UpdateFikaVersionDisplayAsync] Error checking for updates: {ex.Message}");
+                return null;
+            }
+        }
+
+        private void ApplyFikaUiState(bool fikaInstalled, string? clientVersion, string? serverVersion, FikaUpdateInfo? updateInfo)
+        {
+            if (FikaVersionText == null)
+            {
+                return;
+            }
+
+            if (InstallFikaButton != null)
+            {
+                InstallFikaButton.Visibility = fikaInstalled ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            if (!fikaInstalled)
+            {
+                FikaVersionText.Text = "Not detected";
+                FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+
+                if (FikaUpdateStatusPanel != null)
+                {
+                    FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                }
+
+                if (UpdateFikaButton != null)
+                {
+                    UpdateFikaButton.Visibility = Visibility.Collapsed;
+                }
+
+                if (EnableFikaCheckBox != null)
+                {
+                    EnableFikaCheckBox.IsEnabled = false;
+                    if (_fikaEnabled)
+                    {
+                        _fikaEnabled = false;
+                        EnableFikaCheckBox.IsChecked = false;
+                        SettingsService.Instance.FikaEnabled = false;
+                        SettingsService.Instance.SaveSettings();
+                    }
+                }
+
+                return;
+            }
+
+            if (string.IsNullOrEmpty(clientVersion) && string.IsNullOrEmpty(serverVersion))
+            {
+                FikaVersionText.Text = "Installed (version unknown)";
+                FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+            }
+            else
+            {
+                FikaVersionText.Text = FormatFikaInstalledVersion(clientVersion, serverVersion);
+                FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor");
+            }
+
+            if (FikaUpdateStatusPanel != null && FikaUpdateStatusText != null)
+            {
+                if (updateInfo == null)
+                {
+                    FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                    if (UpdateFikaButton != null)
+                    {
+                        UpdateFikaButton.Visibility = Visibility.Collapsed;
+                    }
+                }
+                else if (updateInfo.IsUpdateAvailable)
+                {
+                    FikaUpdateStatusPanel.Visibility = Visibility.Visible;
+                    FikaUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion}";
+                    FikaUpdateStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94));
+                    if (UpdateFikaButton != null)
+                    {
+                        UpdateFikaButton.Visibility = Visibility.Visible;
+                        UpdateFikaButton.IsEnabled = true;
+                    }
+                }
+                else
+                {
+                    FikaUpdateStatusPanel.Visibility = Visibility.Visible;
+                    FikaUpdateStatusText.Text = "Up to date";
+                    FikaUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                    if (UpdateFikaButton != null)
+                    {
+                        UpdateFikaButton.Visibility = Visibility.Collapsed;
+                    }
+                }
+            }
+
+            if (EnableFikaCheckBox != null)
+            {
+                EnableFikaCheckBox.IsEnabled = true;
+                EnableFikaCheckBox.IsChecked = _fikaEnabled;
+
+                if (_fikaEnabled)
+                {
+                    if (FikaIpEditorPanel != null)
+                    {
+                        FikaIpEditorPanel.Visibility = Visibility.Visible;
+                    }
+
+                    if (FikaIpTextBox != null && string.IsNullOrWhiteSpace(FikaIpTextBox.Text))
+                    {
+                        FikaIpTextBox.Text = _defaultIp;
+                    }
+                }
+                else if (FikaIpEditorPanel != null)
+                {
+                    FikaIpEditorPanel.Visibility = Visibility.Collapsed;
+                }
+            }
+        }
+
+        private static string FormatFikaInstalledVersion(string? clientVersion, string? serverVersion)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrEmpty(clientVersion))
+            {
+                parts.Add($"client {clientVersion}");
+            }
+
+            if (!string.IsNullOrEmpty(serverVersion))
+            {
+                parts.Add($"server {serverVersion}");
+            }
+
+            return parts.Count > 0 ? string.Join(" / ", parts) : "Installed (version unknown)";
         }
 
         /// <summary>
@@ -2334,7 +2350,7 @@ namespace SptLauncherWpf.Pages
                             {
                                 System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found version in package.json: {version}");
                                 // Normalize version (strip commit hash and suffixes)
-                                version = NormalizeVersion(version);
+                                version = VersionStringHelper.Normalize(version);
                                 return version;
                             }
                         }
@@ -2368,7 +2384,7 @@ namespace SptLauncherWpf.Pages
                         if (!string.IsNullOrEmpty(version))
                         {
                             System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found version in Fika.Core.dll: {version}");
-                            version = NormalizeVersion(version);
+                            version = VersionStringHelper.Normalize(version);
                             return version;
                         }
                         else
@@ -2401,7 +2417,7 @@ namespace SptLauncherWpf.Pages
                         if (!string.IsNullOrEmpty(version))
                         {
                             System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Found version in Fika.dll: {version}");
-                            version = NormalizeVersion(version);
+                            version = VersionStringHelper.Normalize(version);
                             return version;
                         }
                         else
@@ -2435,37 +2451,6 @@ namespace SptLauncherWpf.Pages
                 System.Diagnostics.Debug.WriteLine($"[GetFikaVersion] Exception: {ex.Message}\n{ex.StackTrace}");
                 return string.Empty;
             }
-        }
-
-        /// <summary>
-        /// Normalizes version string by removing commit hashes and common suffixes
-        /// </summary>
-        private string NormalizeVersion(string version)
-        {
-            if (string.IsNullOrEmpty(version))
-            {
-                return version;
-            }
-
-            // Strip commit hash if present (format: "version+commithash")
-            var plusIndex = version.IndexOf('+');
-            if (plusIndex > 0)
-            {
-                version = version.Substring(0, plusIndex);
-            }
-
-            // Strip common suffixes like "-RELEASE", "-DEV", "-ALPHA", "-BETA"
-            var dashIndex = version.IndexOf('-');
-            if (dashIndex > 0)
-            {
-                var suffix = version.Substring(dashIndex).ToUpperInvariant();
-                if (suffix == "-RELEASE" || suffix == "-DEV" || suffix == "-ALPHA" || suffix == "-BETA" || suffix.StartsWith("-RC"))
-                {
-                    version = version.Substring(0, dashIndex);
-                }
-            }
-
-            return version.Trim();
         }
 
         private async Task UpdateSptVersionDisplayAsync()
@@ -2616,169 +2601,27 @@ namespace SptLauncherWpf.Pages
 
         private async void UpdateNowButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentUpdateInfo == null || !_currentUpdateInfo.IsUpdateAvailable)
+            if (!TryPrepareSptUpdate(out var sptPath, out var createBackup, out var backupPath))
             {
-                System.Windows.MessageBox.Show("No update information available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
-            }
-
-            // Get SPT path using GetSptInstallPath which handles nested directories
-            var sptPath = GetSptInstallPath();
-            if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
-            {
-                System.Windows.MessageBox.Show("SPT installation directory not found. Please set the SPT launcher path in settings first.", 
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-
-            // Check if installer download URL is available
-            if (string.IsNullOrWhiteSpace(_currentUpdateInfo.InstallerDownloadUrl))
-            {
-                var releaseUrl = _currentUpdateInfo.ReleaseUrl ?? "https://github.com/sp-tarkov/build/releases/latest";
-                var result = System.Windows.MessageBox.Show(
-                    $"Automatic update is not available for this release.\n\n" +
-                    $"The GitHub release does not include a downloadable installer.\n\n" +
-                    $"You can download the update manually from the GitHub releases page.\n\n" +
-                    $"Would you like to open the releases page now?",
-                    "Manual Update Required",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Information);
-                
-                if (result == MessageBoxResult.Yes)
-                {
-                    try
-                    {
-                        Process.Start(new ProcessStartInfo
-                        {
-                            FileName = releaseUrl,
-                            UseShellExecute = true
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Windows.MessageBox.Show($"Failed to open browser: {ex.Message}", "Error", 
-                            MessageBoxButton.OK, MessageBoxImage.Error);
-                    }
-                }
-                return;
-            }
-
-            // Ask about backup
-            var backupResult = System.Windows.MessageBox.Show(
-                "Would you like to backup your current SPT folder before updating?\n\n" +
-                "This may take a long time and consume large amounts of storage space.\n\n" +
-                "Click Yes to create a backup, or No to skip backup.",
-                "Backup SPT Folder?",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            bool createBackup = backupResult == MessageBoxResult.Yes;
-            string? backupPath = null;
-
-            if (createBackup)
-            {
-                // Show folder browser for backup location
-                var folderDialog = new WinForms.FolderBrowserDialog
-                {
-                    Description = "Select where to save the SPT backup",
-                    ShowNewFolderButton = true
-                };
-
-                if (folderDialog.ShowDialog() == WinForms.DialogResult.OK)
-                {
-                    backupPath = Path.Combine(folderDialog.SelectedPath, $"SPT_Backup_{DateTime.Now:yyyyMMdd_HHmmss}");
-                }
-                else
-                {
-                    // User cancelled folder selection, ask if they want to continue without backup
-                    var continueResult = System.Windows.MessageBox.Show(
-                        "No backup location selected. Continue without backup?",
-                        "No Backup",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Question);
-
-                    if (continueResult == MessageBoxResult.No)
-                    {
-                        return; // User cancelled
-                    }
-                    createBackup = false;
-                }
-            }
-
-            // Disable button during update
-            if (UpdateNowButton != null)
-            {
-                UpdateNowButton.IsEnabled = false;
             }
 
             try
             {
-                // Show progress UI
-                Dispatcher.Invoke(() =>
-                {
-                    if (SptUpdateProgressBar != null)
-                    {
-                        SptUpdateProgressBar.Visibility = Visibility.Visible;
-                        SptUpdateProgressBar.Value = 0;
-                    }
-                    if (SptUpdateProgressText != null)
-                    {
-                        SptUpdateProgressText.Visibility = Visibility.Visible;
-                        SptUpdateProgressText.Text = "Starting update...";
-                    }
-                    if (UpdateNowButton != null)
-                    {
-                        UpdateNowButton.Visibility = Visibility.Collapsed;
-                    }
-                });
-
-                // Step 1: Download installer
+                SetSptUpdateUiStarting();
                 var tempPath = Path.GetTempPath();
                 var installerFileName = "SPTInstaller.exe";
                 var installerPath = Path.Combine(tempPath, installerFileName);
 
-                var downloadProgress = new Progress<double>(percent =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        if (SptUpdateProgressBar != null)
-                        {
-                            SptUpdateProgressBar.Value = percent;
-                        }
-                        if (SptUpdateProgressText != null)
-                        {
-                            SptUpdateProgressText.Text = $"Downloading installer... {percent:F0}%";
-                        }
-                    });
-                });
+                var downloadProgress = CreateDownloadProgress();
 
                 await SptUpdateService.Instance.DownloadInstallerAsync(
-                    _currentUpdateInfo.InstallerDownloadUrl,
+                    _currentUpdateInfo!.InstallerDownloadUrl!,
                     installerPath,
                     downloadProgress);
 
-                // Step 2: Run update process
-                var statusProgress = new Progress<string>(status =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        if (SptUpdateProgressText != null)
-                        {
-                            SptUpdateProgressText.Text = status;
-                        }
-                    });
-                });
-
-                var progressProgress = new Progress<double>(percent =>
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        if (SptUpdateProgressBar != null)
-                        {
-                            SptUpdateProgressBar.Value = percent;
-                        }
-                    });
-                });
+                var statusProgress = CreateStatusProgress();
+                var progressProgress = CreatePercentProgress();
 
                 await SptUpdateService.Instance.UpdateSptAsync(
                     sptPath,
@@ -2788,19 +2631,7 @@ namespace SptLauncherWpf.Pages
                     statusProgress,
                     progressProgress);
 
-                // Update completed successfully
-                Dispatcher.Invoke(() =>
-                {
-                    if (SptUpdateProgressText != null)
-                    {
-                        SptUpdateProgressText.Text = "Update completed successfully!";
-                        SptUpdateProgressText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
-                    }
-                    if (SptUpdateProgressBar != null)
-                    {
-                        SptUpdateProgressBar.Value = 100;
-                    }
-                });
+                ShowSptUpdateSuccessUi();
 
                 System.Windows.MessageBox.Show(
                     "SPT has been updated successfully!\n\nThe version display will refresh automatically.",
@@ -2808,25 +2639,7 @@ namespace SptLauncherWpf.Pages
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
 
-                // Refresh version display with retry logic
-                // The installer may need time to finish writing all files
-                for (int retry = 0; retry < 5; retry++)
-                {
-                    await Task.Delay(2000); // Wait 2 seconds between retries
-                    UpdateSptVersionDisplay();
-                    
-                    // Check if we got a valid version (not empty and not "Not detected")
-                    await Task.Delay(500); // Small delay to let UI update
-                    var currentVersion = Dispatcher.Invoke(() => SptVersionText?.Text);
-                    if (!string.IsNullOrWhiteSpace(currentVersion) && 
-                        currentVersion != "Not detected" && 
-                        currentVersion != "Error detecting version")
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[UpdateNowButton] Version detected after {retry + 1} retries: {currentVersion}");
-                        break;
-                    }
-                    System.Diagnostics.Debug.WriteLine($"[UpdateNowButton] Retry {retry + 1}/5: Version not yet detected");
-                }
+                await TryRefreshSptVersionAfterUpdateAsync();
             }
             catch (Exception ex)
             {
@@ -2855,60 +2668,287 @@ namespace SptLauncherWpf.Pages
             }
             finally
             {
-                // Hide progress UI after a delay
-                await Task.Delay(3000);
-                Dispatcher.Invoke(() =>
+                await FinalizeSptUpdateUiAndStateAsync();
+            }
+        }
+
+        private bool TryPrepareSptUpdate(out string sptPath, out bool createBackup, out string? backupPath)
+        {
+            sptPath = string.Empty;
+            createBackup = false;
+            backupPath = null;
+
+            if (_currentUpdateInfo == null || !_currentUpdateInfo.IsUpdateAvailable)
+            {
+                System.Windows.MessageBox.Show("No update information available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+
+            sptPath = GetSptInstallPath();
+            if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
+            {
+                System.Windows.MessageBox.Show("SPT installation directory not found. Please set the SPT launcher path in settings first.",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(_currentUpdateInfo.InstallerDownloadUrl))
+            {
+                ShowManualSptUpdatePrompt(_currentUpdateInfo.ReleaseUrl ?? "https://github.com/sp-tarkov/build/releases/latest");
+                return false;
+            }
+
+            var backupResult = System.Windows.MessageBox.Show(
+                "Would you like to backup your current SPT folder before updating?\n\n" +
+                "This may take a long time and consume large amounts of storage space.\n\n" +
+                "Click Yes to create a backup, or No to skip backup.",
+                "Backup SPT Folder?",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            createBackup = backupResult == MessageBoxResult.Yes;
+            if (createBackup && !TrySelectBackupPath(out backupPath, out createBackup))
+            {
+                return false;
+            }
+
+            if (UpdateNowButton != null)
+            {
+                UpdateNowButton.IsEnabled = false;
+            }
+
+            return true;
+        }
+
+        private void ShowManualSptUpdatePrompt(string releaseUrl)
+        {
+            var result = System.Windows.MessageBox.Show(
+                "Automatic update is not available for this release.\n\n" +
+                "The GitHub release does not include a downloadable installer.\n\n" +
+                "You can download the update manually from the GitHub releases page.\n\n" +
+                "Would you like to open the releases page now?",
+                "Manual Update Required",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (result != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = releaseUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Failed to open browser: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private bool TrySelectBackupPath(out string? backupPath, out bool createBackup)
+        {
+            backupPath = null;
+            createBackup = true;
+            var folderDialog = new WinForms.FolderBrowserDialog
+            {
+                Description = "Select where to save the SPT backup",
+                ShowNewFolderButton = true
+            };
+
+            if (folderDialog.ShowDialog() == WinForms.DialogResult.OK)
+            {
+                backupPath = Path.Combine(folderDialog.SelectedPath, $"SPT_Backup_{DateTime.Now:yyyyMMdd_HHmmss}");
+                return true;
+            }
+
+            var continueResult = System.Windows.MessageBox.Show(
+                "No backup location selected. Continue without backup?",
+                "No Backup",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (continueResult == MessageBoxResult.Yes)
+            {
+                createBackup = false;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void SetSptUpdateUiStarting()
+        {
+            InvokeOnUi(() =>
+            {
+                if (SptUpdateProgressBar != null)
+                {
+                    SptUpdateProgressBar.Visibility = Visibility.Visible;
+                    SptUpdateProgressBar.Value = 0;
+                }
+                if (SptUpdateProgressText != null)
+                {
+                    SptUpdateProgressText.Visibility = Visibility.Visible;
+                    SptUpdateProgressText.Text = "Starting update...";
+                }
+                if (UpdateNowButton != null)
+                {
+                    UpdateNowButton.Visibility = Visibility.Collapsed;
+                }
+            });
+        }
+
+        private IProgress<double> CreateDownloadProgress()
+        {
+            return new Progress<double>(percent =>
+            {
+                InvokeOnUi(() =>
                 {
                     if (SptUpdateProgressBar != null)
                     {
-                        SptUpdateProgressBar.Visibility = Visibility.Collapsed;
+                        SptUpdateProgressBar.Value = percent;
                     }
                     if (SptUpdateProgressText != null)
                     {
-                        SptUpdateProgressText.Visibility = Visibility.Collapsed;
-                    }
-                    if (UpdateNowButton != null && _currentUpdateInfo != null && _currentUpdateInfo.IsUpdateAvailable)
-                    {
-                        UpdateNowButton.Visibility = Visibility.Visible;
-                        UpdateNowButton.IsEnabled = true;
+                        SptUpdateProgressText.Text = $"Downloading installer... {percent:F0}%";
                     }
                 });
-                
-                // Force refresh version display after update completes
-                // Wait a bit more to ensure all files are written
+            });
+        }
+
+        private IProgress<string> CreateStatusProgress()
+        {
+            return new Progress<string>(status =>
+            {
+                InvokeOnUi(() =>
+                {
+                    if (SptUpdateProgressText != null)
+                    {
+                        SptUpdateProgressText.Text = status;
+                    }
+                });
+            });
+        }
+
+        private IProgress<double> CreatePercentProgress()
+        {
+            return new Progress<double>(percent =>
+            {
+                InvokeOnUi(() =>
+                {
+                    if (SptUpdateProgressBar != null)
+                    {
+                        SptUpdateProgressBar.Value = percent;
+                    }
+                });
+            });
+        }
+
+        private void ShowSptUpdateSuccessUi()
+        {
+            InvokeOnUi(() =>
+            {
+                if (SptUpdateProgressText != null)
+                {
+                    SptUpdateProgressText.Text = "Update completed successfully!";
+                    SptUpdateProgressText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94));
+                }
+                if (SptUpdateProgressBar != null)
+                {
+                    SptUpdateProgressBar.Value = 100;
+                }
+            });
+        }
+
+        private async Task TryRefreshSptVersionAfterUpdateAsync()
+        {
+            for (int retry = 0; retry < 5; retry++)
+            {
                 await Task.Delay(2000);
                 UpdateSptVersionDisplay();
-                
-                // Also refresh the update check to see if we're now up to date
-                await Task.Delay(1000);
-                var currentVersion = SptDetectionService.Instance.GetSptVersion(SettingsService.Instance.LauncherPath);
-                if (!string.IsNullOrWhiteSpace(currentVersion))
+
+                await Task.Delay(500);
+                var currentVersion = InvokeOnUi(() => SptVersionText?.Text);
+                if (!string.IsNullOrWhiteSpace(currentVersion) &&
+                    currentVersion != "Not detected" &&
+                    currentVersion != "Error detecting version")
                 {
-                    var updateInfo = await SptDetectionService.Instance.CheckForUpdatesAsync(currentVersion);
-                    _currentUpdateInfo = updateInfo;
-                    
-                    Dispatcher.Invoke(() =>
-                    {
-                        if (updateInfo == null || !updateInfo.IsUpdateAvailable)
-                        {
-                            // Up to date now
-                            if (SptUpdateStatusPanel != null)
-                            {
-                                SptUpdateStatusPanel.Visibility = Visibility.Visible;
-                            }
-                            if (SptUpdateStatusText != null)
-                            {
-                                SptUpdateStatusText.Text = "Up to date";
-                                SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                            }
-                            if (UpdateNowButton != null)
-                            {
-                                UpdateNowButton.Visibility = Visibility.Collapsed;
-                            }
-                        }
-                    });
+                    System.Diagnostics.Debug.WriteLine($"[UpdateNowButton] Version detected after {retry + 1} retries: {currentVersion}");
+                    break;
                 }
+                System.Diagnostics.Debug.WriteLine($"[UpdateNowButton] Retry {retry + 1}/5: Version not yet detected");
             }
+        }
+
+        private async Task FinalizeSptUpdateUiAndStateAsync()
+        {
+            await Task.Delay(3000);
+            InvokeOnUi(() =>
+            {
+                if (SptUpdateProgressBar != null)
+                {
+                    SptUpdateProgressBar.Visibility = Visibility.Collapsed;
+                }
+                if (SptUpdateProgressText != null)
+                {
+                    SptUpdateProgressText.Visibility = Visibility.Collapsed;
+                }
+                if (UpdateNowButton != null && _currentUpdateInfo != null && _currentUpdateInfo.IsUpdateAvailable)
+                {
+                    UpdateNowButton.Visibility = Visibility.Visible;
+                    UpdateNowButton.IsEnabled = true;
+                }
+            });
+
+            await Task.Delay(2000);
+            UpdateSptVersionDisplay();
+
+            await Task.Delay(1000);
+            var currentVersion = SptDetectionService.Instance.GetSptVersion(SettingsService.Instance.LauncherPath);
+            if (string.IsNullOrWhiteSpace(currentVersion))
+            {
+                return;
+            }
+
+            var updateInfo = await SptDetectionService.Instance.CheckForUpdatesAsync(currentVersion);
+            _currentUpdateInfo = updateInfo;
+
+            InvokeOnUi(() =>
+            {
+                if (updateInfo != null && updateInfo.IsUpdateAvailable)
+                {
+                    return;
+                }
+
+                if (SptUpdateStatusPanel != null)
+                {
+                    SptUpdateStatusPanel.Visibility = Visibility.Visible;
+                }
+                if (SptUpdateStatusText != null)
+                {
+                    SptUpdateStatusText.Text = "Up to date";
+                    SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                }
+                if (UpdateNowButton != null)
+                {
+                    UpdateNowButton.Visibility = Visibility.Collapsed;
+                }
+            });
+        }
+
+        private void InvokeOnUi(Action action)
+        {
+            Dispatcher.Invoke(action);
+        }
+
+        private T InvokeOnUi<T>(Func<T> func)
+        {
+            return Dispatcher.Invoke(func);
         }
 
         private string GetHttpJsonPath()

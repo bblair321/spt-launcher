@@ -55,86 +55,85 @@ namespace SptLauncherWpf.Pages
         {
             try
             {
-                _processes.Clear();
-                
-                // Look for SPT-related processes
-                var sptProcessNames = new[] { "SPT.Server", "SPT.Launcher", "Aki.Server", "Aki.Launcher" };
-                var allProcesses = Process.GetProcesses();
-                
-                foreach (var processName in sptProcessNames)
-                {
-                    try
-                    {
-                        var processes = allProcesses.Where(p => p.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase));
-                        var processList = processes.ToList();
-                        
-                        foreach (var process in processList)
-                        {
-                            try
-                            {
-                                // Check if process is still running
-                                if (!process.HasExited)
-                                {
-                                    var processInfo = new ProcessInfo
-                                    {
-                                        Id = process.Id,
-                                        ProcessName = process.ProcessName,
-                                        CPU = "0%", // CPU usage would require more complex calculation
-                                        Memory = $"{process.WorkingSet64 / 1024 / 1024:F1} MB"
-                                    };
-                                    _processes.Add(processInfo);
-                                }
-                            }
-                            catch
-                            {
-                                // Silently handle individual process access errors
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // Silently handle process search errors
-                    }
-                }
+                _processes = CollectSptProcesses();
 
                 // Update UI on UI thread
                 Dispatcher.Invoke(() =>
                 {
-                    // Update process count
-                    var processCountText = this.FindName("ProcessCountText") as TextBlock;
-                    if (processCountText != null)
-                    {
-                        processCountText.Text = $"{_processes.Count} process{(_processes.Count != 1 ? "es" : "")}";
-                    }
-                    
-                    // Clear selection when refreshing
-                    _selectedProcessCard = null;
-                    
-                    // Get the process list panel
-                    var processListPanel = this.FindName("ProcessListPanel") as StackPanel;
-                    if (processListPanel != null)
-                    {
-                        processListPanel.Children.Clear();
-                        
-                        // Create cards for each process
-                        foreach (var process in _processes)
-                        {
-                            var card = CreateProcessCard(process);
-                            processListPanel.Children.Add(card);
-                        }
-                    }
-                    
-                    // Show/hide empty state
-                    var emptyStatePanel = this.FindName("EmptyStatePanel") as StackPanel;
-                    if (emptyStatePanel != null)
-                    {
-                        emptyStatePanel.Visibility = _processes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-                    }
+                    RenderProcessList();
                 });
             }
             catch
             {
                 // Silently handle refresh errors
+            }
+        }
+
+        private List<ProcessInfo> CollectSptProcesses()
+        {
+            var processesFound = new List<ProcessInfo>();
+            var sptProcessNames = new[] { "SPT.Server", "SPT.Launcher", "Aki.Server", "Aki.Launcher" };
+            var allProcesses = Process.GetProcesses();
+
+            foreach (var processName in sptProcessNames)
+            {
+                try
+                {
+                    var processes = allProcesses.Where(p => p.ProcessName.Equals(processName, StringComparison.OrdinalIgnoreCase));
+                    foreach (var process in processes.ToList())
+                    {
+                        try
+                        {
+                            if (!process.HasExited)
+                            {
+                                processesFound.Add(new ProcessInfo
+                                {
+                                    Id = process.Id,
+                                    ProcessName = process.ProcessName,
+                                    CPU = "0%",
+                                    Memory = $"{process.WorkingSet64 / 1024 / 1024:F1} MB"
+                                });
+                            }
+                        }
+                        catch
+                        {
+                            // Silently handle individual process access errors
+                        }
+                    }
+                }
+                catch
+                {
+                    // Silently handle process search errors
+                }
+            }
+
+            return processesFound;
+        }
+
+        private void RenderProcessList()
+        {
+            var processCountText = this.FindName("ProcessCountText") as TextBlock;
+            if (processCountText != null)
+            {
+                processCountText.Text = $"{_processes.Count} process{(_processes.Count != 1 ? "es" : "")}";
+            }
+
+            _selectedProcessCard = null;
+
+            var processListPanel = this.FindName("ProcessListPanel") as StackPanel;
+            if (processListPanel != null)
+            {
+                processListPanel.Children.Clear();
+                foreach (var process in _processes)
+                {
+                    processListPanel.Children.Add(CreateProcessCard(process));
+                }
+            }
+
+            var emptyStatePanel = this.FindName("EmptyStatePanel") as StackPanel;
+            if (emptyStatePanel != null)
+            {
+                emptyStatePanel.Visibility = _processes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 

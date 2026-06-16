@@ -23,6 +23,10 @@ namespace SptLauncherWpf.Services
         public bool IsUpdateAvailable { get; set; }
         public string? ReleaseUrl { get; set; }
         public string? InstallerDownloadUrl { get; set; }
+        public bool IsClientUpdateAvailable { get; set; }
+        public bool IsServerUpdateAvailable { get; set; }
+        public string? LatestClientVersion { get; set; }
+        public string? LatestServerVersion { get; set; }
     }
 
     public class SptGitHubRelease
@@ -56,7 +60,8 @@ namespace SptLauncherWpf.Services
 
         private const string SptReleasesApiUrl = "https://api.github.com/repos/sp-tarkov/build/releases/latest";
         private const string ForgeInstallerPageUrl = "https://forge.sp-tarkov.com/installer";
-        private const string FikaReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Installer/releases/latest";
+        private const string FikaPluginReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Plugin/releases/latest";
+        private const string FikaServerReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Server/releases/latest";
         private HttpClient? _httpClient;
 
         private SptDetectionService()
@@ -238,27 +243,7 @@ namespace SptLauncherWpf.Services
                     {
                         return string.Empty;
                     }
-
-                    // Strip commit hash if present (format: "version+commithash")
-                    // Take only the part before the '+' sign
-                    var plusIndex = version.IndexOf('+');
-                    if (plusIndex > 0)
-                    {
-                        version = version.Substring(0, plusIndex);
-                    }
-
-                    // Strip common suffixes like "-RELEASE", "-DEV", "-ALPHA", "-BETA"
-                    var dashIndex = version.IndexOf('-');
-                    if (dashIndex > 0)
-                    {
-                        var suffix = version.Substring(dashIndex).ToUpperInvariant();
-                        if (suffix == "-RELEASE" || suffix == "-DEV" || suffix == "-ALPHA" || suffix == "-BETA" || suffix.StartsWith("-RC"))
-                        {
-                            version = version.Substring(0, dashIndex);
-                        }
-                    }
-
-                    return version;
+                    return VersionStringHelper.Normalize(version);
                 }
 
                 return string.Empty;
@@ -295,26 +280,7 @@ namespace SptLauncherWpf.Services
                 {
                     return string.Empty;
                 }
-
-                // Strip commit hash if present (format: "version+commithash")
-                var plusIndex = version.IndexOf('+');
-                if (plusIndex > 0)
-                {
-                    version = version.Substring(0, plusIndex);
-                }
-
-                // Strip common suffixes like "-RELEASE", "-DEV", "-ALPHA", "-BETA"
-                var dashIndex = version.IndexOf('-');
-                if (dashIndex > 0)
-                {
-                    var suffix = version.Substring(dashIndex).ToUpperInvariant();
-                    if (suffix == "-RELEASE" || suffix == "-DEV" || suffix == "-ALPHA" || suffix == "-BETA" || suffix.StartsWith("-RC"))
-                    {
-                        version = version.Substring(0, dashIndex);
-                    }
-                }
-
-                return version;
+                return VersionStringHelper.Normalize(version);
             }
             catch
             {
@@ -511,33 +477,7 @@ namespace SptLauncherWpf.Services
         /// </summary>
         private string NormalizeVersion(string version)
         {
-            if (string.IsNullOrWhiteSpace(version))
-            {
-                return version;
-            }
-
-            // Remove 'v' prefix
-            version = version.TrimStart('v', 'V').Trim();
-
-            // Strip commit hash if present (format: "version+commithash")
-            var plusIndex = version.IndexOf('+');
-            if (plusIndex > 0)
-            {
-                version = version.Substring(0, plusIndex);
-            }
-
-            // Strip common suffixes like "-RELEASE", "-DEV", "-ALPHA", "-BETA"
-            var dashIndex = version.IndexOf('-');
-            if (dashIndex > 0)
-            {
-                var suffix = version.Substring(dashIndex).ToUpperInvariant();
-                if (suffix == "-RELEASE" || suffix == "-DEV" || suffix == "-ALPHA" || suffix == "-BETA" || suffix.StartsWith("-RC"))
-                {
-                    version = version.Substring(0, dashIndex);
-                }
-            }
-
-            return version.Trim();
+            return VersionStringHelper.Normalize(version);
         }
 
         /// <summary>
@@ -568,83 +508,113 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
-        /// Checks for Fika updates by comparing current version with latest GitHub release
+        /// Checks for Fika updates by comparing installed client/server versions with their GitHub release streams.
         /// </summary>
-        public async Task<FikaUpdateInfo?> CheckForFikaUpdatesAsync(string currentVersion)
+        public async Task<FikaUpdateInfo?> CheckForFikaUpdatesAsync(string? clientVersion, string? serverVersion)
         {
-            if (string.IsNullOrWhiteSpace(currentVersion))
+            if (string.IsNullOrWhiteSpace(clientVersion) && string.IsNullOrWhiteSpace(serverVersion))
             {
                 return null;
             }
 
             try
             {
-                var response = await _httpClient!.GetStringAsync(FikaReleasesApiUrl);
-                var release = JsonSerializer.Deserialize<SptGitHubRelease>(response, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = false
-                });
+                var clientReleaseTask = string.IsNullOrWhiteSpace(clientVersion)
+                    ? Task.FromResult<SptGitHubRelease?>(null)
+                    : FetchLatestGitHubReleaseAsync(FikaPluginReleasesApiUrl);
+                var serverReleaseTask = string.IsNullOrWhiteSpace(serverVersion)
+                    ? Task.FromResult<SptGitHubRelease?>(null)
+                    : FetchLatestGitHubReleaseAsync(FikaServerReleasesApiUrl);
 
-                if (release == null || string.IsNullOrWhiteSpace(release.TagName))
+                await Task.WhenAll(clientReleaseTask, serverReleaseTask);
+
+                var clientRelease = clientReleaseTask.Result;
+                var serverRelease = serverReleaseTask.Result;
+
+                if (clientRelease == null && serverRelease == null)
                 {
                     return null;
                 }
 
-                // Extract version from tag (remove 'v' prefix if present)
-                var latestVersion = release.TagName.TrimStart('v', 'V');
-                
-                // Normalize both versions for comparison
-                var normalizedLatest = NormalizeVersion(latestVersion);
-                var normalizedCurrent = NormalizeVersion(currentVersion);
+                string? latestClientVersion = null;
+                string? latestServerVersion = null;
+                var isClientUpdateAvailable = false;
+                var isServerUpdateAvailable = false;
 
-                // Compare versions
-                var isUpdateAvailable = IsNewerVersion(normalizedLatest, normalizedCurrent);
-
-                // Find installer download URL from release assets
-                string? installerUrl = null;
-                if (release.Assets != null && release.Assets.Count > 0)
+                if (clientRelease != null && !string.IsNullOrWhiteSpace(clientRelease.TagName))
                 {
-                    // Look for installer/setup exe files first
-                    var installerAsset = release.Assets.FirstOrDefault(a => 
-                        a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-                        (a.Name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
-                         a.Name.Contains("setup", StringComparison.OrdinalIgnoreCase) ||
-                         a.Name.Contains("install", StringComparison.OrdinalIgnoreCase) ||
-                         a.Name.Contains("Fika", StringComparison.OrdinalIgnoreCase)));
-
-                    // Fallback to any .exe file
-                    if (installerAsset == null)
-                    {
-                        installerAsset = release.Assets.FirstOrDefault(a => 
-                            a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    if (installerAsset != null && !string.IsNullOrEmpty(installerAsset.BrowserDownloadUrl))
-                    {
-                        installerUrl = installerAsset.BrowserDownloadUrl;
-                        System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Found Fika installer URL: {installerUrl}");
-                    }
+                    latestClientVersion = ExtractReleaseVersion(clientRelease.TagName);
+                    isClientUpdateAvailable = IsNewerVersion(latestClientVersion, clientVersion!);
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[SptDetectionService] Fika client: installed={clientVersion}, latest={latestClientVersion}, update={isClientUpdateAvailable}");
                 }
+
+                if (serverRelease != null && !string.IsNullOrWhiteSpace(serverRelease.TagName))
+                {
+                    latestServerVersion = ExtractReleaseVersion(serverRelease.TagName);
+                    isServerUpdateAvailable = IsNewerVersion(latestServerVersion, serverVersion!);
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[SptDetectionService] Fika server: installed={serverVersion}, latest={latestServerVersion}, update={isServerUpdateAvailable}");
+                }
+
+                var isUpdateAvailable = isClientUpdateAvailable || isServerUpdateAvailable;
 
                 return new FikaUpdateInfo
                 {
-                    LatestVersion = latestVersion,
+                    LatestVersion = BuildFikaLatestVersionSummary(latestClientVersion, latestServerVersion, isClientUpdateAvailable, isServerUpdateAvailable),
                     IsUpdateAvailable = isUpdateAvailable,
-                    ReleaseUrl = release.HtmlUrl,
-                    InstallerDownloadUrl = installerUrl
+                    ReleaseUrl = FikaInstallUrls.InstallerReleasesPageUrl,
+                    InstallerDownloadUrl = isUpdateAvailable ? FikaInstallUrls.InstallerDownloadUrl : null,
+                    IsClientUpdateAvailable = isClientUpdateAvailable,
+                    IsServerUpdateAvailable = isServerUpdateAvailable,
+                    LatestClientVersion = latestClientVersion,
+                    LatestServerVersion = latestServerVersion
                 };
             }
             catch (HttpRequestException)
             {
-                // Network error - return null to indicate check failed
                 return null;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Error checking Fika updates: {ex.Message}");
-                // Other errors - return null
                 return null;
             }
+        }
+
+        private async Task<SptGitHubRelease?> FetchLatestGitHubReleaseAsync(string apiUrl)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Fetching latest release from: {apiUrl}");
+            var response = await _httpClient!.GetStringAsync(apiUrl);
+            return JsonSerializer.Deserialize<SptGitHubRelease>(response, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = false
+            });
+        }
+
+        private static string ExtractReleaseVersion(string tagName)
+        {
+            return tagName.TrimStart('v', 'V');
+        }
+
+        private static string BuildFikaLatestVersionSummary(
+            string? latestClientVersion,
+            string? latestServerVersion,
+            bool isClientUpdateAvailable,
+            bool isServerUpdateAvailable)
+        {
+            var parts = new List<string>();
+            if (isClientUpdateAvailable && !string.IsNullOrWhiteSpace(latestClientVersion))
+            {
+                parts.Add($"client {latestClientVersion}");
+            }
+
+            if (isServerUpdateAvailable && !string.IsNullOrWhiteSpace(latestServerVersion))
+            {
+                parts.Add($"server {latestServerVersion}");
+            }
+
+            return parts.Count > 0 ? string.Join(", ", parts) : latestClientVersion ?? latestServerVersion ?? "";
         }
     }
 }

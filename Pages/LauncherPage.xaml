@@ -134,6 +134,15 @@
                                            Foreground="{DynamicResource TextSecondaryColor}"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
+                            <Button Name="UpdateFikaButton"
+                                    Content="Update Now"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{DynamicResource PrimaryColor}"
+                                    Padding="12,8" FontSize="13" FontWeight="SemiBold"
+                                    HorizontalAlignment="Left"
+                                    Visibility="Collapsed"
+                                    Click="UpdateFikaButton_Click"
+                                    Margin="0,4,0,0"/>
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
