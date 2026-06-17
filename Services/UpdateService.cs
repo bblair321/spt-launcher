@@ -222,6 +222,17 @@ namespace SptLauncherWpf.Services
 
         public async Task<bool> DownloadUpdateAsync(UpdateInfo updateInfo, IProgress<double>? progress = null)
         {
+            var currentExePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(currentExePath) || !File.Exists(currentExePath))
+            {
+                Console.WriteLine("Could not determine current executable path for update");
+                return false;
+            }
+
+            var updatePath = Path.Combine(
+                Path.GetTempPath(),
+                $"SPT-Launcher-Update-{updateInfo.Version}.exe");
+
             try
             {
                 if (string.IsNullOrEmpty(updateInfo.DownloadUrl))
@@ -229,48 +240,111 @@ namespace SptLauncherWpf.Services
                     return false;
                 }
 
-                var tempPath = Path.Combine(Path.GetTempPath(), $"SPT-Launcher-Update-{updateInfo.Version}.exe");
-                
-                using (var response = await _httpClient!.GetAsync(updateInfo.DownloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                await DownloadUpdateFileAsync(updateInfo.DownloadUrl, updatePath, progress);
+
+                if (!File.Exists(updatePath) || new FileInfo(updatePath).Length == 0)
                 {
-                    response.EnsureSuccessStatusCode();
-                    
-                    var totalBytes = response.Content.Headers.ContentLength ?? 0;
-                    var downloadedBytes = 0L;
-
-                    using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                    using (var contentStream = await response.Content.ReadAsStreamAsync())
-                    {
-                        var buffer = new byte[8192];
-                        int bytesRead;
-
-                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                        {
-                            await fileStream.WriteAsync(buffer, 0, bytesRead);
-                            downloadedBytes += bytesRead;
-
-                            if (totalBytes > 0 && progress != null)
-                            {
-                                var percent = (double)downloadedBytes / totalBytes * 100;
-                                progress.Report(percent);
-                            }
-                        }
-                    }
+                    Console.WriteLine("Downloaded update file is missing or empty");
+                    return false;
                 }
 
-                // Launch the installer
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = tempPath,
-                    UseShellExecute = true
-                });
-
-                return true;
+                return ApplyUpdateAndRestart(currentExePath, updatePath);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to download update: {ex.Message}");
+                TryDeleteFile(updatePath);
                 return false;
+            }
+        }
+
+        private async Task DownloadUpdateFileAsync(
+            string downloadUrl,
+            string destinationPath,
+            IProgress<double>? progress)
+        {
+            using var response = await _httpClient!.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength ?? 0;
+            var downloadedBytes = 0L;
+
+            await using var contentStream = await response.Content.ReadAsStreamAsync();
+            await using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
+
+            var buffer = new byte[8192];
+            int bytesRead;
+
+            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                await fileStream.WriteAsync(buffer, 0, bytesRead);
+                downloadedBytes += bytesRead;
+
+                if (totalBytes > 0 && progress != null)
+                {
+                    progress.Report((double)downloadedBytes / totalBytes * 100);
+                }
+            }
+        }
+
+        private bool ApplyUpdateAndRestart(string currentExePath, string downloadedUpdatePath)
+        {
+            try
+            {
+                var appDir = Path.GetDirectoryName(currentExePath)!;
+                var backupPath = Path.Combine(appDir, $"{Path.GetFileNameWithoutExtension(currentExePath)}.old.exe");
+                var scriptPath = Path.Combine(Path.GetTempPath(), $"spt-launcher-update-{Guid.NewGuid():N}.cmd");
+                var processName = Path.GetFileName(currentExePath);
+
+                var script = $"""
+                    @echo off
+                    setlocal
+                    :wait_for_exit
+                    tasklist /FI "IMAGENAME eq {processName}" 2>NUL | find /I /N "{processName}" >NUL
+                    if "%ERRORLEVEL%"=="0" (
+                        timeout /t 1 /nobreak > nul
+                        goto wait_for_exit
+                    )
+                    del /f /q "{backupPath}" 2>nul
+                    move /y "{currentExePath}" "{backupPath}" >nul
+                    move /y "{downloadedUpdatePath}" "{currentExePath}" >nul
+                    start "" "{currentExePath}"
+                    del /f /q "{scriptPath}"
+                    """;
+
+                File.WriteAllText(scriptPath, script);
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = scriptPath,
+                    UseShellExecute = true,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    WorkingDirectory = appDir
+                });
+
+                System.Windows.Application.Current.Dispatcher.Invoke(System.Windows.Application.Current.Shutdown);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to apply update: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+                // Best effort cleanup only
             }
         }
 

@@ -318,9 +318,8 @@ namespace SptLauncherWpf
 
                 if (success)
                 {
-                    System.Windows.MessageBox.Show("Update downloaded successfully. The installer will launch shortly.", 
-                        "Update Ready", MessageBoxButton.OK, MessageBoxImage.Information);
-                    UpdateNotificationBanner.Visibility = Visibility.Collapsed;
+                    UpdateDownloadButton.Content = "Restarting...";
+                    // App shuts down to let the update script replace the executable.
                 }
                 else
                 {
