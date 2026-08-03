@@ -208,6 +208,53 @@ namespace SptLauncherWpf.Services
                     }
                 }
             }
+
+            if (!IsValidWindowsExecutable(targetPath))
+            {
+                TryDeleteFile(targetPath);
+                throw new InvalidDataException(
+                    "The downloaded file is not a valid Windows installer. It may be an archive or an error page.");
+            }
+        }
+
+        private static bool IsValidWindowsExecutable(string path)
+        {
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+
+            var fileInfo = new FileInfo(path);
+            if (fileInfo.Length < 1024)
+            {
+                return false;
+            }
+
+            Span<byte> header = stackalloc byte[2];
+            using (var stream = File.OpenRead(path))
+            {
+                if (stream.Read(header) != 2)
+                {
+                    return false;
+                }
+            }
+
+            return header[0] == (byte)'M' && header[1] == (byte)'Z';
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+                // Best effort cleanup only
+            }
         }
 
         /// <summary>

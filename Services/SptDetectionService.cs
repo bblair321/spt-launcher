@@ -59,7 +59,6 @@ namespace SptLauncherWpf.Services
         public static SptDetectionService Instance => _instance ??= new SptDetectionService();
 
         private const string SptReleasesApiUrl = "https://api.github.com/repos/sp-tarkov/build/releases/latest";
-        private const string ForgeInstallerPageUrl = "https://forge.sp-tarkov.com/installer";
         private const string FikaPluginReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Plugin/releases/latest";
         private const string FikaServerReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Server/releases/latest";
         private HttpClient? _httpClient;
@@ -321,67 +320,20 @@ namespace SptLauncherWpf.Services
                 // Compare versions
                 var isUpdateAvailable = IsNewerVersion(normalizedLatest, normalizedCurrent);
 
-                // Find installer download URL from release assets
-                string? installerUrl = null;
-                if (release.Assets != null && release.Assets.Count > 0)
-                {
-                    // Debug: Log available assets
-                    System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Found {release.Assets.Count} assets in release:");
-                    foreach (var asset in release.Assets)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"  - {asset.Name} ({asset.Size} bytes)");
-                    }
+                // Find installer download URL from release assets (.exe only — not archives)
+                string? installerUrl = TryGetInstallerUrlFromReleaseAssets(release.Assets);
 
-                    // Look for installer/setup exe files first
-                    var installerAsset = release.Assets.FirstOrDefault(a => 
-                        (a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-                         (a.Name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
-                          a.Name.Contains("setup", StringComparison.OrdinalIgnoreCase) ||
-                          a.Name.Contains("install", StringComparison.OrdinalIgnoreCase))) ||
-                        a.Name.Equals("SPTInstaller.exe", StringComparison.OrdinalIgnoreCase));
-
-                    // Fallback to any .exe file
-                    if (installerAsset == null)
-                    {
-                        installerAsset = release.Assets.FirstOrDefault(a => 
-                            a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    // Fallback to any Windows executable-like file
-                    if (installerAsset == null)
-                    {
-                        installerAsset = release.Assets.FirstOrDefault(a => 
-                            a.Name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase) ||
-                            a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
-                    }
-
-                    // Fallback to largest asset (likely the installer)
-                    if (installerAsset == null && release.Assets.Count > 0)
-                    {
-                        installerAsset = release.Assets.OrderByDescending(a => a.Size).FirstOrDefault();
-                        System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Using largest asset as fallback: {installerAsset?.Name}");
-                    }
-
-                    if (installerAsset != null && !string.IsNullOrEmpty(installerAsset.BrowserDownloadUrl))
-                    {
-                        installerUrl = installerAsset.BrowserDownloadUrl;
-                        System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Found installer URL: {installerUrl}");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("[SptDetectionService] No installer URL found in assets");
-                    }
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("[SptDetectionService] No assets found in release");
-                }
-
-                // If no installer URL from GitHub, try to get it from Forge
+                // GitHub releases often only ship .7z archives; use the official SPT installer instead
                 if (string.IsNullOrWhiteSpace(installerUrl))
                 {
-                    System.Diagnostics.Debug.WriteLine("[SptDetectionService] Attempting to get installer URL from Forge...");
+                    System.Diagnostics.Debug.WriteLine("[SptDetectionService] No .exe in GitHub release, trying Forge...");
                     installerUrl = await GetInstallerUrlFromForgeAsync();
+                }
+
+                if (string.IsNullOrWhiteSpace(installerUrl))
+                {
+                    installerUrl = SptInstallUrls.InstallerDownloadUrl;
+                    System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Using official SPT installer URL: {installerUrl}");
                 }
 
                 return new SptUpdateInfo
@@ -404,6 +356,39 @@ namespace SptLauncherWpf.Services
             }
         }
 
+        private static string? TryGetInstallerUrlFromReleaseAssets(IReadOnlyList<SptGitHubAsset>? assets)
+        {
+            if (assets == null || assets.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[SptDetectionService] No assets found in release");
+                return null;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Found {assets.Count} assets in release:");
+            foreach (var asset in assets)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - {asset.Name} ({asset.Size} bytes)");
+            }
+
+            var installerAsset = assets.FirstOrDefault(a =>
+                a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                (a.Name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
+                 a.Name.Contains("setup", StringComparison.OrdinalIgnoreCase) ||
+                 a.Name.Contains("install", StringComparison.OrdinalIgnoreCase) ||
+                 a.Name.Equals(SptInstallUrls.InstallerFileName, StringComparison.OrdinalIgnoreCase)))
+                ?? assets.FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                ?? assets.FirstOrDefault(a => a.Name.EndsWith(".msi", StringComparison.OrdinalIgnoreCase));
+
+            if (installerAsset != null && !string.IsNullOrEmpty(installerAsset.BrowserDownloadUrl))
+            {
+                System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Found installer URL: {installerAsset.BrowserDownloadUrl}");
+                return installerAsset.BrowserDownloadUrl;
+            }
+
+            System.Diagnostics.Debug.WriteLine("[SptDetectionService] No executable installer found in GitHub release assets");
+            return null;
+        }
+
         /// <summary>
         /// Gets the installer download URL from the Forge installer page
         /// </summary>
@@ -411,7 +396,7 @@ namespace SptLauncherWpf.Services
         {
             try
             {
-                var html = await _httpClient!.GetStringAsync(ForgeInstallerPageUrl);
+                var html = await _httpClient!.GetStringAsync(SptInstallUrls.ForgeInstallerPageUrl);
                 
                 // Look for download links in the HTML
                 // Common patterns: href="...installer.exe" or data-download-url="..." or download="..."
@@ -435,7 +420,7 @@ namespace SptLauncherWpf.Services
                         {
                             if (!uri.IsAbsoluteUri)
                             {
-                                uri = new Uri(new Uri(ForgeInstallerPageUrl), uri);
+                                uri = new Uri(new Uri(SptInstallUrls.ForgeInstallerPageUrl), uri);
                             }
                             
                             var absoluteUrl = uri.ToString();
@@ -454,7 +439,7 @@ namespace SptLauncherWpf.Services
                     {
                         if (!uri.IsAbsoluteUri)
                         {
-                            uri = new Uri(new Uri(ForgeInstallerPageUrl), uri);
+                            uri = new Uri(new Uri(SptInstallUrls.ForgeInstallerPageUrl), uri);
                         }
                         var absoluteUrl = uri.ToString();
                         System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Found .exe URL from Forge: {absoluteUrl}");
