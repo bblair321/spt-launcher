@@ -191,7 +191,7 @@ namespace SptLauncherWpf.Services
             var sawMissing = false;
             foreach (var targetVariant in GetPatcherTargetVariants(target))
             {
-                var url = $"{PatcherHost}/Patcher_{live}_to_{targetVariant}.7z";
+                var url = BuildPatcherUrl(live!, targetVariant);
                 var result = await ProbeUrlAsync(url);
                 if (result == PatcherProbeResult.Exists)
                 {
@@ -218,12 +218,23 @@ namespace SptLauncherWpf.Services
             Error
         }
 
-        private static IEnumerable<string> GetPatcherTargetVariants(string targetVersion)
+        public static string BuildPatcherUrl(string liveVersion, string targetVariant) =>
+            $"{PatcherHost}/Patcher_{liveVersion}_to_{targetVariant}.7z";
+
+        /// <summary>
+        /// CDN patcher filenames sometimes drop a leading "0." from SPT target versions.
+        /// </summary>
+        public static IReadOnlyList<string> GetPatcherTargetVariants(string targetVersion)
         {
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seen = new List<string>();
             void Add(string? value)
             {
-                if (!string.IsNullOrWhiteSpace(value))
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return;
+                }
+
+                if (!seen.Exists(existing => string.Equals(existing, value, StringComparison.OrdinalIgnoreCase)))
                 {
                     seen.Add(value);
                 }

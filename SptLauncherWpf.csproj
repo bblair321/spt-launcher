@@ -56,6 +56,13 @@
     <Resource Include="spt_rpg_icon.ico" />
     <!-- Icon is embedded in the executable, no need to copy separately -->
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="SptLauncherWpf.Tests/**" />
+    <EmbeddedResource Remove="SptLauncherWpf.Tests/**" />
+    <None Remove="SptLauncherWpf.Tests/**" />
+    <Page Remove="SptLauncherWpf.Tests/**" />
+  </ItemGroup>
   
   <!-- Remove JSON files after publish (not needed for self-contained single-file) -->
   <Target Name="RemoveJsonFilesAfterPublish" AfterTargets="Publish">

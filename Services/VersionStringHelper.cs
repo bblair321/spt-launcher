@@ -2,7 +2,7 @@ using System;
 
 namespace SptLauncherWpf.Services
 {
-    internal static class VersionStringHelper
+    public static class VersionStringHelper
     {
         public static string Normalize(string version)
         {

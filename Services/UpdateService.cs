@@ -245,6 +245,14 @@ namespace SptLauncherWpf.Services
                 if (!File.Exists(updatePath) || new FileInfo(updatePath).Length == 0)
                 {
                     Console.WriteLine("Downloaded update file is missing or empty");
+                    TryDeleteFile(updatePath);
+                    return false;
+                }
+
+                if (!UpdateApplyHelper.LooksLikeWindowsExecutable(updatePath))
+                {
+                    Console.WriteLine("Downloaded update file is not a valid Windows executable");
+                    TryDeleteFile(updatePath);
                     return false;
                 }
 
@@ -296,21 +304,12 @@ namespace SptLauncherWpf.Services
                 var scriptPath = Path.Combine(Path.GetTempPath(), $"spt-launcher-update-{Guid.NewGuid():N}.cmd");
                 var processName = Path.GetFileName(currentExePath);
 
-                var script = $"""
-                    @echo off
-                    setlocal
-                    :wait_for_exit
-                    tasklist /FI "IMAGENAME eq {processName}" 2>NUL | find /I /N "{processName}" >NUL
-                    if "%ERRORLEVEL%"=="0" (
-                        timeout /t 1 /nobreak > nul
-                        goto wait_for_exit
-                    )
-                    del /f /q "{backupPath}" 2>nul
-                    move /y "{currentExePath}" "{backupPath}" >nul
-                    move /y "{downloadedUpdatePath}" "{currentExePath}" >nul
-                    start "" "{currentExePath}"
-                    del /f /q "{scriptPath}"
-                    """;
+                var script = UpdateApplyHelper.BuildReplaceInPlaceScript(
+                    processName,
+                    currentExePath,
+                    downloadedUpdatePath,
+                    backupPath,
+                    scriptPath);
 
                 File.WriteAllText(scriptPath, script);
 
@@ -329,6 +328,7 @@ namespace SptLauncherWpf.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to apply update: {ex.Message}");
+                TryDeleteFile(downloadedUpdatePath);
                 return false;
             }
         }

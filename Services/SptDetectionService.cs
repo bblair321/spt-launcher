@@ -183,9 +183,21 @@ namespace SptLauncherWpf.Services
 
         /// <summary>
         /// Determines the actual SPT root directory, handling nested structures like D:\SPT\SPT\
+        /// and modern SPT_Runtime layouts.
         /// </summary>
-        private string DetermineSptRootDirectory(string launcherDir)
+        private string DetermineSptRootDirectory(string launcherDir) =>
+            ResolveSptRootDirectory(launcherDir);
+
+        /// <summary>
+        /// Resolves the install root from a launcher directory (or SPT_Runtime folder).
+        /// </summary>
+        public static string ResolveSptRootDirectory(string launcherDir)
         {
+            if (string.IsNullOrWhiteSpace(launcherDir))
+            {
+                return launcherDir;
+            }
+
             try
             {
                 // Modern SPT layout: <install>\SPT_Runtime\SPT.Launcher.exe
@@ -205,24 +217,20 @@ namespace SptLauncherWpf.Services
                 var parentDir = Path.GetDirectoryName(launcherDir);
                 if (!string.IsNullOrEmpty(parentDir) && Directory.Exists(parentDir))
                 {
-                    // Get the name of the parent directory (e.g., "SPT" from "D:\SPT")
                     var parentDirName = Path.GetFileName(parentDir);
 
                     // If the parent and launcher directories have the same name (e.g., both are "SPT"),
                     // this suggests a nested structure like D:\SPT\SPT\ where we should use the parent
                     if (string.Equals(launcherDirName, parentDirName, StringComparison.OrdinalIgnoreCase))
                     {
-                        // Also check if parent has multiple items (not just the nested directory)
                         var parentItems = Directory.GetFileSystemEntries(parentDir);
                         if (parentItems.Length > 1)
                         {
-                            // Parent directory is the root SPT directory
                             return parentDir;
                         }
                     }
                     else
                     {
-                        // Check if parent directory contains SPT-related files
                         var serverExePath = Path.Combine(parentDir, "SPT.Server.exe");
                         var sptDataPath = Path.Combine(parentDir, "SPT_Data");
                         var runtimePath = Path.Combine(parentDir, "SPT_Runtime");
@@ -232,7 +240,6 @@ namespace SptLauncherWpf.Services
                             Directory.Exists(runtimePath) ||
                             File.Exists(eftExePath))
                         {
-                            // Parent directory contains SPT files, so use it as the root SPT directory
                             return parentDir;
                         }
                     }
