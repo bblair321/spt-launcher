@@ -104,6 +104,9 @@ namespace SptLauncherWpf.Pages
         // Post-update verify panel
         private CancellationTokenSource? _updateVerifyCts;
 
+        // Compact readiness: user can pin details closed while something still needs attention
+        private bool _readinessUserCollapsed;
+
         public LauncherPage()
         {
             try
@@ -1367,35 +1370,217 @@ namespace SptLauncherWpf.Pages
             {
                 PlayStatusHeadline.Text = "SPT is running";
                 PlayStatusDetail.Text = "Use Stop when you want to shut down the launcher and related processes.";
-                return;
             }
-
-            if (isAnySptRunning)
+            else if (isAnySptRunning)
             {
                 PlayStatusHeadline.Text = "SPT processes detected";
                 PlayStatusDetail.Text = "You can launch again, or Stop to close running SPT/Tarkov processes.";
-                return;
             }
-
-            if (!hasValidPath)
+            else if (!hasValidPath)
             {
                 PlayStatusHeadline.Text = "Set your SPT launcher path to begin";
                 PlayStatusDetail.Text = "Browse to SPT.Launcher.exe below, then Launch when ready.";
+            }
+            else
+            {
+                var sptReady = SptVersionText?.Text != null
+                               && !SptVersionText.Text.Equals("Not detected", StringComparison.OrdinalIgnoreCase)
+                               && !SptVersionText.Text.StartsWith("Error", StringComparison.OrdinalIgnoreCase);
+                if (!sptReady)
+                {
+                    PlayStatusHeadline.Text = "SPT not detected";
+                    PlayStatusDetail.Text = "Install SPT or point the path at a valid SPT launcher.";
+                }
+                else
+                {
+                    PlayStatusHeadline.Text = "Ready to launch";
+                    PlayStatusDetail.Text = "Your SPT launcher path looks good. Launch when you're ready.";
+                }
+            }
+
+            RefreshReadinessSummary();
+        }
+
+        private void ReadinessDetailsToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleReadinessDetails();
+        }
+
+        private void ReadinessSummaryStrip_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            // Ignore clicks that originated on the action buttons inside the strip.
+            if (e.OriginalSource is DependencyObject source &&
+                FindAncestor<System.Windows.Controls.Button>(source) != null)
+            {
                 return;
             }
 
-            var sptReady = SptVersionText?.Text != null
-                           && !SptVersionText.Text.Equals("Not detected", StringComparison.OrdinalIgnoreCase)
-                           && !SptVersionText.Text.StartsWith("Error", StringComparison.OrdinalIgnoreCase);
+            ToggleReadinessDetails();
+        }
+
+        private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+        {
+            while (current != null)
+            {
+                if (current is T match)
+                {
+                    return match;
+                }
+
+                current = VisualTreeHelper.GetParent(current);
+            }
+
+            return null;
+        }
+
+        private void ToggleReadinessDetails()
+        {
+            var expanded = ReadinessDetailsCard?.Visibility == Visibility.Visible;
+            if (expanded)
+            {
+                _readinessUserCollapsed = true;
+                SetReadinessDetailsExpanded(false);
+            }
+            else
+            {
+                _readinessUserCollapsed = false;
+                SetReadinessDetailsExpanded(true);
+            }
+        }
+
+        private void SetReadinessDetailsExpanded(bool expanded)
+        {
+            if (ReadinessDetailsCard != null)
+            {
+                ReadinessDetailsCard.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (ReadinessDetailsToggleButton != null)
+            {
+                ReadinessDetailsToggleButton.Content = expanded ? "Hide details" : "Details";
+            }
+        }
+
+        private void RefreshReadinessSummary()
+        {
+            if (ReadinessSummaryTitle == null || ReadinessSummaryDetail == null || ReadinessSummaryDot == null)
+            {
+                return;
+            }
+
+            var needsAttention = TryGetReadinessAttention(out var reason, out var summaryLine);
+            var readyBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94));
+            var attentionBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8));
+
+            if (needsAttention)
+            {
+                ReadinessSummaryTitle.Text = "Needs attention";
+                ReadinessSummaryDetail.Text = reason;
+                ReadinessSummaryDot.Background = attentionBrush;
+
+                if (!_readinessUserCollapsed)
+                {
+                    SetReadinessDetailsExpanded(true);
+                }
+            }
+            else
+            {
+                _readinessUserCollapsed = false;
+                ReadinessSummaryTitle.Text = "Ready";
+                ReadinessSummaryDetail.Text = summaryLine;
+                ReadinessSummaryDot.Background = readyBrush;
+                SetReadinessDetailsExpanded(false);
+            }
+        }
+
+        private bool TryGetReadinessAttention(out string reason, out string readySummary)
+        {
+            reason = "";
+            var sptVersion = SptVersionText?.Text?.Trim() ?? "";
+            var sptStatus = SptUpdateStatusText?.Text?.Trim() ?? "";
+            var eftStatus = EftStatusText?.Text?.Trim() ?? "";
+            var fikaStatus = FikaUpdateStatusText?.Text?.Trim() ?? "";
+            var fikaVersion = FikaVersionText?.Text?.Trim() ?? "";
+
+            var sptReady = !string.IsNullOrWhiteSpace(sptVersion)
+                           && !sptVersion.Equals("Not detected", StringComparison.OrdinalIgnoreCase)
+                           && !sptVersion.StartsWith("Error", StringComparison.OrdinalIgnoreCase);
+
+            readySummary = sptReady
+                ? $"SPT {sptVersion}" +
+                  (string.IsNullOrWhiteSpace(EftVersionText?.Text) ||
+                   EftVersionText!.Text.Equals("Not detected", StringComparison.OrdinalIgnoreCase)
+                      ? ""
+                      : $" · Tarkov {EftVersionText.Text}") +
+                  (fikaVersion.Equals("Not detected", StringComparison.OrdinalIgnoreCase)
+                      ? " · Fika optional"
+                      : $" · Fika {fikaVersion}")
+                : "Set up SPT to get ready.";
+
+            if (_sptUpdateInProgress)
+            {
+                reason = "SPT update in progress.";
+                return true;
+            }
+
+            if (UpdateVerifyPanel?.Visibility == Visibility.Visible)
+            {
+                var verifyTitle = UpdateVerifyTitleText?.Text?.Trim();
+                reason = string.IsNullOrWhiteSpace(verifyTitle)
+                    ? "Finish verifying the latest update."
+                    : verifyTitle;
+                return true;
+            }
+
+            if (!HasValidLauncherPath(out _))
+            {
+                reason = "Set your SPT.Launcher.exe path under setup.";
+                return true;
+            }
+
             if (!sptReady)
             {
-                PlayStatusHeadline.Text = "SPT not detected";
-                PlayStatusDetail.Text = "Install SPT or point the path at a valid SPT launcher.";
-                return;
+                reason = "SPT is not detected at the current path.";
+                return true;
             }
 
-            PlayStatusHeadline.Text = "Ready to launch";
-            PlayStatusDetail.Text = "Your SPT launcher path looks good. Launch when you're ready.";
+            if (UpdateNowButton?.Visibility == Visibility.Visible ||
+                sptStatus.StartsWith("Update", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = string.IsNullOrWhiteSpace(sptStatus) || sptStatus == "—"
+                    ? "An SPT update is available."
+                    : $"SPT: {sptStatus}.";
+                return true;
+            }
+
+            if (EftPatcherGuidancePanel?.Visibility == Visibility.Visible)
+            {
+                reason = "No downgrade patcher for your live Tarkov yet.";
+                return true;
+            }
+
+            // Tarkov only matters for install/downgrade. Once SPT is installed, play doesn't need live EFT.
+            if (!IsSptDetectedAtCurrentPath() &&
+                _currentEftInfo?.Status is EftCompatibilityStatus.UpdateRequired
+                    or EftCompatibilityStatus.NotDetected
+                    or EftCompatibilityStatus.RequiredUnknown)
+            {
+                reason = string.IsNullOrWhiteSpace(eftStatus) || eftStatus == "—"
+                    ? "Tarkov needs attention before install."
+                    : $"Tarkov: {eftStatus}.";
+                return true;
+            }
+
+            if (UpdateFikaButton?.Visibility == Visibility.Visible ||
+                fikaStatus.StartsWith("Update", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = string.IsNullOrWhiteSpace(fikaStatus) || fikaStatus == "—"
+                    ? "A Fika update is available."
+                    : $"Fika: {fikaStatus}.";
+                return true;
+            }
+
+            return false;
         }
 
         private void AdvancedToggleButton_Click(object sender, RoutedEventArgs e)
@@ -1990,6 +2175,8 @@ namespace SptLauncherWpf.Pages
             {
                 UpdateVerifyPanel.Visibility = Visibility.Collapsed;
             }
+
+            RefreshReadinessSummary();
         }
 
         private void CancelUpdateVerify()
@@ -2091,6 +2278,10 @@ namespace SptLauncherWpf.Pages
                     false => new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)),
                     _ => (System.Windows.Media.Brush)FindResource("TextPrimaryColor")
                 };
+
+                // Verify results should surface in the compact readiness strip.
+                _readinessUserCollapsed = false;
+                RefreshReadinessSummary();
             });
         }
 
@@ -3130,6 +3321,7 @@ namespace SptLauncherWpf.Pages
             }
 
             RefreshPlayHero();
+            RefreshReadinessSummary();
         }
 
         private void RefreshEftStatusButton_Click(object sender, RoutedEventArgs e)
@@ -3368,6 +3560,7 @@ namespace SptLauncherWpf.Pages
                     }
                 }
 
+                RefreshReadinessSummary();
                 return;
             }
 
@@ -3436,6 +3629,8 @@ namespace SptLauncherWpf.Pages
                     FikaIpEditorPanel.Visibility = Visibility.Collapsed;
                 }
             }
+
+            RefreshReadinessSummary();
         }
 
         private static string FormatFikaInstalledVersion(string? clientVersion, string? serverVersion)
@@ -3974,6 +4169,7 @@ namespace SptLauncherWpf.Pages
 
             _sptUpdateCts = new CancellationTokenSource();
             _sptUpdateInProgress = true;
+            InvokeOnUi(RefreshReadinessSummary);
             var installerPath = Path.Combine(Path.GetTempPath(), downloadInfo.FileName);
 
             try
@@ -4068,6 +4264,7 @@ namespace SptLauncherWpf.Pages
                 _sptUpdateCts = null;
                 await FinalizeSptUpdateUiAndStateAsync();
                 RefreshSptRecoveryPanel();
+                InvokeOnUi(RefreshReadinessSummary);
             }
         }
 
@@ -4351,6 +4548,7 @@ namespace SptLauncherWpf.Pages
             }
 
             _sptUpdateInProgress = true;
+            InvokeOnUi(RefreshReadinessSummary);
             try
             {
                 InvokeOnUi(() =>
@@ -4397,6 +4595,7 @@ namespace SptLauncherWpf.Pages
                 _sptUpdateInProgress = false;
                 InvokeOnUi(() =>
                 {
+                    RefreshReadinessSummary();
                     if (SptUpdateProgressBar != null)
                     {
                         SptUpdateProgressBar.Visibility = Visibility.Collapsed;
