@@ -197,5 +197,11 @@ namespace SptLauncherWpf.Services
             get => GetValue("LastSptBackupPath", "");
             set => SetValue("LastSptBackupPath", value);
         }
+
+        public bool FirstRunWizardDismissed
+        {
+            get => GetValue("FirstRunWizardDismissed", false);
+            set => SetValue("FirstRunWizardDismissed", value);
+        }
     }
 }

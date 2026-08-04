@@ -102,9 +102,10 @@ namespace SptLauncherWpf.Services
 
                     case EftCompatibilityStatus.NewerThanSupported:
                         var newerMessage =
-                            $"Live Tarkov is newer than the current SPT downgrader supports " +
-                            $"(installed: {eftCompatibility.InstalledVersion}, supported source: {eftCompatibility.RequiredLiveVersion}). " +
-                            "Wait for SPT to publish a new patcher, or use Download Installer Only and check the installer status.";
+                            $"No downgrade patcher was found yet for live Tarkov {eftCompatibility.InstalledVersion} " +
+                            $"(SPT target {eftCompatibility.TargetSptClientVersion ?? "unknown"}). " +
+                            "Wait for SPT to publish a patcher for this Tarkov version, then try again. " +
+                            "You can also use Download Installer Only and check the official installer.";
                         if (requireCompatibleEft)
                         {
                             result.Errors.Add(newerMessage);

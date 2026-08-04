@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.Win32;
 
 namespace SptLauncherWpf.Services
@@ -22,16 +24,25 @@ namespace SptLauncherWpf.Services
     {
         public string? InstallPath { get; set; }
         public string? InstalledVersion { get; set; }
-        /// <summary>Live Tarkov version the SPT downpatcher expects as input.</summary>
+        /// <summary>Live Tarkov version mentioned in SPT release notes (often lags behind current patchers).</summary>
         public string? RequiredLiveVersion { get; set; }
         /// <summary>SPT client version after downgrade (for display only).</summary>
         public string? TargetSptClientVersion { get; set; }
+        /// <summary>Confirmed patcher URL for installed live → SPT target, when found.</summary>
+        public string? AvailablePatcherUrl { get; set; }
         public EftCompatibilityStatus Status { get; set; } = EftCompatibilityStatus.NotDetected;
-        public string StatusText => Status switch
+        public string StatusText => GetStatusText(sptAlreadyInstalled: false);
+
+        public string GetStatusText(bool sptAlreadyInstalled) => Status switch
         {
-            EftCompatibilityStatus.Compatible => "Ready for SPT installer",
+            EftCompatibilityStatus.Compatible =>
+                sptAlreadyInstalled
+                    ? "Live install detected"
+                    : string.IsNullOrWhiteSpace(AvailablePatcherUrl)
+                        ? "Ready for SPT installer"
+                        : "Patcher available for install",
             EftCompatibilityStatus.UpdateRequired => "Update Tarkov (for downgrader)",
-            EftCompatibilityStatus.NewerThanSupported => "Tarkov newer than SPT patcher",
+            EftCompatibilityStatus.NewerThanSupported => "No patcher for this Tarkov version yet",
             EftCompatibilityStatus.RequiredUnknown => "Required live version unknown",
             _ => "Not detected"
         };
@@ -44,6 +55,12 @@ namespace SptLauncherWpf.Services
 
         private const string EftExeName = "EscapeFromTarkov.exe";
         private const string EftOfficialSiteUrl = "https://www.escapefromtarkov.com/";
+        private const string PatcherHost = "https://slugma.waffle-lord.net";
+
+        private static readonly HttpClient PatcherHttpClient = new()
+        {
+            Timeout = TimeSpan.FromSeconds(8)
+        };
 
         private EftDetectionService()
         {
@@ -80,15 +97,197 @@ namespace SptLauncherWpf.Services
                 return info;
             }
 
-            if (string.IsNullOrWhiteSpace(info.RequiredLiveVersion))
+            if (string.IsNullOrWhiteSpace(info.TargetSptClientVersion) &&
+                string.IsNullOrWhiteSpace(info.RequiredLiveVersion))
             {
                 info.Status = EftCompatibilityStatus.RequiredUnknown;
                 return info;
             }
 
-            // Compare live install against the downgrader SOURCE version (Patcher_X_to_Y).
-            info.Status = CompareLiveEftToDowngraderSource(info.InstalledVersion, info.RequiredLiveVersion);
+            // Provisional status from release-note source version only:
+            // - too old  -> UpdateRequired
+            // - equal/newer/unknown -> Compatible until the CDN patcher probe runs
+            // Never set NewerThanSupported here; that is reserved for "no patcher for this live build".
+            if (!string.IsNullOrWhiteSpace(info.RequiredLiveVersion))
+            {
+                var comparison = CompareNormalizedVersions(info.InstalledVersion, info.RequiredLiveVersion);
+                info.Status = comparison < 0
+                    ? EftCompatibilityStatus.UpdateRequired
+                    : EftCompatibilityStatus.Compatible;
+            }
+            else
+            {
+                info.Status = EftCompatibilityStatus.Compatible;
+            }
+
             return info;
+        }
+
+        /// <summary>
+        /// Confirms whether a Patcher_{live}_to_{target}.7z exists.
+        /// The warning panel is only used when live Tarkov has no matching patcher yet.
+        /// </summary>
+        public async Task ResolveCurrentPatcherAvailabilityAsync(EftCompatibilityInfo info)
+        {
+            if (info == null)
+            {
+                return;
+            }
+
+            if (info.Status is EftCompatibilityStatus.NotDetected or EftCompatibilityStatus.UpdateRequired)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(info.InstalledVersion) ||
+                string.IsNullOrWhiteSpace(info.TargetSptClientVersion))
+            {
+                return;
+            }
+
+            var probe = await ProbeAvailablePatcherUrlAsync(
+                info.InstalledVersion,
+                info.TargetSptClientVersion);
+
+            if (probe.Result == PatcherProbeResult.Exists)
+            {
+                info.AvailablePatcherUrl = probe.Url;
+                info.Status = EftCompatibilityStatus.Compatible;
+                Debug.WriteLine($"[EftDetectionService] Found current patcher: {probe.Url}");
+                return;
+            }
+
+            if (probe.Result == PatcherProbeResult.Error)
+            {
+                // Network/CDN glitch — don't scare the user with a false "no patcher" warning.
+                Debug.WriteLine("[EftDetectionService] Patcher probe errored; leaving provisional status.");
+                return;
+            }
+
+            // Confirmed missing: live Tarkov has no downgrade patcher for the SPT target yet.
+            info.AvailablePatcherUrl = null;
+            info.Status = EftCompatibilityStatus.NewerThanSupported;
+            Debug.WriteLine(
+                $"[EftDetectionService] No patcher for live {info.InstalledVersion} -> {info.TargetSptClientVersion}");
+        }
+
+        public async Task<string?> FindAvailablePatcherUrlAsync(string liveVersion, string targetVersion)
+        {
+            var probe = await ProbeAvailablePatcherUrlAsync(liveVersion, targetVersion);
+            return probe.Result == PatcherProbeResult.Exists ? probe.Url : null;
+        }
+
+        private async Task<(PatcherProbeResult Result, string? Url)> ProbeAvailablePatcherUrlAsync(
+            string liveVersion,
+            string targetVersion)
+        {
+            var live = NormalizeEftVersion(liveVersion);
+            var target = NormalizeEftVersion(targetVersion);
+            if (string.IsNullOrWhiteSpace(live) || string.IsNullOrWhiteSpace(target))
+            {
+                return (PatcherProbeResult.Error, null);
+            }
+
+            var sawMissing = false;
+            foreach (var targetVariant in GetPatcherTargetVariants(target))
+            {
+                var url = $"{PatcherHost}/Patcher_{live}_to_{targetVariant}.7z";
+                var result = await ProbeUrlAsync(url);
+                if (result == PatcherProbeResult.Exists)
+                {
+                    return (PatcherProbeResult.Exists, url);
+                }
+
+                if (result == PatcherProbeResult.Missing)
+                {
+                    sawMissing = true;
+                }
+                else
+                {
+                    return (PatcherProbeResult.Error, null);
+                }
+            }
+
+            return (sawMissing ? PatcherProbeResult.Missing : PatcherProbeResult.Error, null);
+        }
+
+        private enum PatcherProbeResult
+        {
+            Exists,
+            Missing,
+            Error
+        }
+
+        private static IEnumerable<string> GetPatcherTargetVariants(string targetVersion)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void Add(string? value)
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    seen.Add(value);
+                }
+            }
+
+            Add(targetVersion);
+
+            // Release notes use 0.16.9.5.40743; patcher files use 16.9.5.40743.
+            if (targetVersion.StartsWith("0.", StringComparison.Ordinal))
+            {
+                Add(targetVersion.Substring(2));
+            }
+            else if (targetVersion.StartsWith("16.", StringComparison.Ordinal))
+            {
+                Add("0." + targetVersion);
+            }
+
+            return seen;
+        }
+
+        private static async Task<PatcherProbeResult> ProbeUrlAsync(string url)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Head, url);
+                using var response = await PatcherHttpClient.SendAsync(request);
+                if (response.IsSuccessStatusCode)
+                {
+                    return PatcherProbeResult.Exists;
+                }
+
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    return PatcherProbeResult.Missing;
+                }
+
+                // Some hosts dislike HEAD; fall back to a ranged GET.
+                if (response.StatusCode is System.Net.HttpStatusCode.MethodNotAllowed
+                    or System.Net.HttpStatusCode.Forbidden)
+                {
+                    using var getRequest = new HttpRequestMessage(HttpMethod.Get, url);
+                    getRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
+                    using var getResponse = await PatcherHttpClient.SendAsync(
+                        getRequest,
+                        HttpCompletionOption.ResponseHeadersRead);
+                    if (getResponse.IsSuccessStatusCode ||
+                        getResponse.StatusCode == System.Net.HttpStatusCode.PartialContent)
+                    {
+                        return PatcherProbeResult.Exists;
+                    }
+
+                    if (getResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        return PatcherProbeResult.Missing;
+                    }
+                }
+
+                return PatcherProbeResult.Error;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EftDetectionService] Patcher probe failed for {url}: {ex.Message}");
+                return PatcherProbeResult.Error;
+            }
         }
 
         public string? FindEftInstallPath(string? preferredGamePath = null)
@@ -270,22 +469,6 @@ namespace SptLauncherWpf.Services
             }
 
             return null;
-        }
-
-        private static EftCompatibilityStatus CompareLiveEftToDowngraderSource(string installedVersion, string requiredLiveVersion)
-        {
-            var comparison = CompareNormalizedVersions(installedVersion, requiredLiveVersion);
-            if (comparison < 0)
-            {
-                return EftCompatibilityStatus.UpdateRequired;
-            }
-
-            if (comparison > 0)
-            {
-                return EftCompatibilityStatus.NewerThanSupported;
-            }
-
-            return EftCompatibilityStatus.Compatible;
         }
 
         public string? TryGetGamePathFromSptLauncherConfig(string? launcherConfigJsonPath)

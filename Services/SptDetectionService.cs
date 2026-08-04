@@ -188,13 +188,23 @@ namespace SptLauncherWpf.Services
         {
             try
             {
+                // Modern SPT layout: <install>\SPT_Runtime\SPT.Launcher.exe
+                // Game files / BepInEx live in <install>, not inside SPT_Runtime.
+                var launcherDirName = Path.GetFileName(launcherDir);
+                if (string.Equals(launcherDirName, "SPT_Runtime", StringComparison.OrdinalIgnoreCase))
+                {
+                    var runtimeParent = Path.GetDirectoryName(launcherDir);
+                    if (!string.IsNullOrEmpty(runtimeParent) && Directory.Exists(runtimeParent))
+                    {
+                        return runtimeParent;
+                    }
+                }
+
                 // Check if the parent directory contains SPT-related files
                 // This handles cases where SPT is in a nested structure like D:\SPT\SPT\SPT.Launcher.exe
                 var parentDir = Path.GetDirectoryName(launcherDir);
                 if (!string.IsNullOrEmpty(parentDir) && Directory.Exists(parentDir))
                 {
-                    // Get the name of the launcher directory (e.g., "SPT" from "D:\SPT\SPT")
-                    var launcherDirName = Path.GetFileName(launcherDir);
                     // Get the name of the parent directory (e.g., "SPT" from "D:\SPT")
                     var parentDirName = Path.GetFileName(parentDir);
 
@@ -215,7 +225,12 @@ namespace SptLauncherWpf.Services
                         // Check if parent directory contains SPT-related files
                         var serverExePath = Path.Combine(parentDir, "SPT.Server.exe");
                         var sptDataPath = Path.Combine(parentDir, "SPT_Data");
-                        if (File.Exists(serverExePath) || Directory.Exists(sptDataPath))
+                        var runtimePath = Path.Combine(parentDir, "SPT_Runtime");
+                        var eftExePath = Path.Combine(parentDir, "EscapeFromTarkov.exe");
+                        if (File.Exists(serverExePath) ||
+                            Directory.Exists(sptDataPath) ||
+                            Directory.Exists(runtimePath) ||
+                            File.Exists(eftExePath))
                         {
                             // Parent directory contains SPT files, so use it as the root SPT directory
                             return parentDir;

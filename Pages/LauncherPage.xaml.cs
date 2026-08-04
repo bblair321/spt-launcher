@@ -191,7 +191,7 @@ namespace SptLauncherWpf.Pages
             UpdateFikaVersionDisplay();
 
             RefreshSptRecoveryPanel();
-            EnsureSetupPanelForPath();
+            RefreshFirstRunWizard();
         }
 
         private void LauncherPage_Unloaded(object sender, RoutedEventArgs e)
@@ -433,7 +433,7 @@ namespace SptLauncherWpf.Pages
             }
 
             RefreshPlayHero();
-            EnsureSetupPanelForPath();
+            RefreshFirstRunWizard();
         }
 
         /// <summary>
@@ -1411,17 +1411,316 @@ namespace SptLauncherWpf.Pages
             AdvancedToggleButton.Content = expanded ? "Hide setup" : "Show setup";
         }
 
-        private void EnsureSetupPanelForPath()
+        private bool HasValidLauncherPath(out string path)
         {
-            var path = LauncherPathTextBox?.Text?.Trim() ?? string.Empty;
-            var hasValidPath = !string.IsNullOrWhiteSpace(path)
-                               && File.Exists(path)
-                               && path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+            path = LauncherPathTextBox?.Text?.Trim() ?? string.Empty;
+            return !string.IsNullOrWhiteSpace(path)
+                   && File.Exists(path)
+                   && path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+        }
 
-            // First-run / missing path: open setup so Launch isn't a dead end.
-            if (!hasValidPath)
+        private bool IsSptDetectedAtCurrentPath()
+        {
+            if (!HasValidLauncherPath(out var path))
+            {
+                return false;
+            }
+
+            try
+            {
+                return SptDetectionService.Instance.IsSptInstalled(path);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool _firstRunAwaitingFinish;
+        private bool _firstRunPreferLocateStep;
+
+        private void RefreshFirstRunWizard()
+        {
+            if (FirstRunWizardPanel == null || MainLauncherContent == null)
+            {
+                return;
+            }
+
+            var hasValidPath = HasValidLauncherPath(out var path);
+            var sptReady = IsSptDetectedAtCurrentPath();
+            var dismissed = SettingsService.Instance.FirstRunWizardDismissed;
+            var wizardWasVisible = FirstRunWizardPanel.Visibility == Visibility.Visible;
+
+            if (dismissed && !_firstRunAwaitingFinish)
+            {
+                FirstRunWizardPanel.Visibility = Visibility.Collapsed;
+                MainLauncherContent.Visibility = Visibility.Visible;
+                return;
+            }
+
+            // Path + SPT ready: existing users skip the wizard; in-progress setup gets step 3.
+            if (hasValidPath && sptReady)
+            {
+                if (wizardWasVisible || _firstRunAwaitingFinish)
+                {
+                    _firstRunAwaitingFinish = true;
+                    FirstRunWizardPanel.Visibility = Visibility.Visible;
+                    MainLauncherContent.Visibility = Visibility.Collapsed;
+                    ShowFirstRunStep(3);
+                    if (FirstRunReadyDetailText != null && !string.IsNullOrWhiteSpace(path))
+                    {
+                        FirstRunReadyDetailText.Text =
+                            $"SPT looks good at:\n{path}\n\nYou can launch from the Play card, check Tarkov/Fika readiness, or tweak setup anytime.";
+                    }
+
+                    return;
+                }
+
+                if (!dismissed)
+                {
+                    SettingsService.Instance.FirstRunWizardDismissed = true;
+                    SettingsService.Instance.SaveSettings();
+                }
+
+                FirstRunWizardPanel.Visibility = Visibility.Collapsed;
+                MainLauncherContent.Visibility = Visibility.Visible;
+                return;
+            }
+
+            _firstRunAwaitingFinish = false;
+            FirstRunWizardPanel.Visibility = Visibility.Visible;
+            MainLauncherContent.Visibility = Visibility.Collapsed;
+            SetSetupPanelExpanded(false);
+
+            // Install first when there's nothing to point at yet.
+            // After install / "I already have SPT", move to locate launcher.
+            if (!hasValidPath && !_firstRunPreferLocateStep)
+            {
+                ShowFirstRunStep(1);
+                return;
+            }
+
+            ShowFirstRunStep(2);
+            if (FirstRunPathStatusText != null)
+            {
+                if (hasValidPath && !sptReady)
+                {
+                    FirstRunPathStatusText.Text =
+                        $"Path set, but SPT was not detected there:\n{path}\nTry a different SPT.Launcher.exe.";
+                    FirstRunPathStatusText.Foreground =
+                        new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8));
+                }
+                else if (string.IsNullOrWhiteSpace(FirstRunPathStatusText.Text) ||
+                         FirstRunPathStatusText.Text.StartsWith("No launcher", StringComparison.OrdinalIgnoreCase) ||
+                         FirstRunPathStatusText.Text.StartsWith("That path", StringComparison.OrdinalIgnoreCase))
+                {
+                    FirstRunPathStatusText.Text =
+                        "Click Auto-detect after the installer finishes, or Browse to SPT.Launcher.exe.";
+                    FirstRunPathStatusText.Foreground =
+                        (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                }
+            }
+        }
+
+        private void ShowFirstRunStep(int step)
+        {
+            if (FirstRunStep1Panel != null)
+            {
+                FirstRunStep1Panel.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (FirstRunStep2Panel != null)
+            {
+                FirstRunStep2Panel.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (FirstRunStep3Panel != null)
+            {
+                FirstRunStep3Panel.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (FirstRunStepLabel != null)
+            {
+                FirstRunStepLabel.Text = step switch
+                {
+                    1 => "Step 1 of 3 — Install SPT",
+                    2 => "Step 2 of 3 — Find SPT.Launcher.exe",
+                    3 => "Step 3 of 3 — Ready",
+                    _ => "Setup"
+                };
+            }
+        }
+
+        private void DismissFirstRunWizard()
+        {
+            _firstRunAwaitingFinish = false;
+            _firstRunPreferLocateStep = false;
+            SettingsService.Instance.FirstRunWizardDismissed = true;
+            SettingsService.Instance.SaveSettings();
+
+            if (FirstRunWizardPanel != null)
+            {
+                FirstRunWizardPanel.Visibility = Visibility.Collapsed;
+            }
+
+            if (MainLauncherContent != null)
+            {
+                MainLauncherContent.Visibility = Visibility.Visible;
+            }
+
+            RefreshPlayHero();
+        }
+
+        private void FirstRunInstallSptButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (FirstRunInstallStatusText != null)
+            {
+                FirstRunInstallStatusText.Text =
+                    "Downloading/launching the SPT installer. When it finishes, come back and find SPT.Launcher.exe.";
+            }
+
+            _firstRunPreferLocateStep = true;
+            InstallSptButton_Click(sender, e);
+
+            // Soft advance so Browse/Auto-detect is available after install starts.
+            ShowFirstRunStep(2);
+            if (FirstRunPathStatusText != null)
+            {
+                FirstRunPathStatusText.Text =
+                    "Finish the SPT installer, then Auto-detect or Browse to SPT.Launcher.exe.";
+                FirstRunPathStatusText.Foreground =
+                    (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+            }
+        }
+
+        private void FirstRunAlreadyInstalledButton_Click(object sender, RoutedEventArgs e)
+        {
+            _firstRunPreferLocateStep = true;
+            ShowFirstRunStep(2);
+
+            var detected = AutoDetectSptLauncher();
+            if (!string.IsNullOrWhiteSpace(detected))
+            {
+                LauncherPathTextBox.Text = detected;
+                SaveSettings();
+                UpdatePathStatus();
+                UpdateSptVersionDisplay();
+                RefreshFirstRunWizard();
+                return;
+            }
+
+            if (FirstRunPathStatusText != null)
+            {
+                FirstRunPathStatusText.Text =
+                    "Could not auto-detect SPT.Launcher.exe. Browse to it in your SPT install folder.";
+                FirstRunPathStatusText.Foreground =
+                    new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8));
+            }
+        }
+
+        private void FirstRunBackToInstallButton_Click(object sender, RoutedEventArgs e)
+        {
+            _firstRunPreferLocateStep = false;
+            ShowFirstRunStep(1);
+        }
+
+        private void FirstRunBrowseButton_Click(object sender, RoutedEventArgs e)
+        {
+            _firstRunPreferLocateStep = true;
+            BrowseButton_Click(sender, e);
+            RefreshFirstRunWizard();
+        }
+
+        private void FirstRunDetectButton_Click(object sender, RoutedEventArgs e)
+        {
+            _firstRunPreferLocateStep = true;
+            var detected = AutoDetectSptLauncher();
+            if (string.IsNullOrWhiteSpace(detected))
+            {
+                if (FirstRunPathStatusText != null)
+                {
+                    FirstRunPathStatusText.Text =
+                        "Still couldn’t find SPT.Launcher.exe. Use Browse and pick it from the folder you installed SPT into.";
+                    FirstRunPathStatusText.Foreground =
+                        new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8));
+                }
+
+                return;
+            }
+
+            LauncherPathTextBox.Text = detected;
+            SaveSettings();
+            UpdatePathStatus();
+            UpdateSptVersionDisplay();
+            RefreshFirstRunWizard();
+
+            if (FirstRunPathStatusText != null)
+            {
+                FirstRunPathStatusText.Text = $"Found: {detected}";
+                FirstRunPathStatusText.Foreground =
+                    new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94));
+            }
+        }
+
+        private void FirstRunRecheckSptButton_Click(object sender, RoutedEventArgs e)
+        {
+            _firstRunPreferLocateStep = true;
+
+            if (!HasValidLauncherPath(out _))
+            {
+                var detected = AutoDetectSptLauncher();
+                if (!string.IsNullOrWhiteSpace(detected))
+                {
+                    LauncherPathTextBox.Text = detected;
+                    SaveSettings();
+                }
+            }
+
+            UpdateSptVersionDisplay();
+            RefreshFirstRunWizard();
+
+            if (!IsSptDetectedAtCurrentPath())
+            {
+                System.Windows.MessageBox.Show(
+                    "SPT.Launcher.exe still wasn’t found.\n\n" +
+                    "Finish the official installer, then use Auto-detect or Browse to the SPT.Launcher.exe in your install folder.",
+                    "SPT not found",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+        }
+
+        private void FirstRunFinishButton_Click(object sender, RoutedEventArgs e)
+        {
+            DismissFirstRunWizard();
+        }
+
+        private void FirstRunSkipButton_Click(object sender, RoutedEventArgs e)
+        {
+            DismissFirstRunWizard();
+            if (!HasValidLauncherPath(out _))
             {
                 SetSetupPanelExpanded(true);
+            }
+        }
+
+        private void OpenSptReleasesButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = SptInstallUrls.ReleasesPageUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(
+                    $"Could not open SPT releases page.\n\n{ex.Message}",
+                    "Open SPT Releases",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             }
         }
 
@@ -1718,84 +2017,150 @@ namespace SptLauncherWpf.Pages
         // Fika Co-op Configuration Methods
         
         /// <summary>
-        /// Auto-detects SPT.Launcher.exe in common installation locations
+        /// Auto-detects SPT.Launcher.exe in common installation locations.
+        /// Newer SPT installs place it under SPT_Runtime\ rather than the install root.
         /// </summary>
         private string AutoDetectSptLauncher()
         {
             try
             {
-                // First, check if there's a running SPT.Launcher process and get its path
-                var launcherProcesses = Process.GetProcessesByName("SPT.Launcher");
-                if (launcherProcesses.Length > 0)
+                var candidates = new List<string>();
+
+                void Consider(string? path)
                 {
+                    if (string.IsNullOrWhiteSpace(path))
+                    {
+                        return;
+                    }
+
                     try
                     {
-                        var processPath = TryGetProcessPath(launcherProcesses[0]);
-                        if (!string.IsNullOrEmpty(processPath) && File.Exists(processPath))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found running process: {processPath}");
-                            return processPath;
-                        }
+                        path = Path.GetFullPath(path.Trim().Trim('"'));
                     }
                     catch
                     {
-                        // Continue with file system search if process path fails
+                        return;
+                    }
+
+                    if (!path.EndsWith("SPT.Launcher.exe", StringComparison.OrdinalIgnoreCase) &&
+                        !path.EndsWith("Aki.Launcher.exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    if (File.Exists(path) &&
+                        !candidates.Contains(path, StringComparer.OrdinalIgnoreCase))
+                    {
+                        candidates.Add(path);
                     }
                 }
 
-                // Get all drive letters
+                // Running process path
+                foreach (var processName in new[] { "SPT.Launcher", "Aki.Launcher" })
+                {
+                    foreach (var process in Process.GetProcessesByName(processName))
+                    {
+                        try
+                        {
+                            Consider(TryGetProcessPath(process));
+                        }
+                        catch
+                        {
+                            // Continue searching
+                        }
+                    }
+                }
+
+                // Desktop / Start Menu shortcuts created by the SPT installer
+                foreach (var shortcut in GetSptLauncherShortcutCandidates())
+                {
+                    Consider(TryResolveShortcutTarget(shortcut));
+                }
+
                 var drives = DriveInfo.GetDrives()
-                    .Where(d => d.IsReady && d.DriveType == DriveType.Fixed)
+                    .Where(d => d.IsReady && (d.DriveType == DriveType.Fixed || d.DriveType == DriveType.Removable))
                     .Select(d => d.RootDirectory.FullName)
                     .ToList();
 
-                // Common SPT folder names to check
-                var folderNames = new[] { "SPT", "SPT-AKI", "SinglePlayerTarkov", "spt" };
+                var folderNames = new[]
+                {
+                    "SPT", "SPT-AKI", "SPTarkov", "SinglePlayerTarkov", "spt", "SP-Tarkov"
+                };
 
-                // Search in common locations
+                // Explicit modern + legacy layouts under common folder names
                 foreach (var drive in drives)
                 {
                     foreach (var folderName in folderNames)
                     {
-                        // Check root level (e.g., D:\SPT\SPT.Launcher.exe)
-                        var rootPath = Path.Combine(drive, folderName, "SPT.Launcher.exe");
-                        if (File.Exists(rootPath))
+                        var root = Path.Combine(drive, folderName);
+                        foreach (var relative in new[]
+                                 {
+                                     "SPT.Launcher.exe",
+                                     Path.Combine("SPT_Runtime", "SPT.Launcher.exe"),
+                                     Path.Combine("SPT", "SPT.Launcher.exe"),
+                                     Path.Combine("SPT", "SPT_Runtime", "SPT.Launcher.exe"),
+                                     Path.Combine(folderName, "SPT.Launcher.exe"),
+                                     Path.Combine(folderName, "SPT_Runtime", "SPT.Launcher.exe"),
+                                     "Aki.Launcher.exe",
+                                     Path.Combine("SPT_Runtime", "Aki.Launcher.exe")
+                                 })
                         {
-                            System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found at root: {rootPath}");
-                            return rootPath;
+                            Consider(Path.Combine(root, relative));
                         }
 
-                        // Check nested structure (e.g., D:\SPT\SPT\SPT.Launcher.exe)
-                        var nestedPath = Path.Combine(drive, folderName, folderName, "SPT.Launcher.exe");
-                        if (File.Exists(nestedPath))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found nested: {nestedPath}");
-                            return nestedPath;
-                        }
-
-                        // Also check in SPT subdirectory (e.g., D:\SPT\SPT\SPT.Launcher.exe)
-                        var subDirPath = Path.Combine(drive, folderName, "SPT", "SPT.Launcher.exe");
-                        if (File.Exists(subDirPath))
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found in subdirectory: {subDirPath}");
-                            return subDirPath;
-                        }
+                        // Installer often drops shortcuts in the chosen install folder.
+                        Consider(TryResolveShortcutTarget(Path.Combine(root, "SPT.Launcher.lnk")));
                     }
                 }
 
-                // If not found in common locations, do a limited recursive search
-                foreach (var drive in drives.Take(3)) // Limit to first 3 drives for performance
+                // Deeper scan under likely SPT roots (covers custom subfolders)
+                foreach (var drive in drives)
                 {
-                    var found = SearchForLauncherRecursive(drive, maxDepth: 2);
-                    if (!string.IsNullOrEmpty(found))
+                    foreach (var folderName in folderNames)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Found via recursive search: {found}");
-                        return found;
+                        var root = Path.Combine(drive, folderName);
+                        if (!Directory.Exists(root))
+                        {
+                            continue;
+                        }
+
+                        var found = SearchForLauncherRecursive(root, maxDepth: 4);
+                        Consider(found);
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine("[AutoDetectSptLauncher] No launcher found");
-                return string.Empty;
+                // Broader shallow scan across drives as a last resort
+                if (candidates.Count == 0)
+                {
+                    foreach (var drive in drives)
+                    {
+                        var found = SearchForLauncherRecursive(drive, maxDepth: 3);
+                        Consider(found);
+                        if (candidates.Count > 0)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                if (candidates.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine("[AutoDetectSptLauncher] No launcher found");
+                    return string.Empty;
+                }
+
+                // Prefer the newest launcher (most recent install/update).
+                var best = candidates
+                    .OrderByDescending(IsLikelyCurrentSptLauncher)
+                    .ThenByDescending(p =>
+                    {
+                        try { return File.GetLastWriteTimeUtc(p); }
+                        catch { return DateTime.MinValue; }
+                    })
+                    .First();
+
+                System.Diagnostics.Debug.WriteLine($"[AutoDetectSptLauncher] Selected: {best}");
+                return best;
             }
             catch (Exception ex)
             {
@@ -1804,12 +2169,80 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        private static bool IsLikelyCurrentSptLauncher(string path)
+        {
+            // Prefer modern SPT_Runtime layout and non-archive folders.
+            var lower = path.ToLowerInvariant();
+            if (lower.Contains("\\spt_version_archive\\") || lower.Contains("\\backup"))
+            {
+                return false;
+            }
+
+            return lower.Contains("\\spt_runtime\\") || lower.Contains("\\spt\\");
+        }
+
+        private static IEnumerable<string> GetSptLauncherShortcutCandidates()
+        {
+            var dirs = new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs")
+            };
+
+            foreach (var dir in dirs.Where(d => !string.IsNullOrWhiteSpace(d) && Directory.Exists(d)))
+            {
+                string[] files;
+                try
+                {
+                    files = Directory.GetFiles(dir, "*SPT*Launcher*.lnk", SearchOption.AllDirectories);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                foreach (var file in files)
+                {
+                    yield return file;
+                }
+            }
+        }
+
+        private static string? TryResolveShortcutTarget(string? shortcutPath)
+        {
+            if (string.IsNullOrWhiteSpace(shortcutPath) || !File.Exists(shortcutPath))
+            {
+                return null;
+            }
+
+            try
+            {
+                var shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType == null)
+                {
+                    return null;
+                }
+
+                dynamic shell = Activator.CreateInstance(shellType)!;
+                var link = shell.CreateShortcut(shortcutPath);
+                string? target = link.TargetPath;
+                return string.IsNullOrWhiteSpace(target) ? null : target;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TryResolveShortcutTarget] {shortcutPath}: {ex.Message}");
+                return null;
+            }
+        }
+
         /// <summary>
         /// Recursively searches for SPT.Launcher.exe (with depth limit for performance)
         /// </summary>
         private string SearchForLauncherRecursive(string directory, int maxDepth, int currentDepth = 0)
         {
-            if (currentDepth >= maxDepth)
+            if (currentDepth > maxDepth)
             {
                 return string.Empty;
             }
@@ -1821,25 +2254,34 @@ namespace SptLauncherWpf.Pages
                     return string.Empty;
                 }
 
-                // Check current directory
-                var launcherPath = Path.Combine(directory, "SPT.Launcher.exe");
-                if (File.Exists(launcherPath))
+                foreach (var exeName in new[] { "SPT.Launcher.exe", "Aki.Launcher.exe" })
                 {
-                    return launcherPath;
+                    var launcherPath = Path.Combine(directory, exeName);
+                    if (File.Exists(launcherPath))
+                    {
+                        return launcherPath;
+                    }
                 }
 
-                // Search subdirectories (limit to avoid scanning system folders)
-                var skipFolders = new[] { "Windows", "Program Files", "Program Files (x86)", "ProgramData", 
-                                         "$Recycle.Bin", "System Volume Information", "PerfLogs", 
-                                         "Recovery", "Documents and Settings" };
+                if (currentDepth == maxDepth)
+                {
+                    return string.Empty;
+                }
 
-                var dirs = Directory.GetDirectories(directory);
-                foreach (var dir in dirs)
+                var skipFolders = new[]
+                {
+                    "Windows", "Program Files", "Program Files (x86)", "ProgramData",
+                    "$Recycle.Bin", "System Volume Information", "PerfLogs",
+                    "Recovery", "Documents and Settings", "Windows.old",
+                    "node_modules", ".git"
+                };
+
+                foreach (var dir in Directory.GetDirectories(directory))
                 {
                     var dirName = Path.GetFileName(dir);
                     if (skipFolders.Contains(dirName, StringComparer.OrdinalIgnoreCase))
                     {
-                        continue; // Skip system folders
+                        continue;
                     }
 
                     var found = SearchForLauncherRecursive(dir, maxDepth, currentDepth + 1);
@@ -1867,11 +2309,22 @@ namespace SptLauncherWpf.Pages
                     return string.Empty;
                 }
                 
-                // Extract directory from launcher path (e.g., D:\SPT\SPT\SPT.Launcher.exe -> D:\SPT\SPT)
+                // Extract directory from launcher path
+                // Modern SPT: D:\SPT\SPT_Runtime\SPT.Launcher.exe -> install root is D:\SPT
                 var launcherDir = Path.GetDirectoryName(launcherPath);
                 if (string.IsNullOrEmpty(launcherDir))
                 {
                     return string.Empty;
+                }
+
+                var launcherDirName = Path.GetFileName(launcherDir);
+                if (string.Equals(launcherDirName, "SPT_Runtime", StringComparison.OrdinalIgnoreCase))
+                {
+                    var runtimeParent = Path.GetDirectoryName(launcherDir);
+                    if (!string.IsNullOrEmpty(runtimeParent) && Directory.Exists(runtimeParent))
+                    {
+                        return runtimeParent;
+                    }
                 }
                 
                 // Check if the parent directory exists and has more files/subdirectories than just the nested SPT folder
@@ -1880,8 +2333,6 @@ namespace SptLauncherWpf.Pages
                 var parentDir = Path.GetDirectoryName(launcherDir);
                 if (!string.IsNullOrEmpty(parentDir) && Directory.Exists(parentDir))
                 {
-                    // Get the name of the launcher directory (e.g., "SPT" from "D:\SPT\SPT")
-                    var launcherDirName = Path.GetFileName(launcherDir);
                     // Get the name of the parent directory (e.g., "SPT" from "D:\SPT")
                     var parentDirName = Path.GetFileName(parentDir);
                     
@@ -2159,6 +2610,7 @@ namespace SptLauncherWpf.Pages
                         requiredLiveVersion,
                         targetClientVersion,
                         preferredGamePath));
+                await EftDetectionService.Instance.ResolveCurrentPatcherAvailabilityAsync(eftInfo);
                 _currentEftInfo = eftInfo;
 
                 InvokeOnUi(() => ApplyEftUiState(eftInfo));
@@ -2189,6 +2641,13 @@ namespace SptLauncherWpf.Pages
 
         private void ApplyEftUiState(EftCompatibilityInfo eftInfo)
         {
+            var sptAlreadyInstalled = IsSptDetectedAtCurrentPath();
+            // Patcher messaging is only useful before/during install. Once SPT is installed,
+            // the live copy has already been downgraded into the SPT folder.
+            var showPatcherDetails = !sptAlreadyInstalled &&
+                                     eftInfo.Status == EftCompatibilityStatus.Compatible &&
+                                     !string.IsNullOrWhiteSpace(eftInfo.AvailablePatcherUrl);
+
             if (EftVersionText != null)
             {
                 EftVersionText.Text = string.IsNullOrWhiteSpace(eftInfo.InstalledVersion)
@@ -2201,7 +2660,7 @@ namespace SptLauncherWpf.Pages
 
             if (EftStatusText != null)
             {
-                EftStatusText.Text = eftInfo.StatusText;
+                EftStatusText.Text = eftInfo.GetStatusText(sptAlreadyInstalled);
                 EftStatusText.Foreground = eftInfo.Status switch
                 {
                     EftCompatibilityStatus.Compatible =>
@@ -2214,15 +2673,31 @@ namespace SptLauncherWpf.Pages
                 };
             }
 
+            var isNewerThanPatcher = eftInfo.Status == EftCompatibilityStatus.NewerThanSupported;
             var showUpdateButton = eftInfo.Status is
                 EftCompatibilityStatus.UpdateRequired or
                 EftCompatibilityStatus.NotDetected or
-                EftCompatibilityStatus.RequiredUnknown or
-                EftCompatibilityStatus.NewerThanSupported;
+                EftCompatibilityStatus.RequiredUnknown;
 
             if (EftRequiredVersionText != null)
             {
-                if (showUpdateButton || eftInfo.Status == EftCompatibilityStatus.RequiredUnknown)
+                if (isNewerThanPatcher)
+                {
+                    // Detailed copy lives in EftPatcherGuidancePanel.
+                    EftRequiredVersionText.Visibility = Visibility.Collapsed;
+                    EftRequiredVersionText.Text = string.Empty;
+                }
+                else if (showPatcherDetails)
+                {
+                    EftRequiredVersionText.Visibility = Visibility.Visible;
+                    var target = string.IsNullOrWhiteSpace(eftInfo.TargetSptClientVersion)
+                        ? "SPT client"
+                        : eftInfo.TargetSptClientVersion;
+                    EftRequiredVersionText.Text =
+                        $"Downgrade patcher available: {eftInfo.InstalledVersion} → {target}";
+                }
+                else if (!sptAlreadyInstalled &&
+                         (showUpdateButton || eftInfo.Status == EftCompatibilityStatus.RequiredUnknown))
                 {
                     EftRequiredVersionText.Visibility = Visibility.Visible;
                     if (!string.IsNullOrWhiteSpace(eftInfo.RequiredLiveVersion))
@@ -2250,6 +2725,34 @@ namespace SptLauncherWpf.Pages
             {
                 UpdateTarkovButton.Visibility = showUpdateButton ? Visibility.Visible : Visibility.Collapsed;
                 UpdateTarkovButton.IsEnabled = !_sptUpdateInProgress;
+            }
+
+            if (EftPatcherGuidancePanel != null)
+            {
+                // Still warn when no patcher exists — matters for reinstall/update even if SPT is present.
+                EftPatcherGuidancePanel.Visibility =
+                    isNewerThanPatcher ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (EftPatcherGuidanceText != null)
+            {
+                if (isNewerThanPatcher)
+                {
+                    var installed = string.IsNullOrWhiteSpace(eftInfo.InstalledVersion)
+                        ? "unknown"
+                        : eftInfo.InstalledVersion;
+                    var target = string.IsNullOrWhiteSpace(eftInfo.TargetSptClientVersion)
+                        ? "the SPT client version"
+                        : eftInfo.TargetSptClientVersion;
+
+                    EftPatcherGuidanceText.Text =
+                        $"Your live Tarkov is {installed}. No downgrade patcher was found for " +
+                        $"{installed} → {target} on the SPT patcher CDN yet.";
+                }
+                else
+                {
+                    EftPatcherGuidanceText.Text = string.Empty;
+                }
             }
 
             RefreshPlayHero();
@@ -2746,6 +3249,7 @@ namespace SptLauncherWpf.Pages
                         SetSptUpdateActionButtonsVisible(false, false);
                         RefreshSptRecoveryPanel();
                         RefreshPlayHero();
+                        RefreshFirstRunWizard();
                     });
                     return;
                 }
@@ -2770,6 +3274,7 @@ namespace SptLauncherWpf.Pages
                         SetSptUpdateActionButtonsVisible(false, false);
                         RefreshSptRecoveryPanel();
                         RefreshPlayHero();
+                        RefreshFirstRunWizard();
                     });
                     return;
                 }
@@ -2793,6 +3298,7 @@ namespace SptLauncherWpf.Pages
                         SetSptUpdateActionButtonsVisible(false, false);
                         RefreshSptRecoveryPanel();
                         RefreshPlayHero();
+                        RefreshFirstRunWizard();
                     });
                     return;
                 }
@@ -2858,6 +3364,7 @@ namespace SptLauncherWpf.Pages
 
                     RefreshSptRecoveryPanel();
                     RefreshPlayHero();
+                    RefreshFirstRunWizard();
                 });
             }
             catch (Exception ex)
@@ -2877,6 +3384,7 @@ namespace SptLauncherWpf.Pages
                     }
                     RefreshSptRecoveryPanel();
                     RefreshPlayHero();
+                    RefreshFirstRunWizard();
                 });
             }
         }
@@ -3016,6 +3524,7 @@ namespace SptLauncherWpf.Pages
                 _currentUpdateInfo.RequiredLiveEftVersion,
                 _currentUpdateInfo.RequiredEftVersion,
                 preferredGamePath);
+            await EftDetectionService.Instance.ResolveCurrentPatcherAvailabilityAsync(eftCompatibility);
             _currentEftInfo = eftCompatibility;
             InvokeOnUi(() => ApplyEftUiState(eftCompatibility));
 

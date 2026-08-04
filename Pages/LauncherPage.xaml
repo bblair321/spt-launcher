@@ -50,6 +50,133 @@
         <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
             <StackPanel Margin="0,4,0,16" MaxWidth="900" HorizontalAlignment="Stretch">
 
+                <!-- Guided first-run wizard -->
+                <Border Name="FirstRunWizardPanel"
+                        Style="{StaticResource ModernCardStyle}"
+                        Padding="28,24"
+                        Margin="0,0,0,12"
+                        Visibility="Collapsed">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,6" LastChildFill="False">
+                            <TextBlock Text="Get set up"
+                                       FontSize="22"
+                                       FontWeight="Bold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       VerticalAlignment="Center"/>
+                            <Button Name="FirstRunSkipButton"
+                                    Content="Skip for now"
+                                    Style="{StaticResource LinkToggleStyle}"
+                                    Click="FirstRunSkipButton_Click"
+                                    DockPanel.Dock="Right"
+                                    VerticalAlignment="Center"/>
+                        </DockPanel>
+                        <TextBlock Name="FirstRunStepLabel"
+                                   Text="Step 1 of 3"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextSecondaryColor}"
+                                   Margin="0,0,0,16"/>
+
+                        <!-- Step 1: install SPT first (nothing to browse for yet) -->
+                        <StackPanel Name="FirstRunStep1Panel">
+                            <TextBlock Text="Install SPT"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       Margin="0,0,0,6"/>
+                            <TextBlock Text="If you don’t have SPT yet, install it first. The official installer will create SPT.Launcher.exe — we’ll find that afterward."
+                                       FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,14"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Name="FirstRunInstallSptButton"
+                                        Content="Install SPT"
+                                        Style="{StaticResource ModernButtonStyle}"
+                                        Background="{DynamicResource PrimaryColor}"
+                                        Padding="18,10"
+                                        Click="FirstRunInstallSptButton_Click"
+                                        Margin="0,0,8,0"/>
+                                <Button Name="FirstRunAlreadyInstalledButton"
+                                        Content="I already have SPT"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="FirstRunAlreadyInstalledButton_Click"/>
+                            </StackPanel>
+                            <TextBlock Name="FirstRunInstallStatusText"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       Margin="0,10,0,0"
+                                       TextWrapping="Wrap"
+                                       Text="Remember the folder you install to — you’ll point us at SPT.Launcher.exe next."/>
+                        </StackPanel>
+
+                        <!-- Step 2: locate launcher after install -->
+                        <StackPanel Name="FirstRunStep2Panel" Visibility="Collapsed">
+                            <TextBlock Text="Find SPT.Launcher.exe"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       Margin="0,0,0,6"/>
+                            <TextBlock Text="After installing, SPT.Launcher.exe is in your SPT folder (often next to SPT.Server.exe). Auto-detect usually finds it; otherwise Browse to that file."
+                                       FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,14"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button Name="FirstRunDetectButton"
+                                        Content="Auto-detect"
+                                        Style="{StaticResource ModernButtonStyle}"
+                                        Background="{DynamicResource PrimaryColor}"
+                                        Padding="18,10"
+                                        Click="FirstRunDetectButton_Click"
+                                        Margin="0,0,8,0"/>
+                                <Button Name="FirstRunBrowseButton"
+                                        Content="Browse…"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="FirstRunBrowseButton_Click"
+                                        Margin="0,0,8,0"/>
+                                <Button Name="FirstRunRecheckSptButton"
+                                        Content="Recheck"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="FirstRunRecheckSptButton_Click"/>
+                            </StackPanel>
+                            <TextBlock Name="FirstRunPathStatusText"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       Margin="0,10,0,0"
+                                       TextWrapping="Wrap"/>
+                            <Button Name="FirstRunBackToInstallButton"
+                                    Content="Back — I still need to install SPT"
+                                    Style="{StaticResource LinkToggleStyle}"
+                                    Margin="0,14,0,0"
+                                    Click="FirstRunBackToInstallButton_Click"/>
+                        </StackPanel>
+
+                        <!-- Step 3: done -->
+                        <StackPanel Name="FirstRunStep3Panel" Visibility="Collapsed">
+                            <TextBlock Text="You're ready"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       Margin="0,0,0,6"/>
+                            <TextBlock Name="FirstRunReadyDetailText"
+                                       Text="SPT looks good. You can launch from the Play card, check Tarkov/Fika readiness, or tweak setup anytime."
+                                       FontSize="13"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,14"/>
+                            <Button Name="FirstRunFinishButton"
+                                    Content="Continue to launcher"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{DynamicResource PrimaryColor}"
+                                    Padding="18,10"
+                                    HorizontalAlignment="Left"
+                                    Click="FirstRunFinishButton_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel Name="MainLauncherContent">
                 <!-- Play hero -->
                 <Border Style="{StaticResource ModernCardStyle}" Padding="24,20" Margin="0,0,0,12">
                     <Grid>
@@ -173,6 +300,48 @@
                                     Style="{StaticResource QuietButtonStyle}"
                                     Visibility="Collapsed" Click="UpdateTarkovButton_Click" Margin="8,0,0,0"/>
                         </Grid>
+
+                        <!-- Live Tarkov newer than SPT patcher -->
+                        <Border Name="EftPatcherGuidancePanel"
+                                Background="{DynamicResource HoverColor}"
+                                CornerRadius="8"
+                                Padding="14,12"
+                                Margin="0,0,0,12"
+                                Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock Text="No downgrade patcher found for your live Tarkov yet"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryColor}"
+                                           Margin="0,0,0,6"/>
+                                <TextBlock Name="EftPatcherGuidanceText"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,10"/>
+                                <TextBlock FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,10"
+                                           Text="SPT needs a patcher from your live Tarkov version down to the SPT client version. New EFT updates usually get a patcher within a day or two.&#10;&#10;What you can do:&#10;1. Wait for the SPT team to publish a patcher for your version, then Recheck.&#10;2. Keep live Tarkov updated — the official SPT installer uses the newest matching patcher when it’s available.&#10;3. Check SPT Releases for installer/patcher notes."/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Name="OpenSptReleasesButton"
+                                            Content="Open SPT Releases"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Click="OpenSptReleasesButton_Click"
+                                            Margin="0,0,8,0"/>
+                                    <Button Name="OpenBsgForPatcherButton"
+                                            Content="Open BSG Launcher"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Click="UpdateTarkovButton_Click"
+                                            Margin="0,0,8,0"/>
+                                    <Button Name="RecheckPatcherButton"
+                                            Content="Recheck"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Click="RefreshEftStatusButton_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
                         <!-- Fika row -->
                         <Grid>
@@ -378,6 +547,7 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
+                </StackPanel>
             </StackPanel>
         </ScrollViewer>
 
