@@ -256,14 +256,77 @@ namespace SptLauncherWpf.Services
                     return false;
                 }
 
+                MarkPendingSelfUpdate(updateInfo.Version);
                 return ApplyUpdateAndRestart(currentExePath, updatePath);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to download update: {ex.Message}");
+                ClearPendingSelfUpdate();
                 TryDeleteFile(updatePath);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// After restart: remove .old.exe when the update succeeded, and report whether to show a success banner.
+        /// </summary>
+        public SelfUpdateCompletionResult? CompleteSelfUpdateIfNeeded()
+        {
+            var currentExePath = Environment.ProcessPath;
+            if (string.IsNullOrWhiteSpace(currentExePath) || !File.Exists(currentExePath))
+            {
+                return null;
+            }
+
+            var currentVersion = GetCurrentVersion();
+            var displayVersion = UpdateApplyHelper.FormatDisplayVersion(currentVersion);
+            var pending = SettingsService.Instance.PendingSelfUpdateVersion?.Trim() ?? "";
+
+            if (string.IsNullOrWhiteSpace(pending))
+            {
+                // Orphaned leftover from an older update path — safe once we're running.
+                UpdateApplyHelper.TryRemoveBackup(currentExePath);
+                return null;
+            }
+
+            var matched = UpdateApplyHelper.VersionsLookEqual(pending, currentVersion.ToString()) ||
+                          UpdateApplyHelper.VersionsLookEqual(pending, displayVersion);
+
+            if (matched)
+            {
+                var removed = UpdateApplyHelper.TryRemoveBackup(currentExePath);
+                ClearPendingSelfUpdate();
+                return new SelfUpdateCompletionResult
+                {
+                    ShowSuccessBanner = true,
+                    DisplayVersion = displayVersion,
+                    ExpectedVersion = pending,
+                    BackupRemoved = removed
+                };
+            }
+
+            // Keep .old.exe for possible manual recovery; clear the marker so we don't nag forever.
+            ClearPendingSelfUpdate();
+            return new SelfUpdateCompletionResult
+            {
+                ShowFailureBanner = true,
+                DisplayVersion = displayVersion,
+                ExpectedVersion = pending,
+                BackupRemoved = false
+            };
+        }
+
+        private static void MarkPendingSelfUpdate(string version)
+        {
+            SettingsService.Instance.PendingSelfUpdateVersion = version ?? "";
+            SettingsService.Instance.SaveSettings();
+        }
+
+        private static void ClearPendingSelfUpdate()
+        {
+            SettingsService.Instance.PendingSelfUpdateVersion = "";
+            SettingsService.Instance.SaveSettings();
         }
 
         private async Task DownloadUpdateFileAsync(
@@ -300,7 +363,7 @@ namespace SptLauncherWpf.Services
             try
             {
                 var appDir = Path.GetDirectoryName(currentExePath)!;
-                var backupPath = Path.Combine(appDir, $"{Path.GetFileNameWithoutExtension(currentExePath)}.old.exe");
+                var backupPath = UpdateApplyHelper.GetBackupPath(currentExePath);
                 var scriptPath = Path.Combine(Path.GetTempPath(), $"spt-launcher-update-{Guid.NewGuid():N}.cmd");
                 var processName = Path.GetFileName(currentExePath);
 
@@ -328,6 +391,7 @@ namespace SptLauncherWpf.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to apply update: {ex.Message}");
+                ClearPendingSelfUpdate();
                 TryDeleteFile(downloadedUpdatePath);
                 return false;
             }

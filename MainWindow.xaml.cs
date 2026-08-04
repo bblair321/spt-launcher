@@ -68,6 +68,9 @@ namespace SptLauncherWpf
                 
                 // Extend window frame into client area to eliminate white border
                 Loaded += MainWindow_Loaded;
+
+                // Handle post-restart self-update confirmation / .old.exe cleanup
+                Loaded += (_, _) => TryShowSelfUpdateCompletion();
             }
             catch (Exception ex)
             {
@@ -287,12 +290,101 @@ namespace SptLauncherWpf
         }
 
         private UpdateInfo? _availableUpdate;
+        private System.Windows.Threading.DispatcherTimer? _updateBannerAutoHideTimer;
+        private bool _showingSelfUpdateResult;
+
+        private void TryShowSelfUpdateCompletion()
+        {
+            try
+            {
+                var result = UpdateService.Instance.CompleteSelfUpdateIfNeeded();
+                if (result == null)
+                {
+                    return;
+                }
+
+                if (result.ShowSuccessBanner)
+                {
+                    ShowSelfUpdateResultBanner(
+                        title: "Launcher updated",
+                        detail: $"You're now on {result.DisplayVersion}.",
+                        success: true);
+                    return;
+                }
+
+                if (result.ShowFailureBanner)
+                {
+                    var expected = UpdateApplyHelper.FormatDisplayVersion(result.ExpectedVersion);
+                    ShowSelfUpdateResultBanner(
+                        title: "Launcher update may not have applied",
+                        detail: string.IsNullOrWhiteSpace(expected)
+                            ? $"Still running {result.DisplayVersion}. A .old.exe backup may still be next to the app."
+                            : $"Expected {expected}, but this build is {result.DisplayVersion}. A .old.exe backup may still be next to the app.",
+                        success: false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to complete self-update handling: {ex.Message}");
+            }
+        }
+
+        private void ShowSelfUpdateResultBanner(string title, string detail, bool success)
+        {
+            _showingSelfUpdateResult = true;
+            _availableUpdate = null;
+
+            UpdateNotificationText.Text = title;
+            UpdateVersionText.Text = detail;
+            UpdateDownloadButton.Visibility = Visibility.Collapsed;
+            UpdateNotificationBanner.Background = new System.Windows.Media.SolidColorBrush(
+                success
+                    ? System.Windows.Media.Color.FromRgb(5, 150, 105)   // green
+                    : System.Windows.Media.Color.FromRgb(180, 83, 9));  // amber
+            UpdateNotificationBanner.Visibility = Visibility.Visible;
+
+            _updateBannerAutoHideTimer?.Stop();
+            if (success)
+            {
+                _updateBannerAutoHideTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(8)
+                };
+                _updateBannerAutoHideTimer.Tick += (_, _) =>
+                {
+                    _updateBannerAutoHideTimer.Stop();
+                    if (_showingSelfUpdateResult)
+                    {
+                        UpdateNotificationBanner.Visibility = Visibility.Collapsed;
+                        _showingSelfUpdateResult = false;
+                        ResetUpdateBannerChrome();
+                    }
+                };
+                _updateBannerAutoHideTimer.Start();
+            }
+        }
+
+        private void ResetUpdateBannerChrome()
+        {
+            UpdateDownloadButton.Visibility = Visibility.Visible;
+            UpdateDownloadButton.IsEnabled = true;
+            UpdateDownloadButton.Content = "Download";
+            UpdateNotificationBanner.SetResourceReference(
+                System.Windows.Controls.Border.BackgroundProperty,
+                "PrimaryColor");
+        }
 
         private void OnUpdateAvailable(object? sender, UpdateInfo updateInfo)
         {
             Dispatcher.Invoke(() =>
             {
+                if (_showingSelfUpdateResult)
+                {
+                    return;
+                }
+
                 _availableUpdate = updateInfo;
+                ResetUpdateBannerChrome();
                 UpdateNotificationText.Text = $"A new version is available!";
                 UpdateVersionText.Text = $"Version {updateInfo.Version} - Click Download to update";
                 UpdateNotificationBanner.Visibility = Visibility.Visible;
@@ -339,7 +431,10 @@ namespace SptLauncherWpf
 
         private void UpdateDismissButton_Click(object sender, RoutedEventArgs e)
         {
+            _updateBannerAutoHideTimer?.Stop();
+            _showingSelfUpdateResult = false;
             UpdateNotificationBanner.Visibility = Visibility.Collapsed;
+            ResetUpdateBannerChrome();
         }
     }
 }

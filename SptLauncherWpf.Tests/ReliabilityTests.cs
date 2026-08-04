@@ -179,4 +179,42 @@ public class UpdateApplyHelperTests
         Assert.False(service.IsNewerVersion("3.0.3", new Version(3, 0, 3, 0)));
         Assert.False(service.IsNewerVersion("not-a-version", new Version(3, 0, 3, 0)));
     }
+
+    [Fact]
+    public void GetBackupPath_uses_old_exe_suffix()
+    {
+        var backup = UpdateApplyHelper.GetBackupPath(@"C:\Apps\SPTLauncher.exe");
+        Assert.Equal(@"C:\Apps\SPTLauncher.old.exe", backup);
+    }
+
+    [Theory]
+    [InlineData("3.0.4", "3.0.4.0", true)]
+    [InlineData("v3.0.4", "3.0.4", true)]
+    [InlineData("3.0.4", "3.0.3", false)]
+    public void VersionsLookEqual_compares_major_minor_build(string left, string right, bool expected)
+    {
+        Assert.Equal(expected, UpdateApplyHelper.VersionsLookEqual(left, right));
+    }
+
+    [Fact]
+    public void TryRemoveBackup_deletes_sibling_old_exe()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "spt-upd-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var exe = Path.Combine(dir, "SPTLauncher.exe");
+        var backup = Path.Combine(dir, "SPTLauncher.old.exe");
+        try
+        {
+            File.WriteAllBytes(exe, new byte[] { (byte)'M', (byte)'Z', 0, 0 });
+            File.WriteAllBytes(backup, new byte[] { (byte)'M', (byte)'Z', 0, 0 });
+
+            Assert.True(UpdateApplyHelper.TryRemoveBackup(exe));
+            Assert.False(File.Exists(backup));
+            Assert.True(File.Exists(exe));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

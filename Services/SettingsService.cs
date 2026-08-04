@@ -198,6 +198,15 @@ namespace SptLauncherWpf.Services
             set => SetValue("LastSptBackupPath", value);
         }
 
+        /// <summary>
+        /// Target launcher version written before replace-in-place; cleared after restart handling.
+        /// </summary>
+        public string PendingSelfUpdateVersion
+        {
+            get => GetValue("PendingSelfUpdateVersion", "");
+            set => SetValue("PendingSelfUpdateVersion", value);
+        }
+
         public bool FirstRunWizardDismissed
         {
             get => GetValue("FirstRunWizardDismissed", false);
