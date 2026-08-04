@@ -8,116 +8,104 @@
       TextOptions.TextFormattingMode="Ideal"
       TextOptions.TextRenderingMode="ClearType"
       RenderOptions.EdgeMode="Unspecified">
-    
+
+    <Page.Resources>
+        <Style x:Key="QuietButtonStyle" TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="#4B5563"/>
+        </Style>
+    </Page.Resources>
+
     <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
-        <StackPanel Margin="0,16,0,0" >
-            
-            <!-- Header -->
-            <StackPanel HorizontalAlignment="Center" Margin="0,0,0,32">
-                <TextBlock Text="Settings" FontSize="28" FontWeight="Bold" 
-                           Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
-                <TextBlock Text="Configure your SPT Launcher preferences" 
-                           FontSize="16" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
-                           Margin="0,8,0,0"/>
-            </StackPanel>
+        <StackPanel Margin="0,4,0,16" MaxWidth="720" HorizontalAlignment="Stretch">
 
-            <!-- General Settings -->
-            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
+            <Border Style="{StaticResource ModernCardStyle}" Padding="20" Margin="0,0,0,12">
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
-                        <TextBlock Text="General Settings" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <TextBlock Text="Updates"
+                               FontSize="15"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryColor}"
+                               Margin="0,0,0,14"/>
 
-                    <StackPanel>
-                        <!-- Auto-update -->
-                        <StackPanel Margin="0,0,0,16">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                <CheckBox Name="AutoUpdateCheckBox" VerticalAlignment="Center" Margin="0,0,12,0" Padding="0,8">
-                                    <CheckBox.Style>
-                                        <Style TargetType="CheckBox">
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="CheckBox">
-                                                        <Grid>
-                                                            <Border x:Name="CheckBoxBorder" Width="20" Height="20" 
-                                                                    CornerRadius="4" BorderBrush="{DynamicResource BorderColor}" 
-                                                                    BorderThickness="2" Background="{DynamicResource CardBackgroundColor}"/>
-                                                            <Path x:Name="CheckMark" Data="M 2 6 L 6 10 L 14 2" 
-                                                                  Stroke="White" StrokeThickness="2" 
-                                                                  Visibility="Collapsed" Margin="3,3,3,3"/>
-                                                        </Grid>
-                                                        <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsChecked" Value="True">
-                                                                <Setter TargetName="CheckBoxBorder" Property="Background" Value="{DynamicResource PrimaryColor}"/>
-                                                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource PrimaryColor}"/>
-                                                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
-                                                            </Trigger>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource TextSecondaryColor}"/>
-                                                            </Trigger>
-                                                        </ControlTemplate.Triggers>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </CheckBox.Style>
-                                </CheckBox>
-                                <StackPanel>
-                                    <TextBlock Text="Check for Updates Automatically" FontWeight="SemiBold" 
-                                               Foreground="{DynamicResource TextPrimaryColor}" FontSize="16"/>
-                                    <TextBlock Text="Automatically check and notify about new versions" 
-                                               Foreground="{DynamicResource TextSecondaryColor}" FontSize="14" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </StackPanel>
-                            
-                            <Button Name="CheckForUpdatesButton" 
-                                    Content="Check for Updates Now" 
-                                    Style="{StaticResource ModernButtonStyle}"
-                                    Click="CheckForUpdatesButton_Click"
-                                    HorizontalAlignment="Left"/>
+                    <DockPanel Margin="0,0,0,12" LastChildFill="True">
+                        <CheckBox Name="AutoUpdateCheckBox"
+                                  DockPanel.Dock="Left"
+                                  VerticalAlignment="Top"
+                                  Margin="0,2,12,0"
+                                  Padding="0">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="CheckBox">
+                                                <Grid>
+                                                    <Border x:Name="CheckBoxBorder" Width="20" Height="20"
+                                                            CornerRadius="4" BorderBrush="{DynamicResource BorderColor}"
+                                                            BorderThickness="2" Background="{DynamicResource CardBackgroundColor}"/>
+                                                    <Path x:Name="CheckMark" Data="M 2 6 L 6 10 L 14 2"
+                                                          Stroke="White" StrokeThickness="2"
+                                                          Visibility="Collapsed" Margin="3,3,3,3"/>
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="CheckBoxBorder" Property="Background" Value="{DynamicResource PrimaryColor}"/>
+                                                        <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource PrimaryColor}"/>
+                                                        <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource TextSecondaryColor}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
+                        <StackPanel>
+                            <TextBlock Text="Check for launcher updates automatically"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       FontSize="14"/>
+                            <TextBlock Text="Notify when a newer SPT Launcher release is available."
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       FontSize="12"
+                                       Margin="0,2,0,0"
+                                       TextWrapping="Wrap"/>
                         </StackPanel>
+                    </DockPanel>
 
-                    </StackPanel>
+                    <Button Name="CheckForUpdatesButton"
+                            Content="Check for updates now"
+                            Style="{StaticResource QuietButtonStyle}"
+                            Click="CheckForUpdatesButton_Click"
+                            HorizontalAlignment="Left"/>
                 </StackPanel>
             </Border>
 
-
-
-
-            <!-- Action Buttons -->
-            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
+            <Border Style="{StaticResource ModernCardStyle}" Padding="20" Margin="0,0,0,8">
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
-                        <TextBlock Text="Actions" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                        <Button Name="SaveSettingsButton" 
-                                Style="{StaticResource ModernButtonStyle}" 
+                    <TextBlock Text="Preferences"
+                               FontSize="15"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryColor}"
+                               Margin="0,0,0,14"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Name="SaveSettingsButton"
+                                Content="Save"
+                                Style="{StaticResource ModernButtonStyle}"
                                 Background="{DynamicResource PrimaryColor}"
-                                Padding="20,12" FontSize="14" FontWeight="SemiBold"
+                                Padding="18,10"
+                                FontSize="13"
+                                FontWeight="SemiBold"
                                 Click="SaveSettingsButton_Click"
-                                Margin="0,0,12,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="💾" FontSize="14" Margin="0,0,8,0"/>
-                                <TextBlock Text="Save Settings"/>
-                            </StackPanel>
-                        </Button>
-                        
-                        <Button Name="CancelSettingsButton" 
-                                Style="{StaticResource ModernButtonStyle}" 
-                                Background="#6B7280"
-                                Padding="20,12" FontSize="14" FontWeight="SemiBold"
-                                Click="CancelSettingsButton_Click">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="↩️" FontSize="14" Margin="0,0,8,0"/>
-                                <TextBlock Text="Reset Changes"/>
-                            </StackPanel>
-                        </Button>
+                                Margin="0,0,8,0"/>
+                        <Button Name="CancelSettingsButton"
+                                Content="Reset changes"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Click="CancelSettingsButton_Click"/>
                     </StackPanel>
                 </StackPanel>
             </Border>

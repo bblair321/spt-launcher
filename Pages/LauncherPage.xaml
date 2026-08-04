@@ -402,6 +402,35 @@
                                        TextWrapping="Wrap"/>
                         </StackPanel>
 
+                        <!-- Post-update / install verification -->
+                        <Border Name="UpdateVerifyPanel"
+                                Background="{DynamicResource HoverColor}"
+                                CornerRadius="8"
+                                Padding="14,12"
+                                Margin="0,14,0,0"
+                                Visibility="Collapsed">
+                            <DockPanel LastChildFill="True">
+                                <Button Name="UpdateVerifyDismissButton"
+                                        Content="Dismiss"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="UpdateVerifyDismissButton_Click"
+                                        DockPanel.Dock="Right"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Top"/>
+                                <StackPanel>
+                                    <TextBlock Name="UpdateVerifyTitleText"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryColor}"
+                                               Margin="0,0,0,4"/>
+                                    <TextBlock Name="UpdateVerifyDetailText"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryColor}"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
                         <!-- Hidden panel kept for Fika update visibility toggles -->
                         <StackPanel Name="FikaUpdateStatusPanel" Visibility="Collapsed"/>
                     </StackPanel>

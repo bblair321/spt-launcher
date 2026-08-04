@@ -1,132 +1,146 @@
-# SPT Launcher WPF
+# SPT Launcher
 
-A modern Windows Presentation Foundation (WPF) launcher for SPT-AKI with Fika Co-op support, replacing the previous Electron-based version.
+A native WPF launcher for [SPT](https://sp-tarkov.com/) (Single Player Tarkov) with Fika co-op support.
 
 ## Features
 
-- **Modern WPF Interface**: Native Windows application with modern UI design
-- **SPT-AKI Support**: Launch and manage SPT-AKI instances
-- **Fika Co-op Integration**: Connect to Fika servers for multiplayer
-- **Server Management**: Manage local and remote servers
-- **Mod Management**: Install and manage SPT mods
-- **Settings Configuration**: Customize launcher behavior
-- **Developer Tools**: Built-in debugging and development tools
+- **Play-first Launcher** — Launch / Stop up front, with a compact readiness checklist for SPT, live Tarkov, and Fika
+- **Guided first-run setup** — Install SPT first, then auto-detect or browse for `SPT.Launcher.exe` (including modern `SPT_Runtime` installs)
+- **Safer SPT updates** — Preflight checks, download details, cancel, installer-only mode, and backup/restore recovery
+- **Live Tarkov / patcher awareness** — Detects your live EFT version and checks the SPT patcher CDN; only warns when no downgrade patcher exists for your build
+- **Fika co-op** — Install/update Fika, enable co-op, and set host IP
+- **Servers & Tools** — Local/remote server helpers and developer utilities
+- **Self-update** — Checks GitHub releases and replaces the installed launcher in place
+
+> **Note:** The Mods tab is hidden for now (still under development).
 
 ## Requirements
 
 - Windows 10/11
-- .NET 8.0 Runtime
-- SPT-AKI installation
+- .NET 8.0 (included in self-contained releases)
+- A legitimate Escape From Tarkov install (for SPT install / updates that need the downgrader)
+- An SPT install (or use the in-app installer on first run)
 
 ## Installation
 
-1. Download the latest release from the [Releases](https://github.com/bblair321/spt-launcher/releases) page
-2. Extract the files to your desired location
-3. Run `SptLauncherWpf.exe`
+1. Download the latest release from [Releases](https://github.com/bblair321/spt-launcher/releases)
+2. Extract anywhere you like
+3. Run `SPTLauncher.exe`
 
 ## Building from Source
 
 ### Prerequisites
 
-- Visual Studio 2022 or later
 - .NET 8.0 SDK
+- Visual Studio 2022 (or another IDE / `dotnet` CLI)
 
+### Build & run
+
+```powershell
+dotnet build
+dotnet run
+```
+
+### Publish a self-contained exe
+
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained true
+```
 
 ## Usage
 
-### First Time Setup
+### First-time setup
 
-1. Launch the application
-2. Navigate to the **Settings** tab
-3. Set your SPT-AKI installation path
-4. Configure your preferences
+1. Start the launcher
+2. If SPT isn’t set up yet, the **Get set up** wizard appears:
+   1. **Install SPT** (or choose “I already have SPT”)
+   2. **Auto-detect** / **Browse** for `SPT.Launcher.exe`
+   3. Continue to the main launcher
+3. Optionally enable Fika under **Show setup**
 
-### Launching SPT-AKI
+### Day-to-day play
 
-1. Go to the **Launcher** tab
-2. Select your server type (Local or Remote)
-3. Click **Configure** to set up your server
-4. Click **Launch** to start SPT-AKI
+1. Open the **Launcher** tab
+2. Check **Readiness** (SPT / Tarkov / Fika)
+3. Click **Launch SPT**
+4. Use **Stop** to shut down related SPT processes
 
-### Server Management
+### Tarkov / patcher status
 
-1. Go to the **Servers** tab
-2. Choose between Local Server or Remote Server (Fika)
-3. Configure server settings
-4. Use **Auto Start** for automatic server startup
+- Live Tarkov is read from your BSG install (registry / exe), not the already-downpatched SPT copy
+- If a matching CDN patcher exists for your live version, install/update can proceed
+- The “no patcher” warning only appears when no downgrade patcher is found for your live Tarkov → SPT target
+- After SPT is already installed, Tarkov shows as a live install — patcher details are hidden unless something is wrong
 
-### Mod Management
+### Updates
 
-1. Go to the **Mods** tab
-2. Install mods from the SPT mod repository
-3. Enable/disable mods as needed
-4. Manage mod configurations
+- **SPT** — Update / install actions on the readiness row; advanced recovery under **Show setup**
+- **Fika** — Install or Update when a newer client/server build is available
+- **This launcher** — Banner prompt when a newer GitHub release is available
+
+### Servers
+
+Use the **Servers** tab for local/remote server configuration and related helpers.
 
 ## Configuration
 
-The launcher stores its configuration in:
+Stored under:
 
-- **Settings**: `%APPDATA%\SPT Launcher WPF\settings.json`
-- **Server Configs**: `%APPDATA%\SPT Launcher WPF\servers.json`
+- **Settings:** `%APPDATA%\SPT Launcher WPF\settings.json`
+- **Server configs:** `%APPDATA%\SPT Launcher WPF\servers.json`
+
+SPT’s own launcher config (including Fika IP / dev mode) lives next to your SPT install (e.g. under `SPT_Runtime` / launcher user data).
 
 ## Troubleshooting
 
-### Common Issues
+**App won’t start**
 
-**Application won't start:**
+- Use a release build of `SPTLauncher.exe`, or install the [.NET 8 runtime](https://dotnet.microsoft.com/download/dotnet/8.0) for framework-dependent builds
+- Try running as administrator only if Windows blocks the exe
 
-- Ensure .NET 8.0 Runtime is installed
-- Check Windows compatibility
-- Run as administrator if needed
+**SPT path / auto-detect fails**
 
-**SPT-AKI won't launch:**
+- Newer SPT builds put the launcher at `...\SPT_Runtime\SPT.Launcher.exe`
+- Use **Auto-detect** after install, or **Browse** to that file
+- Desktop / install-folder `SPT.Launcher.lnk` shortcuts are also resolved
 
-- Verify SPT-AKI installation path in Settings
-- Check that SPT-AKI is properly installed
-- Ensure no antivirus is blocking the process
+**“No patcher for this Tarkov version yet”**
 
-**Server connection issues:**
+- BSG updated live Tarkov and SPT hasn’t published a matching `Patcher_{live}_to_{target}.7z` yet
+- Wait for the patcher, then click **Recheck**
+- Keep live Tarkov updated — the official SPT installer uses the newest matching patcher when available
 
-- Verify server settings in the Servers tab
-- Check network connectivity
-- Ensure firewall allows the connection
+**Launch / Stop issues**
 
+- Confirm `SPT.Launcher.exe` under **Show setup**
+- Check antivirus isn’t blocking SPT or this launcher
+- **Stop** targets SPT-related processes; it won’t close this app
 
-### Contributing
+**Fika**
+
+- Install Fika into your SPT folder when prompted
+- Enable Fika co-op and save the host IP under **Show setup**
+
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## Migration from Electron Version
-
-This WPF version replaces the previous Electron-based launcher. Key improvements:
-
-- **Better Performance**: Native Windows application
-- **Lower Resource Usage**: No Chromium overhead
-- **Better Integration**: Native Windows UI components
-- **Faster Startup**: No Electron initialization time
+4. Test thoroughly (fresh install, existing install, Tarkov/patcher cases, Fika, self-update)
+5. Open a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- SPT-AKI team for the amazing mod
-- Fika Co-op team for multiplayer support
-- The SPT community for feedback and contributions
+- SPT team and community
+- Fika co-op team
+- Everyone who’s filed issues and feedback on this launcher
 
 ## Support
 
-For support, please:
-
-1. Check the [Issues](https://github.com/bblair321/spt-launcher/issues) page
-2. Search for existing solutions
-3. Create a new issue with detailed information
-
----
-
-**Note**: This WPF version replaces the previous Electron-based launcher. The Electron version is no longer maintained.
+1. Check [Issues](https://github.com/bblair321/spt-launcher/issues)
+2. Search for an existing report
+3. Open a new issue with OS, launcher version, SPT version, and steps to reproduce

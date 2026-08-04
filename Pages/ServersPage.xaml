@@ -10,18 +10,18 @@
       TextOptions.TextFormattingMode="Ideal"
       TextOptions.TextRenderingMode="ClearType"
       RenderOptions.EdgeMode="Unspecified">
-    
+
+    <Page.Resources>
+        <Style x:Key="QuietButtonStyle" TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="#4B5563"/>
+        </Style>
+    </Page.Resources>
+
     <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
-        <StackPanel Margin="0,16,0,0" >
-            
-            <!-- Header -->
-            <StackPanel HorizontalAlignment="Center" Margin="0,0,0,32">
-                <TextBlock Text="Server Management" FontSize="28" FontWeight="Bold" 
-                           Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
-                <TextBlock Text="Configure and manage your SPT-AKI servers" 
-                           FontSize="16" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
-                           Margin="0,8,0,0"/>
-            </StackPanel>
+        <StackPanel Margin="0,4,0,16" MaxWidth="980" HorizontalAlignment="Stretch">
 
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -29,229 +29,186 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Server Form -->
-                <Border Grid.Column="0" Style="{StaticResource ModernCardStyle}" 
-                        Padding="24" Margin="0,0,12,0">
+                <!-- Server form -->
+                <Border Grid.Column="0" Style="{StaticResource ModernCardStyle}"
+                        Padding="20" Margin="0,0,8,0">
                     <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                            <Ellipse Width="16" Height="16" Fill="#2563EB" Margin="0,0,8,0"
-                                     RenderOptions.EdgeMode="Unspecified"
-                                     RenderOptions.BitmapScalingMode="HighQuality"
-                                     UseLayoutRounding="True"
-                                     SnapsToDevicePixels="True"/>
-                            <TextBlock Name="FormTitle" Text="Add New Server" FontSize="16" FontWeight="SemiBold" 
-                                       Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                        <TextBlock Name="FormTitle" Text="Add server"
+                                   FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryColor}"
+                                   Margin="0,0,0,14"/>
+
+                        <TextBlock Text="Server name" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,6"/>
+                        <TextBox Name="ServerNameTextBox" Text="My SPT Server"
+                                 Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,12"/>
+
+                        <TextBlock Text="Server type" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
+                        <RadioButton Name="LocalServerRadio" Content="Local server"
+                                     IsChecked="True" GroupName="ServerType"
+                                     Checked="ServerType_Changed" Margin="0,0,0,12"
+                                     FontSize="13" Foreground="{DynamicResource TextPrimaryColor}" Padding="0,4">
+                            <RadioButton.Style>
+                                <Style TargetType="RadioButton">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid Width="20" Height="20" VerticalAlignment="Center">
+                                                        <Ellipse x:Name="OuterEllipse"
+                                                                 Stroke="{DynamicResource BorderColor}" StrokeThickness="2"
+                                                                 Fill="{DynamicResource CardBackgroundColor}"/>
+                                                        <Ellipse x:Name="InnerEllipse" Width="10" Height="10"
+                                                                 Fill="{DynamicResource PrimaryColor}"
+                                                                 Visibility="Collapsed"
+                                                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                    <ContentPresenter Grid.Column="1" Margin="10,0,0,0"
+                                                                      VerticalAlignment="Center"/>
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="InnerEllipse" Property="Visibility" Value="Visible"/>
+                                                        <Setter TargetName="OuterEllipse" Property="Stroke" Value="{DynamicResource PrimaryColor}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </RadioButton.Style>
+                        </RadioButton>
+
+                        <StackPanel Name="LocalServerPanel" Margin="0,0,0,12">
+                            <TextBlock Text="Server executable" FontWeight="Medium" FontSize="13"
+                                       Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,6"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Name="ServerPathTextBox"
+                                         Style="{StaticResource ModernTextBoxStyle}"/>
+                                <Button Grid.Column="1" Name="BrowseServerButton" Content="Browse"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Margin="8,0,0,0" Click="BrowseServerButton_Click"/>
+                            </Grid>
                         </StackPanel>
 
-                        <StackPanel >
-                            <!-- Server Name -->
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Server Name" FontWeight="Medium" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
-                                <TextBox Name="ServerNameTextBox" Text="My SPT Server" 
-                                         Style="{StaticResource ModernTextBoxStyle}"/>
-                            </StackPanel>
+                        <TextBlock Text="Port" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,6"/>
+                        <TextBox Name="PortTextBox" Text="6969"
+                                 Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,12"/>
 
-                            <!-- Server Type -->
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Server Type" FontWeight="Medium" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,12"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                                    <RadioButton Name="LocalServerRadio" Content="Local Server" 
-                                                IsChecked="True" GroupName="ServerType" 
-                                                Checked="ServerType_Changed" Margin="0,0,32,0"
-                                                FontSize="14" Foreground="{DynamicResource TextPrimaryColor}" Padding="0,8">
-                                        <RadioButton.Style>
-                                            <Style TargetType="RadioButton">
-                                                <Setter Property="Template">
-                                                    <Setter.Value>
-                                                        <ControlTemplate TargetType="RadioButton">
-                                                            <Grid>
-                                                                <Ellipse x:Name="OuterEllipse" Width="20" Height="20" 
-                                                                         Stroke="#D1D5DB" StrokeThickness="2" 
-                                                                         Fill="White" Margin="-76,0,8,0" VerticalAlignment="Center"
-                                                                         RenderOptions.EdgeMode="Unspecified"
-                                                                         RenderOptions.BitmapScalingMode="HighQuality"
-                                                                         UseLayoutRounding="True"
-                                                                         SnapsToDevicePixels="True"/>
-                                                                <Ellipse x:Name="InnerEllipse" Width="10" Height="10" 
-                                                                         Fill="#2563EB" Margin="-71,5,13,5" 
-                                                                         Visibility="Collapsed" VerticalAlignment="Center"
-                                                                         RenderOptions.EdgeMode="Unspecified"
-                                                                         RenderOptions.BitmapScalingMode="HighQuality"
-                                                                         UseLayoutRounding="True"
-                                                                         SnapsToDevicePixels="True"/>
-                                                                <ContentPresenter Margin="32,0,0,0" 
-                                                                                  VerticalAlignment="Center"/>
-                                                            </Grid>
-                                                            <ControlTemplate.Triggers>
-                                                                <Trigger Property="IsChecked" Value="True">
-                                                                    <Setter TargetName="InnerEllipse" Property="Visibility" Value="Visible"/>
-                                                                    <Setter TargetName="OuterEllipse" Property="Stroke" Value="#2563EB"/>
-                                                                </Trigger>
-                                                                <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="OuterEllipse" Property="Stroke" Value="#9CA3AF"/>
-                                                                </Trigger>
-                                                            </ControlTemplate.Triggers>
-                                                        </ControlTemplate>
-                                                    </Setter.Value>
-                                                </Setter>
-                                            </Style>
-                                        </RadioButton.Style>
-                                    </RadioButton>
-                                </StackPanel>
-                            </StackPanel>
+                        <TextBlock Text="Description" FontWeight="Medium" FontSize="13"
+                                   Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,6"/>
+                        <TextBox Name="DescriptionTextBox"
+                                 TextWrapping="Wrap" AcceptsReturn="True" Height="56"
+                                 Style="{StaticResource ModernTextBoxStyle}" Margin="0,0,0,12"/>
 
-                            <!-- Local Server Path -->
-                            <StackPanel Name="LocalServerPanel" Margin="0,0,0,16">
-                                <TextBlock Text="Server Executable" FontWeight="Medium" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    
-                                    <TextBox Grid.Column="0" Name="ServerPathTextBox" 
-                                             Text="" 
-                                             Style="{StaticResource ModernTextBoxStyle}"/>
-                                    
-                                    <Button Grid.Column="1" Name="BrowseServerButton" Content="Browse" 
-                                            Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
-                                            Padding="16,10" Margin="8,0,0,0" Click="BrowseServerButton_Click"
-                                            FontSize="14" FontWeight="Medium"/>
-                                </Grid>
-                            </StackPanel>
+                        <CheckBox Name="AutoStartCheckBox" Content="Auto-start with launcher"
+                                  FontWeight="Medium" Foreground="{DynamicResource TextPrimaryColor}"
+                                  FontSize="13" Padding="0,6" Margin="0,0,0,16">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="CheckBox">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border x:Name="border" Width="20" Height="20"
+                                                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="2"
+                                                            Background="{DynamicResource CardBackgroundColor}" CornerRadius="4"
+                                                            VerticalAlignment="Center"/>
+                                                    <Path x:Name="checkMark" Data="M 2 6 L 6 10 L 14 2"
+                                                          Stroke="{DynamicResource PrimaryColor}" StrokeThickness="2"
+                                                          Visibility="Collapsed" Margin="3,3,3,3"
+                                                          VerticalAlignment="Center"/>
+                                                    <ContentPresenter Grid.Column="1" Margin="10,0,0,0"
+                                                                      VerticalAlignment="Center"/>
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
+                                                        <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource PrimaryColor}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
 
-
-                            <!-- Port -->
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Port" FontWeight="Medium" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
-                                <TextBox Name="PortTextBox" Text="6969" 
-                                         Style="{StaticResource ModernTextBoxStyle}"/>
-                            </StackPanel>
-
-                            <!-- Description -->
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Description" FontWeight="Medium" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8"/>
-                                <TextBox Name="DescriptionTextBox" Text="" 
-                                         TextWrapping="Wrap" AcceptsReturn="True" Height="60"
-                                         Style="{StaticResource ModernTextBoxStyle}"/>
-                            </StackPanel>
-
-                            <!-- Auto-start -->
-                            <StackPanel Margin="0,0,0,24">
-                                <CheckBox Name="AutoStartCheckBox" Content="Auto-start with launcher" 
-                                          FontWeight="Medium" Foreground="{DynamicResource TextPrimaryColor}" FontSize="14" Padding="0,8">
-                                    <CheckBox.Style>
-                                        <Style TargetType="CheckBox">
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="CheckBox">
-                                                        <Grid>
-                                                            <Border x:Name="border" Width="20" Height="20" 
-                                                                    BorderBrush="#D1D5DB" BorderThickness="2" 
-                                                                    Background="White" CornerRadius="4" Margin="0,0,12,0" 
-                                                                    VerticalAlignment="Center"/>
-                                                            <Path x:Name="checkMark" Data="M 2 6 L 6 10 L 14 2" 
-                                                                  Stroke="#2563EB" StrokeThickness="2" 
-                                                                  Visibility="Collapsed" Margin="3,3,15,3" 
-                                                                  VerticalAlignment="Center"/>
-                                                            <ContentPresenter Margin="32,0,0,0" 
-                                                                              VerticalAlignment="Center"/>
-                                                        </Grid>
-                                                        <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsChecked" Value="True">
-                                                                <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
-                                                                <Setter TargetName="border" Property="BorderBrush" Value="#2563EB"/>
-                                                            </Trigger>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter TargetName="border" Property="BorderBrush" Value="#9CA3AF"/>
-                                                            </Trigger>
-                                                        </ControlTemplate.Triggers>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </CheckBox.Style>
-                                </CheckBox>
-                            </StackPanel>
-
-                            <!-- Action Buttons -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
-                                <Button Name="SaveServerButton" Content="Add Server" 
-                                        Style="{StaticResource ModernButtonStyle}" Background="#2563EB"
-                                        Click="SaveServerButton_Click" Margin="0,0,12,0"/>
-                                <Button Name="CancelEditButton" Content="Cancel" 
-                                        Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
-                                        Visibility="Collapsed" Click="CancelEditButton_Click"/>
-                            </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Name="SaveServerButton" Content="Add server"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="{DynamicResource PrimaryColor}"
+                                    Padding="16,10" FontSize="13"
+                                    Click="SaveServerButton_Click" Margin="0,0,8,0"/>
+                            <Button Name="CancelEditButton" Content="Cancel"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Visibility="Collapsed" Click="CancelEditButton_Click"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- Server List -->
-                <Border Grid.Column="1" Style="{StaticResource ModernCardStyle}" 
-                        Padding="24" Margin="12,0,0,0">
+                <!-- Server list + console -->
+                <Border Grid.Column="1" Style="{StaticResource ModernCardStyle}"
+                        Padding="20" Margin="8,0,0,0">
                     <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                            <Ellipse Width="20" Height="20" Fill="#3B82F6" Margin="0,0,8,0"
-                                     RenderOptions.EdgeMode="Unspecified"
-                                     RenderOptions.BitmapScalingMode="HighQuality"
-                                     UseLayoutRounding="True"
-                                     SnapsToDevicePixels="True"/>
-                            <TextBlock Text="Configured Servers" FontSize="18" FontWeight="SemiBold" 
-                                       Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        <TextBlock Text="Configured servers"
+                                   FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimaryColor}"
+                                   Margin="0,0,0,12"/>
 
-                        <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden"
-                                    PreviewMouseWheel="ServersListScrollViewer_PreviewMouseWheel">
-                            <StackPanel Name="ServersListPanel" >
-                                <!-- Servers will be added here dynamically -->
-                            </StackPanel>
+                        <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Hidden"
+                                      HorizontalScrollBarVisibility="Hidden"
+                                      PreviewMouseWheel="ServersListScrollViewer_PreviewMouseWheel">
+                            <StackPanel Name="ServersListPanel"/>
                         </ScrollViewer>
 
-                        <!-- Server Console Section -->
-                        <StackPanel Margin="0,16,0,0">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                <Ellipse Width="16" Height="16" Fill="#10B981" Margin="0,0,8,0"
-                                         RenderOptions.EdgeMode="Unspecified"
-                                         RenderOptions.BitmapScalingMode="HighQuality"
-                                         UseLayoutRounding="True"
-                                         SnapsToDevicePixels="True"/>
-                                <TextBlock Text="Server Console" FontSize="16" FontWeight="SemiBold" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                                <Button Name="ClearLogButton" Content="Clear Console" 
-                                        Style="{StaticResource ModernButtonStyle}" 
-                                        Background="#6B7280" Padding="8,4" Margin="16,0,0,0"
-                                        FontSize="12" Click="ClearLogButton_Click"/>
-                            </StackPanel>
+                        <DockPanel Margin="0,16,0,8" LastChildFill="False">
+                            <TextBlock Text="Console"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       VerticalAlignment="Center"/>
+                            <Button Name="ClearLogButton" Content="Clear"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    DockPanel.Dock="Right"
+                                    Click="ClearLogButton_Click"/>
+                        </DockPanel>
 
-                            <Border Style="{StaticResource ModernCardStyle}" 
-                                    Padding="12" Height="300">
-                                <Grid>
-                                    <TextBlock Name="NoServerRunningText" 
-                                               Text="No server is currently running. Launch a server to see its console output here."
-                                               FontSize="14"
-                                               Foreground="{DynamicResource TextSecondaryColor}"
-                                               HorizontalAlignment="Center"
-                                               VerticalAlignment="Center"
-                                               TextWrapping="Wrap"/>
-                                    <Border Name="ConsoleContainer" 
-                                            Background="Black" 
-                                            CornerRadius="4"
-                                            Visibility="Collapsed">
-                                        <!-- Embedded console will be added here programmatically -->
-                                    </Border>
-                                </Grid>
-                            </Border>
-                        </StackPanel>
+                        <Border Background="{DynamicResource HoverColor}"
+                                CornerRadius="8"
+                                Padding="10"
+                                Height="280">
+                            <Grid>
+                                <TextBlock Name="NoServerRunningText"
+                                           Text="No server is running. Launch one to see console output here."
+                                           FontSize="13"
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"/>
+                                <Border Name="ConsoleContainer"
+                                        Background="#111827"
+                                        CornerRadius="6"
+                                        Visibility="Collapsed"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
                 </Border>
             </Grid>
-
         </StackPanel>
     </ScrollViewer>
 </Page>

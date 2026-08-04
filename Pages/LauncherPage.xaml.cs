@@ -1822,7 +1822,8 @@ namespace SptLauncherWpf.Pages
 
                 resetButton();
                 ShowFikaInstallerLaunchedMessage();
-                ScheduleFikaVersionRefresh();
+                var expectedFika = _currentFikaUpdateInfo?.LatestVersion;
+                _ = VerifyFikaAfterInstallAsync(expectedFika);
             }
             catch (HttpRequestException ex)
             {
@@ -1976,11 +1977,191 @@ namespace SptLauncherWpf.Pages
 
         private void ScheduleFikaVersionRefresh()
         {
-            _ = Task.Run(async () =>
+            _ = VerifyFikaAfterInstallAsync(_currentFikaUpdateInfo?.LatestVersion);
+        }
+
+        private void UpdateVerifyDismissButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (UpdateVerifyPanel != null)
             {
-                await Task.Delay(5000);
-                Dispatcher.Invoke(UpdateFikaVersionDisplay);
+                UpdateVerifyPanel.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void ShowUpdateVerifyResult(bool? passed, string title, string detail)
+        {
+            InvokeOnUi(() =>
+            {
+                if (UpdateVerifyPanel == null || UpdateVerifyTitleText == null || UpdateVerifyDetailText == null)
+                {
+                    return;
+                }
+
+                UpdateVerifyPanel.Visibility = Visibility.Visible;
+                UpdateVerifyTitleText.Text = title;
+                UpdateVerifyDetailText.Text = detail;
+
+                UpdateVerifyTitleText.Foreground = passed switch
+                {
+                    true => new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)),
+                    false => new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)),
+                    _ => (System.Windows.Media.Brush)FindResource("TextPrimaryColor")
+                };
             });
+        }
+
+        private static bool VersionsMatch(string? left, string? right)
+        {
+            if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+            {
+                return false;
+            }
+
+            var a = VersionStringHelper.Normalize(left);
+            var b = VersionStringHelper.Normalize(right);
+            if (string.Equals(a, b, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Allow prefix matches like 4.1.1 vs 4.1.1.0
+            return a.StartsWith(b, StringComparison.OrdinalIgnoreCase) ||
+                   b.StartsWith(a, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task VerifySptAfterUpdateAsync(string? expectedVersion)
+        {
+            ShowUpdateVerifyResult(
+                passed: null,
+                title: "Verifying SPT update…",
+                detail: "Checking that the installed SPT version refreshed correctly.");
+
+            string? detectedVersion = null;
+            for (var retry = 0; retry < 6; retry++)
+            {
+                await Task.Delay(2000);
+                UpdateSptVersionDisplay();
+                await Task.Delay(600);
+
+                detectedVersion = await Task.Run(() =>
+                {
+                    if (!HasValidLauncherPath(out var path))
+                    {
+                        return null;
+                    }
+
+                    return SptDetectionService.Instance.GetSptVersion(path);
+                });
+
+                if (!string.IsNullOrWhiteSpace(detectedVersion))
+                {
+                    break;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(detectedVersion))
+            {
+                ShowUpdateVerifyResult(
+                    passed: false,
+                    title: "SPT update could not be verified",
+                    detail: "SPT was not detected after the update. Confirm the installer finished, then click Recheck.");
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(expectedVersion) &&
+                VersionsMatch(detectedVersion, expectedVersion))
+            {
+                ShowUpdateVerifyResult(
+                    passed: true,
+                    title: "SPT update verified",
+                    detail: $"Installed version {detectedVersion} matches the expected update ({expectedVersion}).");
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(expectedVersion))
+            {
+                ShowUpdateVerifyResult(
+                    passed: false,
+                    title: "SPT version mismatch",
+                    detail: $"Detected {detectedVersion}, but expected {expectedVersion}. " +
+                            "If the installer is still running, finish it and click Recheck.");
+                return;
+            }
+
+            ShowUpdateVerifyResult(
+                passed: true,
+                title: "SPT update verified",
+                detail: $"SPT is detected at version {detectedVersion}.");
+        }
+
+        private async Task VerifyFikaAfterInstallAsync(string? expectedVersion)
+        {
+            ShowUpdateVerifyResult(
+                passed: null,
+                title: "Waiting for Fika installer…",
+                detail: "Finish the Fika installer wizard. This launcher will recheck versions automatically.");
+
+            string? clientVersion = null;
+            string? serverVersion = null;
+            FikaUpdateInfo? updateInfo = null;
+            var installed = false;
+
+            for (var retry = 0; retry < 8; retry++)
+            {
+                await Task.Delay(retry == 0 ? 8000 : 4000);
+
+                var sptPath = GetSptInstallPathOnUiThread();
+                var state = await DetectFikaStateAsync(sptPath);
+                installed = state.Installed;
+                clientVersion = state.ClientVersion;
+                serverVersion = state.ServerVersion;
+                updateInfo = await TryGetFikaUpdateInfoAsync(clientVersion, serverVersion);
+                InvokeOnUi(() => ApplyFikaUiState(installed, clientVersion, serverVersion, updateInfo));
+
+                if (installed)
+                {
+                    if (updateInfo?.IsUpdateAvailable != true)
+                    {
+                        break;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(expectedVersion) &&
+                        (VersionsMatch(clientVersion, expectedVersion) || VersionsMatch(serverVersion, expectedVersion)))
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (!installed)
+            {
+                ShowUpdateVerifyResult(
+                    passed: false,
+                    title: "Fika install not verified",
+                    detail: "Fika was not detected yet. Finish the installer into your SPT folder, then click Recheck.");
+                return;
+            }
+
+            var detectedLabel = FormatFikaInstalledVersion(clientVersion, serverVersion);
+            if (updateInfo?.IsUpdateAvailable == true &&
+                !string.IsNullOrWhiteSpace(expectedVersion) &&
+                !VersionsMatch(clientVersion, expectedVersion) &&
+                !VersionsMatch(serverVersion, expectedVersion))
+            {
+                ShowUpdateVerifyResult(
+                    passed: false,
+                    title: "Fika may still need an update",
+                    detail: $"Detected {detectedLabel}, but an update is still reported " +
+                            $"(expected around {expectedVersion}). Confirm the installer completed, then Recheck.");
+                return;
+            }
+
+            ShowUpdateVerifyResult(
+                passed: true,
+                title: "Fika install verified",
+                detail: string.IsNullOrWhiteSpace(expectedVersion)
+                    ? $"Fika detected: {detectedLabel}."
+                    : $"Fika detected: {detectedLabel}. Expected update target was {expectedVersion}.");
         }
 
         private void HandleFikaInstallHttpError(HttpRequestException ex)
@@ -3626,6 +3807,11 @@ namespace SptLauncherWpf.Pages
 
                     await SptUpdateService.Instance.LaunchInstallerOnlyAsync(installerPath, sptPath);
 
+                    ShowUpdateVerifyResult(
+                        passed: null,
+                        title: "SPT installer launched",
+                        detail: "Your SPT folder was not modified by this launcher. Finish the installer wizard, then click Recheck on Readiness to verify the version.");
+
                     System.Windows.MessageBox.Show(
                         "Installer downloaded and launched.\n\n" +
                         "Your SPT folder was not modified by the launcher.\n" +
@@ -3650,12 +3836,13 @@ namespace SptLauncherWpf.Pages
                 ShowSptUpdateSuccessUi();
 
                 System.Windows.MessageBox.Show(
-                    "SPT has been updated successfully!\n\nThe version display will refresh automatically.",
+                    "SPT has been updated successfully!\n\nThe launcher will verify the installed version next.",
                     "Update Complete",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
 
-                await TryRefreshSptVersionAfterUpdateAsync();
+                var expectedVersion = _currentUpdateInfo?.LatestVersion;
+                await VerifySptAfterUpdateAsync(expectedVersion);
             }
             catch (OperationCanceledException)
             {
