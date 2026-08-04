@@ -10,308 +10,404 @@
       TextOptions.TextFormattingMode="Ideal"
       TextOptions.TextRenderingMode="ClearType"
       RenderOptions.EdgeMode="Unspecified">
-    
+
+    <Page.Resources>
+        <Style x:Key="StatusPillBorder" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{DynamicResource HoverColor}"/>
+        </Style>
+        <Style x:Key="QuietButtonStyle" TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Background" Value="#4B5563"/>
+        </Style>
+        <Style x:Key="LinkToggleStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryColor}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <TextBlock Text="{TemplateBinding Content}"
+                                   Foreground="{TemplateBinding Foreground}"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   FontWeight="{TemplateBinding FontWeight}"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
     <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden">
-        <StackPanel Margin="0,16,0,0">
-            
-            <!-- Header -->
-            <StackPanel HorizontalAlignment="Center" Margin="0,0,0,32">
-                <TextBlock Text="SPT Launcher" FontSize="28" FontWeight="Bold" 
-                           Foreground="{DynamicResource TextPrimaryColor}" HorizontalAlignment="Center"/>
-                <TextBlock Text="Launch and manage your SPT-AKI installation" 
-                           FontSize="16" Foreground="{DynamicResource TextSecondaryColor}" HorizontalAlignment="Center" 
-                           Margin="0,8,0,0"/>
-            </StackPanel>
+            <StackPanel Margin="0,4,0,16" MaxWidth="900" HorizontalAlignment="Stretch">
 
-            <!-- SPT Installation Section -->
-            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
-                        <TextBlock Text="SPT Installation" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    
-                    <TextBlock Text="Do you need to install SPT?" 
-                               FontSize="14" Foreground="{DynamicResource TextPrimaryColor}" 
-                               Margin="0,0,0,12"/>
-                    
-                    <Button Name="InstallSptButton" Content="📥 Install Latest SPT Version" 
-                            Style="{StaticResource ModernButtonStyle}" 
-                            Click="InstallSptButton_Click"
-                            HorizontalAlignment="Left"
-                            Margin="0,0,0,12"/>
-                    
-                    <!-- SPT Version Display -->
-                    <StackPanel Margin="0,8,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Installed SPT Version: " 
-                                       FontSize="14" 
-                                       Foreground="{DynamicResource TextSecondaryColor}"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock Name="SptVersionText" 
-                                       Text="Not detected" 
-                                       FontSize="14" 
-                                       FontWeight="SemiBold"
+                <!-- Play hero -->
+                <Border Style="{StaticResource ModernCardStyle}" Padding="24,20" Margin="0,0,0,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Name="PlayStatusHeadline"
+                                       Text="Set your SPT launcher path to begin"
+                                       FontSize="22"
+                                       FontWeight="Bold"
                                        Foreground="{DynamicResource TextPrimaryColor}"
-                                       VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <!-- Update Status -->
-                        <StackPanel Name="SptUpdateStatusPanel" Margin="0,4,0,0" Visibility="Collapsed">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Name="SptUpdateStatusText" 
-                                           FontSize="13" 
-                                           Foreground="{DynamicResource TextSecondaryColor}"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <!-- Update Now Button (shown when update available) -->
-                            <Button Name="UpdateNowButton" 
-                                    Content="Update Now" 
-                                    Style="{StaticResource ModernButtonStyle}"
-                                    Background="{DynamicResource PrimaryColor}"
-                                    Padding="12,8" FontSize="13" FontWeight="SemiBold"
-                                    HorizontalAlignment="Left"
-                                    Visibility="Collapsed"
-                                    Click="UpdateNowButton_Click"
-                                    Margin="0,4,0,0"/>
-                            <!-- Progress Bar (shown during update) -->
-                            <ProgressBar Name="SptUpdateProgressBar" 
-                                         Height="6" 
-                                         Margin="0,8,0,0"
-                                         Visibility="Collapsed"
-                                         Minimum="0" Maximum="100"/>
-                            <!-- Progress Status Text -->
-                            <TextBlock Name="SptUpdateProgressText" 
-                                       FontSize="12" 
+                                       TextWrapping="Wrap"/>
+                            <TextBlock Name="PlayStatusDetail"
+                                       Text="Launch SPT when your install is ready."
+                                       FontSize="13"
                                        Foreground="{DynamicResource TextSecondaryColor}"
-                                       Margin="0,4,0,0"
-                                       Visibility="Collapsed"
+                                       Margin="0,6,0,0"
                                        TextWrapping="Wrap"/>
                         </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
 
-            <!-- FIKA Installation Section -->
-            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
-                        <TextBlock Text="FIKA Installation" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    
-                    <TextBlock Text="Do you need to install FIKA Co-op?" 
-                               FontSize="14" Foreground="{DynamicResource TextPrimaryColor}" 
-                               Margin="0,0,0,12"/>
-                    
-                    <Button Name="InstallFikaButton" Content="📥 Install Latest FIKA Version" 
-                            Style="{StaticResource ModernButtonStyle}" 
-                            Click="InstallFikaButton_Click"
-                            HorizontalAlignment="Left"
-                            Margin="0,0,0,12"/>
-                    
-                    <!-- Fika Version Display -->
-                    <StackPanel Margin="0,8,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Installed Fika Version: " 
-                                       FontSize="14" 
-                                       Foreground="{DynamicResource TextSecondaryColor}"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock Name="FikaVersionText" 
-                                       Text="Not detected" 
-                                       FontSize="14" 
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimaryColor}"
-                                       VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <!-- Fika Update Status -->
-                        <StackPanel Name="FikaUpdateStatusPanel" Margin="0,4,0,0" Visibility="Collapsed">
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Name="FikaUpdateStatusText" 
-                                           FontSize="13" 
-                                           Foreground="{DynamicResource TextSecondaryColor}"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <Button Name="UpdateFikaButton"
-                                    Content="Update Now"
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
+                            <Button Name="LaunchButton"
+                                    Content="Launch SPT"
                                     Style="{StaticResource ModernButtonStyle}"
                                     Background="{DynamicResource PrimaryColor}"
-                                    Padding="12,8" FontSize="13" FontWeight="SemiBold"
-                                    HorizontalAlignment="Left"
-                                    Visibility="Collapsed"
-                                    Click="UpdateFikaButton_Click"
-                                    Margin="0,4,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- Fika Co-op Configuration -->
-            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
-                        <TextBlock Text="Fika Co-op Configuration" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                    
-                    <StackPanel Margin="0,0,0,0">
-                        <CheckBox Name="EnableFikaCheckBox" Content="Enable Fika Co-op" 
-                                  FontWeight="Medium" Foreground="{DynamicResource TextPrimaryColor}" FontSize="14" Padding="0,8"
-                                  Checked="EnableFikaCheckBox_Changed" Unchecked="EnableFikaCheckBox_Changed">
-                            <CheckBox.Style>
-                                <Style TargetType="CheckBox">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="CheckBox">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <ContentPresenter Grid.Column="0" 
-                                                                      VerticalAlignment="Center"
-                                                                      HorizontalAlignment="Left"
-                                                                      Margin="0,0,12,0"/>
-                                                    <Border x:Name="border" Grid.Column="1" Width="20" Height="20" 
-                                                            BorderBrush="{DynamicResource BorderColor}" BorderThickness="2" 
-                                                            Background="{DynamicResource CardBackgroundColor}" CornerRadius="4" 
-                                                            VerticalAlignment="Center"
-                                                            HorizontalAlignment="Right"/>
-                                                    <Path x:Name="checkMark" Grid.Column="1" Data="M 2 6 L 6 10 L 14 2" 
-                                                          Stroke="{DynamicResource PrimaryColor}" StrokeThickness="2" 
-                                                          Visibility="Collapsed" Margin="3,3,3,3" 
-                                                          VerticalAlignment="Center"
-                                                          HorizontalAlignment="Right"/>
-                                                </Grid>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
-                                                        <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource PrimaryColor}"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource TextSecondaryColor}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </CheckBox.Style>
-                        </CheckBox>
-                        
-                        <!-- IP Address Editor (collapsible) -->
-                        <StackPanel Name="FikaIpEditorPanel" Margin="0,16,0,0" Visibility="Collapsed">
-                            <StackPanel Margin="0,0,0,12">
-                                <TextBlock Text="IP Address" FontWeight="Medium" 
-                                           Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8" FontSize="14"/>
-                                <TextBox Name="FikaIpTextBox" 
-                                         FontSize="14"
-                                         Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                         Background="{DynamicResource CardBackgroundColor}"/>
-                            </StackPanel>
-                            
-                            <Button Name="SaveFikaIpButton" Content="Save IP Address" 
-                                    Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
-                                    Padding="16,8" FontSize="14" FontWeight="SemiBold"
-                                    HorizontalAlignment="Left" Click="SaveFikaIpButton_Click"/>
-                        </StackPanel>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- Modern SPT Launcher Configuration -->
-            <Border Style="{StaticResource ModernCardStyle}" Padding="24" Margin="0,0,0,20">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <Ellipse Width="16" Height="16" Fill="{DynamicResource PrimaryColor}" Margin="0,0,8,0"/>
-                        <TextBlock Text="SPT Launcher Executable" FontSize="16" FontWeight="SemiBold" 
-                                   Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <StackPanel>
-                        <!-- Path Input -->
-                        <StackPanel Margin="0,0,0,16">
-                            <TextBlock Text="Launcher Path" FontWeight="Medium" 
-                                       Foreground="{DynamicResource TextPrimaryColor}" Margin="0,0,0,8" FontSize="14"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                
-                                <TextBox Grid.Column="0" Name="LauncherPathTextBox" 
-                                         Text="" FontSize="14"
-                                         Padding="12,8" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
-                                         Background="{DynamicResource CardBackgroundColor}"
-                                         TextChanged="LauncherPathTextBox_TextChanged"/>
-                                
-                                <Button Grid.Column="1" Name="BrowseButton" Content="Browse" 
-                                        Style="{StaticResource ModernButtonStyle}" Background="#6B7280"
-                                        Padding="16,8" Margin="8,0,0,0" Click="BrowseButton_Click"/>
-                            </Grid>
-                            <TextBlock Name="PathStatusText" Text="Please select your SPT Launcher executable using the Browse button." 
-                                       FontSize="12" Foreground="{DynamicResource TextSecondaryColor}" 
-                                       Margin="0,4,0,0" TextWrapping="Wrap"/>
-                        </StackPanel>
-
-                        <!-- Modern Action Buttons -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,16,0,0">
-                            <Button Name="LaunchButton" Content="🚀 Launch SPT" 
-                                    Style="{StaticResource ModernButtonStyle}" Click="LaunchButton_Click"
-                                    Margin="0,0,12,0"/>
-                            <!-- Use Border as clickable stop button to bypass Button control issues -->
-                            <Border Name="StopButtonBorder" 
-                                    Background="#6B7280" 
+                                    Padding="26,12"
+                                    FontSize="15"
+                                    FontWeight="Bold"
+                                    Click="LaunchButton_Click"
+                                    Margin="0,0,8,0"/>
+                            <Border Name="StopButtonBorder"
+                                    Background="#6B7280"
                                     CornerRadius="12"
                                     Padding="20,12"
                                     Cursor="Hand"
                                     MouseDown="StopButtonBorder_MouseDown"
                                     MouseEnter="StopButtonBorder_MouseEnter"
                                     MouseLeave="StopButtonBorder_MouseLeave">
-                                <TextBlock Text="⏹ Stop" 
-                                           FontSize="14" 
+                                <TextBlock Text="Stop"
+                                           FontSize="14"
                                            FontWeight="SemiBold"
                                            Foreground="White"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"/>
                             </Border>
                         </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Readiness checklist -->
+                <Border Style="{StaticResource ModernCardStyle}" Padding="20" Margin="0,0,0,12">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,12" LastChildFill="False">
+                            <TextBlock Text="Readiness"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       VerticalAlignment="Center"/>
+                            <Button Name="RefreshEftStatusButton"
+                                    Content="Recheck"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Click="RefreshEftStatusButton_Click"
+                                    DockPanel.Dock="Right"/>
+                        </DockPanel>
+
+                        <!-- SPT row -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="88"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="SPT" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Name="SptVersionText" Text="Not detected" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                                <Border Name="SptStatusPill" Style="{StaticResource StatusPillBorder}" Margin="10,0,0,0">
+                                    <TextBlock Name="SptUpdateStatusText" Text="—" FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryColor}"/>
+                                </Border>
+                            </StackPanel>
+                            <Button Grid.Column="2" Name="UpdateNowButton" Content="Update SPT"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Visibility="Collapsed" Click="UpdateNowButton_Click" Margin="8,0,0,0"/>
+                            <Button Grid.Column="3" Name="InstallSptButton" Content="Install SPT"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Click="InstallSptButton_Click" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <!-- Tarkov row -->
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="88"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Tarkov" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Name="EftVersionText" Text="Not detected" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                                    <Border Name="EftStatusPill" Style="{StaticResource StatusPillBorder}" Margin="10,0,0,0">
+                                        <TextBlock Name="EftStatusText" Text="—" FontSize="12"
+                                                   Foreground="{DynamicResource TextSecondaryColor}"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Name="EftRequiredVersionText"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           Margin="0,4,0,0"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed"/>
+                            </StackPanel>
+                            <Button Grid.Column="2" Name="UpdateTarkovButton" Content="Update Tarkov"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Visibility="Collapsed" Click="UpdateTarkovButton_Click" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <!-- Fika row -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="88"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Fika" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Name="FikaVersionText" Text="Not detected" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryColor}" VerticalAlignment="Center"/>
+                                <Border Name="FikaStatusPill" Style="{StaticResource StatusPillBorder}" Margin="10,0,0,0">
+                                    <TextBlock Name="FikaUpdateStatusText" Text="—" FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryColor}"/>
+                                </Border>
+                            </StackPanel>
+                            <Button Grid.Column="2" Name="UpdateFikaButton" Content="Update Fika"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Visibility="Collapsed" Click="UpdateFikaButton_Click" Margin="8,0,0,0"/>
+                            <Button Grid.Column="3" Name="InstallFikaButton" Content="Install Fika"
+                                    Style="{StaticResource QuietButtonStyle}"
+                                    Click="InstallFikaButton_Click" Margin="8,0,0,0"/>
+                        </Grid>
+
+                        <!-- Compact update progress (shared SPT update UI) -->
+                        <StackPanel Name="SptUpdateStatusPanel" Margin="0,14,0,0" Visibility="Collapsed">
+                            <TextBlock Name="SptDownloadDetailsText"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       Margin="0,0,0,6"
+                                       Visibility="Collapsed"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                <Button Name="DownloadInstallerOnlyButton"
+                                        Content="Download Installer Only"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Visibility="Collapsed"
+                                        Click="DownloadInstallerOnlyButton_Click"
+                                        Margin="0,0,8,0"/>
+                                <Button Name="CancelUpdateButton"
+                                        Content="Cancel"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Visibility="Collapsed"
+                                        Click="CancelUpdateButton_Click"/>
+                            </StackPanel>
+                            <ProgressBar Name="SptUpdateProgressBar"
+                                         Height="6"
+                                         Visibility="Collapsed"
+                                         Minimum="0" Maximum="100"/>
+                            <TextBlock Name="SptUpdateProgressText"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       Margin="0,6,0,0"
+                                       Visibility="Collapsed"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+
+                        <!-- Hidden panel kept for Fika update visibility toggles -->
+                        <StackPanel Name="FikaUpdateStatusPanel" Visibility="Collapsed"/>
                     </StackPanel>
-                </StackPanel>
-            </Border>
-        </StackPanel>
-    </ScrollViewer>
-    
-    <!-- Toast Notification -->
-    <Border Name="ToastNotification" 
-            Background="{DynamicResource BackgroundSecondaryColor}"
-            BorderBrush="{DynamicResource PrimaryColor}"
-            BorderThickness="1"
-            CornerRadius="8"
-            Padding="16,12"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Top"
-            Margin="0,20,20,0"
-            Opacity="0"
-            Visibility="Collapsed"
-            RenderTransformOrigin="0.5,0.5">
-        <Border.RenderTransform>
-            <TranslateTransform X="0" Y="0"/>
-        </Border.RenderTransform>
-        <StackPanel Orientation="Horizontal">
-            <TextBlock Name="ToastMessage" 
-                      Text="IP was applied" 
-                      Foreground="{DynamicResource TextPrimaryColor}"
-                      FontSize="14"
-                      VerticalAlignment="Center"
-                      Margin="0,0,8,0"/>
-            <Ellipse Width="8" Height="8" 
-                    Fill="{DynamicResource PrimaryColor}"
-                    VerticalAlignment="Center"/>
-        </StackPanel>
-    </Border>
+                </Border>
+
+                <!-- Setup & advanced (collapsed by default when path is valid) -->
+                <Border Style="{StaticResource ModernCardStyle}" Padding="18,14" Margin="0,0,0,8">
+                    <StackPanel>
+                        <Button Name="AdvancedToggleButton"
+                                Content="Show setup"
+                                Style="{StaticResource LinkToggleStyle}"
+                                Click="AdvancedToggleButton_Click"/>
+
+                        <StackPanel Name="AdvancedPanel" Margin="0,14,0,0" Visibility="Collapsed">
+                            <TextBlock Text="SPT launcher path"
+                                       FontWeight="Medium"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       Margin="0,0,0,6"
+                                       FontSize="13"/>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Name="LauncherPathTextBox"
+                                         FontSize="13"
+                                         Padding="12,8"
+                                         BorderBrush="{DynamicResource BorderColor}"
+                                         BorderThickness="1"
+                                         Background="{DynamicResource CardBackgroundColor}"
+                                         TextChanged="LauncherPathTextBox_TextChanged"/>
+                                <Button Grid.Column="1" Name="BrowseButton" Content="Browse"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Margin="8,0,0,0"
+                                        Click="BrowseButton_Click"/>
+                            </Grid>
+                            <TextBlock Name="PathStatusText"
+                                       Text="Select your SPT.Launcher.exe path."
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       Margin="0,0,0,14"
+                                       TextWrapping="Wrap"/>
+
+                            <CheckBox Name="EnableFikaCheckBox" Content="Enable Fika Co-op"
+                                      FontWeight="Medium"
+                                      Foreground="{DynamicResource TextPrimaryColor}"
+                                      FontSize="14"
+                                      Padding="0,6"
+                                      Checked="EnableFikaCheckBox_Changed"
+                                      Unchecked="EnableFikaCheckBox_Changed">
+                                <CheckBox.Style>
+                                    <Style TargetType="CheckBox">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="CheckBox">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <ContentPresenter Grid.Column="0"
+                                                                          VerticalAlignment="Center"
+                                                                          HorizontalAlignment="Left"
+                                                                          Margin="0,0,12,0"/>
+                                                        <Border x:Name="border" Grid.Column="1" Width="20" Height="20"
+                                                                BorderBrush="{DynamicResource BorderColor}" BorderThickness="2"
+                                                                Background="{DynamicResource CardBackgroundColor}" CornerRadius="4"
+                                                                VerticalAlignment="Center"
+                                                                HorizontalAlignment="Right"/>
+                                                        <Path x:Name="checkMark" Grid.Column="1" Data="M 2 6 L 6 10 L 14 2"
+                                                              Stroke="{DynamicResource PrimaryColor}" StrokeThickness="2"
+                                                              Visibility="Collapsed" Margin="3,3,3,3"
+                                                              VerticalAlignment="Center"
+                                                              HorizontalAlignment="Right"/>
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsChecked" Value="True">
+                                                            <Setter TargetName="checkMark" Property="Visibility" Value="Visible"/>
+                                                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource PrimaryColor}"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="border" Property="BorderBrush" Value="{DynamicResource TextSecondaryColor}"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </CheckBox.Style>
+                            </CheckBox>
+
+                            <StackPanel Name="FikaIpEditorPanel" Margin="0,10,0,0" Visibility="Collapsed">
+                                <TextBlock Text="Fika IP address"
+                                           FontWeight="Medium"
+                                           Foreground="{DynamicResource TextPrimaryColor}"
+                                           Margin="0,0,0,6"
+                                           FontSize="13"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Name="FikaIpTextBox"
+                                             FontSize="13"
+                                             Padding="12,8"
+                                             BorderBrush="{DynamicResource BorderColor}"
+                                             BorderThickness="1"
+                                             Background="{DynamicResource CardBackgroundColor}"/>
+                                    <Button Grid.Column="1" Name="SaveFikaIpButton" Content="Save"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Margin="8,0,0,0"
+                                            Click="SaveFikaIpButton_Click"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <TextBlock Text="Recovery"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       Margin="0,16,0,8"/>
+                            <StackPanel Name="SptRecoveryPanel" Orientation="Horizontal">
+                                <Button Name="RestoreBackupButton"
+                                        Content="Restore Backup"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="RestoreBackupButton_Click"
+                                        Margin="0,0,8,0"/>
+                                <Button Name="OpenSptFolderButton"
+                                        Content="Open SPT Folder"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="OpenSptFolderButton_Click"
+                                        Margin="0,0,8,0"/>
+                                <Button Name="ReinstallSptButton"
+                                        Content="Reinstall SPT"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="ReinstallSptButton_Click"/>
+                            </StackPanel>
+                            <TextBlock Name="LastBackupPathText"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       Margin="0,8,0,0"
+                                       TextWrapping="Wrap"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Toast Notification -->
+        <Border Name="ToastNotification"
+                Background="{DynamicResource SurfaceColor}"
+                BorderBrush="{DynamicResource PrimaryColor}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="16,12"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,20,20,0"
+                Opacity="0"
+                Visibility="Collapsed"
+                RenderTransformOrigin="0.5,0.5">
+            <Border.RenderTransform>
+                <TranslateTransform X="0" Y="0"/>
+            </Border.RenderTransform>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Name="ToastMessage"
+                           Text="IP was applied"
+                           Foreground="{DynamicResource TextPrimaryColor}"
+                           FontSize="14"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0"/>
+                <Ellipse Width="8" Height="8"
+                         Fill="{DynamicResource PrimaryColor}"
+                         VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </Page>

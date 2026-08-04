@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -93,6 +94,9 @@ namespace SptLauncherWpf.Pages
         
         // SPT Update tracking
         private SptUpdateInfo? _currentUpdateInfo = null;
+        private CancellationTokenSource? _sptUpdateCts;
+        private bool _sptUpdateInProgress;
+        private EftCompatibilityInfo? _currentEftInfo;
         
         // Fika Update tracking
         private FikaUpdateInfo? _currentFikaUpdateInfo = null;
@@ -179,13 +183,21 @@ namespace SptLauncherWpf.Pages
             
             // Update SPT version display
             UpdateSptVersionDisplay();
+
+            // Update live Tarkov / EFT version display
+            UpdateEftVersionDisplay();
             
             // Update Fika version display
             UpdateFikaVersionDisplay();
+
+            RefreshSptRecoveryPanel();
+            EnsureSetupPanelForPath();
         }
 
         private void LauncherPage_Unloaded(object sender, RoutedEventArgs e)
         {
+            _sptUpdateCts?.Cancel();
+
             // Stop the timer when the page is unloaded
             if (_uiUpdateTimer != null)
             {
@@ -317,6 +329,9 @@ namespace SptLauncherWpf.Pages
             
             // Update SPT version display
             UpdateSptVersionDisplay();
+
+            // Update live Tarkov / EFT version display
+            UpdateEftVersionDisplay();
             
             // Check if Fika mod is installed and update version display
             UpdateFikaVersionDisplay();
@@ -391,7 +406,7 @@ namespace SptLauncherWpf.Pages
         {
             if (string.IsNullOrWhiteSpace(LauncherPathTextBox.Text))
             {
-                PathStatusText.Text = "Please select your SPT Launcher executable using the Browse button.";
+                PathStatusText.Text = "Select your SPT.Launcher.exe path.";
                 PathStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
             }
             else
@@ -401,21 +416,24 @@ namespace SptLauncherWpf.Pages
                 {
                     if (path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                     {
-                        PathStatusText.Text = "✓ Valid launcher path selected.";
+                        PathStatusText.Text = "Valid launcher path selected.";
                         PathStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
                     }
                     else
                     {
-                        PathStatusText.Text = "⚠ Selected file is not an executable (.exe).";
+                        PathStatusText.Text = "Selected file is not an executable (.exe).";
                         PathStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Yellow
                     }
                 }
                 else
                 {
-                    PathStatusText.Text = "✗ File not found. Please check the path.";
+                    PathStatusText.Text = "File not found. Please check the path.";
                     PathStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)); // Red
                 }
             }
+
+            RefreshPlayHero();
+            EnsureSetupPanelForPath();
         }
 
         /// <summary>
@@ -1308,6 +1326,7 @@ namespace SptLauncherWpf.Pages
                         System.Diagnostics.Debug.WriteLine($"[UpdateLauncherUI] StopButtonBorder.Opacity: {StopButtonBorder.Opacity}, IsHitTestVisible: {StopButtonBorder.IsHitTestVisible}");
                     }
                     System.Diagnostics.Debug.WriteLine($"[UpdateLauncherUI] _isLauncherRunning: {_isLauncherRunning}, _launcherProcess: {(_launcherProcess != null ? "not null" : "null")}");
+                    RefreshPlayHero(hasTrackedLauncher || hasLauncherRunning, hasAnySptProcesses);
                 });
             }
             catch (Exception ex)
@@ -1320,8 +1339,89 @@ namespace SptLauncherWpf.Pages
                     {
                         StopButtonBorder.Opacity = 0.6;
                     }
+                    RefreshPlayHero();
                 });
                 System.Diagnostics.Debug.WriteLine($"[UpdateLauncherUI] Error: {ex.Message}\n{ex.StackTrace}");
+            }
+        }
+
+        private void RefreshPlayHero(bool? launcherRunning = null, bool? anySptRunning = null)
+        {
+            if (PlayStatusHeadline == null || PlayStatusDetail == null)
+            {
+                return;
+            }
+
+            var isLauncherRunning = launcherRunning ?? (_isLauncherRunning && _launcherProcess != null);
+            var isAnySptRunning = anySptRunning ?? false;
+
+            var path = LauncherPathTextBox?.Text?.Trim() ?? string.Empty;
+            var hasValidPath = !string.IsNullOrWhiteSpace(path)
+                               && File.Exists(path)
+                               && path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+
+            if (isLauncherRunning)
+            {
+                PlayStatusHeadline.Text = "SPT is running";
+                PlayStatusDetail.Text = "Use Stop when you want to shut down the launcher and related processes.";
+                return;
+            }
+
+            if (isAnySptRunning)
+            {
+                PlayStatusHeadline.Text = "SPT processes detected";
+                PlayStatusDetail.Text = "You can launch again, or Stop to close running SPT/Tarkov processes.";
+                return;
+            }
+
+            if (!hasValidPath)
+            {
+                PlayStatusHeadline.Text = "Set your SPT launcher path to begin";
+                PlayStatusDetail.Text = "Browse to SPT.Launcher.exe below, then Launch when ready.";
+                return;
+            }
+
+            var sptReady = SptVersionText?.Text != null
+                           && !SptVersionText.Text.Equals("Not detected", StringComparison.OrdinalIgnoreCase)
+                           && !SptVersionText.Text.StartsWith("Error", StringComparison.OrdinalIgnoreCase);
+            if (!sptReady)
+            {
+                PlayStatusHeadline.Text = "SPT not detected";
+                PlayStatusDetail.Text = "Install SPT or point the path at a valid SPT launcher.";
+                return;
+            }
+
+            PlayStatusHeadline.Text = "Ready to launch";
+            PlayStatusDetail.Text = "Your SPT launcher path looks good. Launch when you're ready.";
+        }
+
+        private void AdvancedToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetSetupPanelExpanded(AdvancedPanel?.Visibility != Visibility.Visible);
+        }
+
+        private void SetSetupPanelExpanded(bool expanded)
+        {
+            if (AdvancedPanel == null || AdvancedToggleButton == null)
+            {
+                return;
+            }
+
+            AdvancedPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+            AdvancedToggleButton.Content = expanded ? "Hide setup" : "Show setup";
+        }
+
+        private void EnsureSetupPanelForPath()
+        {
+            var path = LauncherPathTextBox?.Text?.Trim() ?? string.Empty;
+            var hasValidPath = !string.IsNullOrWhiteSpace(path)
+                               && File.Exists(path)
+                               && path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+
+            // First-run / missing path: open setup so Launch isn't a dead end.
+            if (!hasValidPath)
+            {
+                SetSetupPanelExpanded(true);
             }
         }
 
@@ -1336,7 +1436,7 @@ namespace SptLauncherWpf.Pages
             try
             {
                 InstallSptButton.IsEnabled = false;
-                InstallSptButton.Content = "⏳ Downloading installer...";
+                InstallSptButton.Content = "Downloading...";
 
                 var installerPath = Path.Combine(Path.GetTempPath(), SptInstallUrls.InstallerFileName);
 
@@ -1344,7 +1444,7 @@ namespace SptLauncherWpf.Pages
                     SptInstallUrls.InstallerDownloadUrl,
                     installerPath);
 
-                InstallSptButton.Content = "🚀 Launching installer...";
+                InstallSptButton.Content = "Launching...";
 
                 Process.Start(new ProcessStartInfo
                 {
@@ -1353,7 +1453,7 @@ namespace SptLauncherWpf.Pages
                     CreateNoWindow = false
                 });
 
-                InstallSptButton.Content = "📥 Install Latest SPT Version";
+                InstallSptButton.Content = "Install SPT";
                 InstallSptButton.IsEnabled = true;
 
                 System.Windows.MessageBox.Show("SPT installer has been launched. Please follow the installation wizard.",
@@ -1361,21 +1461,21 @@ namespace SptLauncherWpf.Pages
             }
             catch (HttpRequestException ex)
             {
-                InstallSptButton.Content = "📥 Install Latest SPT Version";
+                InstallSptButton.Content = "Install SPT";
                 InstallSptButton.IsEnabled = true;
                 System.Windows.MessageBox.Show($"Failed to download the SPT installer.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.",
                     "Download Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (TaskCanceledException ex)
             {
-                InstallSptButton.Content = "📥 Install Latest SPT Version";
+                InstallSptButton.Content = "Install SPT";
                 InstallSptButton.IsEnabled = true;
                 System.Windows.MessageBox.Show($"Download timed out.\n\nError: {ex.Message}\n\nPlease check your internet connection and try again.",
                     "Download Timeout", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             catch (Exception ex)
             {
-                InstallSptButton.Content = "📥 Install Latest SPT Version";
+                InstallSptButton.Content = "Install SPT";
                 InstallSptButton.IsEnabled = true;
                 System.Windows.MessageBox.Show($"An error occurred while installing SPT.\n\nError: {ex.Message}",
                     "Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -1476,7 +1576,7 @@ namespace SptLauncherWpf.Pages
 
         private void ResetInstallFikaButton()
         {
-            SetInstallFikaButtonState("📥 Install Latest FIKA Version", true);
+            SetInstallFikaButtonState("Install Fika", true);
         }
 
         private void ResetUpdateFikaButton()
@@ -2016,6 +2116,177 @@ namespace SptLauncherWpf.Pages
             _ = UpdateSptVersionDisplayAsync();
         }
 
+        private void UpdateEftVersionDisplay()
+        {
+            _ = UpdateEftVersionDisplayAsync();
+        }
+
+        private async Task UpdateEftVersionDisplayAsync()
+        {
+            try
+            {
+                string? preferredGamePath = null;
+                try
+                {
+                    preferredGamePath = EftDetectionService.Instance.TryGetGamePathFromSptLauncherConfig(
+                        GetLauncherConfigJsonPath());
+                }
+                catch
+                {
+                    // Ignore config read failures
+                }
+
+                var requiredLiveVersion = _currentUpdateInfo?.RequiredLiveEftVersion;
+                var targetClientVersion = _currentUpdateInfo?.RequiredEftVersion;
+                if (string.IsNullOrWhiteSpace(requiredLiveVersion) || string.IsNullOrWhiteSpace(targetClientVersion))
+                {
+                    var latestRelease = await SptDetectionService.Instance.GetLatestReleaseInfoAsync();
+                    requiredLiveVersion ??= latestRelease?.RequiredLiveEftVersion;
+                    targetClientVersion ??= latestRelease?.RequiredEftVersion;
+                    if (_currentUpdateInfo == null && latestRelease != null)
+                    {
+                        _currentUpdateInfo = latestRelease;
+                    }
+                    else if (_currentUpdateInfo != null)
+                    {
+                        _currentUpdateInfo.RequiredLiveEftVersion ??= requiredLiveVersion;
+                        _currentUpdateInfo.RequiredEftVersion ??= targetClientVersion;
+                    }
+                }
+
+                var eftInfo = await Task.Run(() =>
+                    EftDetectionService.Instance.EvaluateCompatibility(
+                        requiredLiveVersion,
+                        targetClientVersion,
+                        preferredGamePath));
+                _currentEftInfo = eftInfo;
+
+                InvokeOnUi(() => ApplyEftUiState(eftInfo));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[UpdateEftVersionDisplayAsync] Error: {ex.Message}");
+                InvokeOnUi(() =>
+                {
+                    if (EftVersionText != null)
+                    {
+                        EftVersionText.Text = "Error detecting version";
+                        EftVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                    }
+
+                    if (EftStatusText != null)
+                    {
+                        EftStatusText.Text = "Could not check Tarkov version";
+                    }
+
+                    if (UpdateTarkovButton != null)
+                    {
+                        UpdateTarkovButton.Visibility = Visibility.Visible;
+                    }
+                });
+            }
+        }
+
+        private void ApplyEftUiState(EftCompatibilityInfo eftInfo)
+        {
+            if (EftVersionText != null)
+            {
+                EftVersionText.Text = string.IsNullOrWhiteSpace(eftInfo.InstalledVersion)
+                    ? "Not detected"
+                    : eftInfo.InstalledVersion;
+                EftVersionText.Foreground = string.IsNullOrWhiteSpace(eftInfo.InstalledVersion)
+                    ? (System.Windows.Media.Brush)FindResource("TextSecondaryColor")
+                    : (System.Windows.Media.Brush)FindResource("TextPrimaryColor");
+            }
+
+            if (EftStatusText != null)
+            {
+                EftStatusText.Text = eftInfo.StatusText;
+                EftStatusText.Foreground = eftInfo.Status switch
+                {
+                    EftCompatibilityStatus.Compatible =>
+                        new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)),
+                    EftCompatibilityStatus.UpdateRequired =>
+                        new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)),
+                    EftCompatibilityStatus.NotDetected =>
+                        new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)),
+                    _ => (System.Windows.Media.Brush)FindResource("TextSecondaryColor")
+                };
+            }
+
+            var showUpdateButton = eftInfo.Status is
+                EftCompatibilityStatus.UpdateRequired or
+                EftCompatibilityStatus.NotDetected or
+                EftCompatibilityStatus.RequiredUnknown or
+                EftCompatibilityStatus.NewerThanSupported;
+
+            if (EftRequiredVersionText != null)
+            {
+                if (showUpdateButton || eftInfo.Status == EftCompatibilityStatus.RequiredUnknown)
+                {
+                    EftRequiredVersionText.Visibility = Visibility.Visible;
+                    if (!string.IsNullOrWhiteSpace(eftInfo.RequiredLiveVersion))
+                    {
+                        EftRequiredVersionText.Text =
+                            $"Needs live Tarkov {eftInfo.RequiredLiveVersion}" +
+                            (string.IsNullOrWhiteSpace(eftInfo.TargetSptClientVersion)
+                                ? string.Empty
+                                : $" → SPT {eftInfo.TargetSptClientVersion}");
+                    }
+                    else
+                    {
+                        EftRequiredVersionText.Text =
+                            "Could not determine the live Tarkov version required by the SPT downgrader.";
+                    }
+                }
+                else
+                {
+                    EftRequiredVersionText.Visibility = Visibility.Collapsed;
+                    EftRequiredVersionText.Text = string.Empty;
+                }
+            }
+
+            if (UpdateTarkovButton != null)
+            {
+                UpdateTarkovButton.Visibility = showUpdateButton ? Visibility.Visible : Visibility.Collapsed;
+                UpdateTarkovButton.IsEnabled = !_sptUpdateInProgress;
+            }
+
+            RefreshPlayHero();
+        }
+
+        private void RefreshEftStatusButton_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateEftVersionDisplay();
+        }
+
+        private void UpdateTarkovButton_Click(object sender, RoutedEventArgs e)
+        {
+            var launched = EftDetectionService.Instance.TryLaunchOfficialUpdater();
+            if (!launched)
+            {
+                System.Windows.MessageBox.Show(
+                    "Could not find the Battlestate Games launcher.\n\n" +
+                    "Most Tarkov copies are updated through the BSG launcher (not Steam).\n" +
+                    "Open your Battlestate Games launcher manually, update Escape From Tarkov, " +
+                    "then click Recheck.",
+                    "Update Tarkov",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            System.Windows.MessageBox.Show(
+                "Opened the Battlestate Games updater when available " +
+                "(or the official Tarkov site / Steam only if Tarkov itself is installed there).\n\n" +
+                "Update Escape From Tarkov, then return here and click Recheck.",
+                "Update Tarkov",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            UpdateEftVersionDisplay();
+        }
+
         private void UpdateFikaVersionDisplay()
         {
             _ = UpdateFikaVersionDisplayAsync();
@@ -2188,14 +2459,19 @@ namespace SptLauncherWpf.Pages
                 InstallFikaButton.Visibility = fikaInstalled ? Visibility.Collapsed : Visibility.Visible;
             }
 
+            if (FikaUpdateStatusPanel != null)
+            {
+                FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
+            }
+
             if (!fikaInstalled)
             {
                 FikaVersionText.Text = "Not detected";
                 FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-
-                if (FikaUpdateStatusPanel != null)
+                if (FikaUpdateStatusText != null)
                 {
-                    FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                    FikaUpdateStatusText.Text = "Optional";
+                    FikaUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                 }
 
                 if (UpdateFikaButton != null)
@@ -2229,11 +2505,12 @@ namespace SptLauncherWpf.Pages
                 FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor");
             }
 
-            if (FikaUpdateStatusPanel != null && FikaUpdateStatusText != null)
+            if (FikaUpdateStatusText != null)
             {
                 if (updateInfo == null)
                 {
-                    FikaUpdateStatusPanel.Visibility = Visibility.Collapsed;
+                    FikaUpdateStatusText.Text = "Installed";
+                    FikaUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                     if (UpdateFikaButton != null)
                     {
                         UpdateFikaButton.Visibility = Visibility.Collapsed;
@@ -2241,8 +2518,7 @@ namespace SptLauncherWpf.Pages
                 }
                 else if (updateInfo.IsUpdateAvailable)
                 {
-                    FikaUpdateStatusPanel.Visibility = Visibility.Visible;
-                    FikaUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion}";
+                    FikaUpdateStatusText.Text = $"Update {updateInfo.LatestVersion}";
                     FikaUpdateStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94));
                     if (UpdateFikaButton != null)
                     {
@@ -2252,7 +2528,6 @@ namespace SptLauncherWpf.Pages
                 }
                 else
                 {
-                    FikaUpdateStatusPanel.Visibility = Visibility.Visible;
                     FikaUpdateStatusText.Text = "Up to date";
                     FikaUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                     if (UpdateFikaButton != null)
@@ -2459,10 +2734,18 @@ namespace SptLauncherWpf.Pages
                     {
                         SptVersionText.Text = "Not detected";
                         SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                        if (SptUpdateStatusPanel != null)
+                        SetSptStatusPill("Not installed");
+                        if (InstallSptButton != null)
+                        {
+                            InstallSptButton.Visibility = Visibility.Visible;
+                        }
+                        if (!_sptUpdateInProgress && SptUpdateStatusPanel != null)
                         {
                             SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
                         }
+                        SetSptUpdateActionButtonsVisible(false, false);
+                        RefreshSptRecoveryPanel();
+                        RefreshPlayHero();
                     });
                     return;
                 }
@@ -2475,10 +2758,18 @@ namespace SptLauncherWpf.Pages
                     {
                         SptVersionText.Text = "Not detected";
                         SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                        if (SptUpdateStatusPanel != null)
+                        SetSptStatusPill("Not installed");
+                        if (InstallSptButton != null)
+                        {
+                            InstallSptButton.Visibility = Visibility.Visible;
+                        }
+                        if (!_sptUpdateInProgress && SptUpdateStatusPanel != null)
                         {
                             SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
                         }
+                        SetSptUpdateActionButtonsVisible(false, false);
+                        RefreshSptRecoveryPanel();
+                        RefreshPlayHero();
                     });
                     return;
                 }
@@ -2490,10 +2781,18 @@ namespace SptLauncherWpf.Pages
                     {
                         SptVersionText.Text = "Installed (version unknown)";
                         SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                        if (SptUpdateStatusPanel != null)
+                        SetSptStatusPill("Installed");
+                        if (InstallSptButton != null)
+                        {
+                            InstallSptButton.Visibility = Visibility.Collapsed;
+                        }
+                        if (!_sptUpdateInProgress && SptUpdateStatusPanel != null)
                         {
                             SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
                         }
+                        SetSptUpdateActionButtonsVisible(false, false);
+                        RefreshSptRecoveryPanel();
+                        RefreshPlayHero();
                     });
                     return;
                 }
@@ -2503,66 +2802,62 @@ namespace SptLauncherWpf.Pages
                 {
                     SptVersionText.Text = version;
                     SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextPrimaryColor");
-                    
-                    // Show checking status
-                    if (SptUpdateStatusPanel != null && SptUpdateStatusText != null)
+                    SetSptStatusPill("Checking...");
+                    if (InstallSptButton != null)
                     {
-                        SptUpdateStatusPanel.Visibility = Visibility.Visible;
-                        SptUpdateStatusText.Text = "Checking for updates...";
-                        SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                        InstallSptButton.Visibility = Visibility.Collapsed;
                     }
                 });
 
                 // Check for updates asynchronously
                 var updateInfo = await SptDetectionService.Instance.CheckForUpdatesAsync(version);
                 _currentUpdateInfo = updateInfo;
+                UpdateEftVersionDisplay();
                 
                 Dispatcher.Invoke(() =>
                 {
-                    if (SptUpdateStatusPanel == null || SptUpdateStatusText == null)
+                    if (SptUpdateStatusText == null)
                     {
                         return;
                     }
 
                     if (updateInfo == null)
                     {
-                        // Check failed (network error, etc.) - hide update status
-                        SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
-                        if (UpdateNowButton != null)
+                        SetSptStatusPill("—");
+                        if (!_sptUpdateInProgress && SptUpdateStatusPanel != null)
                         {
-                            UpdateNowButton.Visibility = Visibility.Collapsed;
+                            SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
                         }
+                        SetSptUpdateActionButtonsVisible(false, false);
                     }
                     else if (updateInfo.IsUpdateAvailable)
                     {
-                        // Update available
-                        SptUpdateStatusPanel.Visibility = Visibility.Visible;
-                        if (string.IsNullOrWhiteSpace(updateInfo.InstallerDownloadUrl))
+                        var hasInstaller = !string.IsNullOrWhiteSpace(updateInfo.InstallerDownloadUrl);
+                        if (!hasInstaller)
                         {
-                            // No installer available - show manual download message
-                            SptUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion} (Manual download required)";
+                            SetSptStatusPill($"Update {updateInfo.LatestVersion} (manual)");
+                            SetSptUpdateActionButtonsVisible(false, false);
                         }
                         else
                         {
-                            SptUpdateStatusText.Text = $"Update available: {updateInfo.LatestVersion}";
+                            SetSptStatusPill($"Update {updateInfo.LatestVersion}");
+                            SetSptUpdateActionButtonsVisible(!_sptUpdateInProgress, !_sptUpdateInProgress);
                         }
-                        SptUpdateStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)); // Green
-                        if (UpdateNowButton != null)
-                        {
-                            UpdateNowButton.Visibility = Visibility.Visible;
-                        }
+
+                        SptUpdateStatusText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94));
                     }
                     else
                     {
-                        // Up to date
-                        SptUpdateStatusPanel.Visibility = Visibility.Visible;
-                        SptUpdateStatusText.Text = "Up to date";
-                        SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                        if (UpdateNowButton != null)
+                        SetSptStatusPill("Up to date");
+                        if (!_sptUpdateInProgress && SptUpdateStatusPanel != null)
                         {
-                            UpdateNowButton.Visibility = Visibility.Collapsed;
+                            SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
                         }
+                        SetSptUpdateActionButtonsVisible(false, false);
                     }
+
+                    RefreshSptRecoveryPanel();
+                    RefreshPlayHero();
                 });
             }
             catch (Exception ex)
@@ -2575,33 +2870,262 @@ namespace SptLauncherWpf.Pages
                         SptVersionText.Text = "Error detecting version";
                         SptVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                     }
-                    if (SptUpdateStatusPanel != null)
+                    SetSptStatusPill("Error");
+                    if (!_sptUpdateInProgress && SptUpdateStatusPanel != null)
                     {
                         SptUpdateStatusPanel.Visibility = Visibility.Collapsed;
                     }
+                    RefreshSptRecoveryPanel();
+                    RefreshPlayHero();
                 });
+            }
+        }
+
+        private void SetSptStatusPill(string text)
+        {
+            if (SptUpdateStatusText == null)
+            {
+                return;
+            }
+
+            SptUpdateStatusText.Text = text;
+            SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+        }
+
+        private void SetSptUpdateActionButtonsVisible(bool showUpdateNow, bool showInstallerOnly)
+        {
+            if (UpdateNowButton != null)
+            {
+                UpdateNowButton.Visibility = showUpdateNow ? Visibility.Visible : Visibility.Collapsed;
+                UpdateNowButton.IsEnabled = showUpdateNow && !_sptUpdateInProgress;
+            }
+
+            if (DownloadInstallerOnlyButton != null)
+            {
+                DownloadInstallerOnlyButton.Visibility = showInstallerOnly ? Visibility.Visible : Visibility.Collapsed;
+                DownloadInstallerOnlyButton.IsEnabled = showInstallerOnly && !_sptUpdateInProgress;
+            }
+
+            // Progress / installer-only actions live in this panel.
+            if (SptUpdateStatusPanel != null && !_sptUpdateInProgress)
+            {
+                SptUpdateStatusPanel.Visibility = showInstallerOnly ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        private void RefreshSptRecoveryPanel()
+        {
+            if (SptRecoveryPanel == null)
+            {
+                return;
+            }
+
+            var sptPath = GetSptInstallPath();
+            var hasSptPath = !string.IsNullOrWhiteSpace(sptPath) && Directory.Exists(sptPath);
+            SptRecoveryPanel.Visibility = hasSptPath ? Visibility.Visible : Visibility.Collapsed;
+
+            if (OpenSptFolderButton != null)
+            {
+                OpenSptFolderButton.IsEnabled = hasSptPath && !_sptUpdateInProgress;
+            }
+
+            if (ReinstallSptButton != null)
+            {
+                ReinstallSptButton.IsEnabled = !_sptUpdateInProgress;
+            }
+
+            var lastBackup = SettingsService.Instance.LastSptBackupPath;
+            var hasBackup = !string.IsNullOrWhiteSpace(lastBackup) && Directory.Exists(lastBackup);
+            if (RestoreBackupButton != null)
+            {
+                RestoreBackupButton.IsEnabled = hasBackup && hasSptPath && !_sptUpdateInProgress;
+            }
+
+            if (LastBackupPathText != null)
+            {
+                if (hasBackup)
+                {
+                    LastBackupPathText.Visibility = Visibility.Visible;
+                    LastBackupPathText.Text = $"Last backup: {lastBackup}";
+                }
+                else
+                {
+                    LastBackupPathText.Visibility = Visibility.Collapsed;
+                    LastBackupPathText.Text = string.Empty;
+                }
             }
         }
 
         private async void UpdateNowButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryPrepareSptUpdate(out var sptPath, out var createBackup, out var backupPath))
+            await RunSptUpdateFlowAsync(installerOnly: false);
+        }
+
+        private async void DownloadInstallerOnlyButton_Click(object sender, RoutedEventArgs e)
+        {
+            await RunSptUpdateFlowAsync(installerOnly: true);
+        }
+
+        private void CancelUpdateButton_Click(object sender, RoutedEventArgs e)
+        {
+            _sptUpdateCts?.Cancel();
+            if (SptUpdateProgressText != null)
+            {
+                SptUpdateProgressText.Text = "Canceling...";
+            }
+        }
+
+        private async Task RunSptUpdateFlowAsync(bool installerOnly)
+        {
+            if (_sptUpdateInProgress)
             {
                 return;
             }
 
+            if (_currentUpdateInfo == null || !_currentUpdateInfo.IsUpdateAvailable)
+            {
+                System.Windows.MessageBox.Show("No update information available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            var sptPath = GetSptInstallPath();
+            var downloadUrl = _currentUpdateInfo.InstallerDownloadUrl;
+            if (string.IsNullOrWhiteSpace(downloadUrl))
+            {
+                ShowManualSptUpdatePrompt(_currentUpdateInfo.ReleaseUrl ?? SptInstallUrls.ReleasesPageUrl);
+                return;
+            }
+
+            SptDownloadInfo? downloadInfo = null;
             try
             {
-                SetSptUpdateUiStarting();
-                var tempPath = Path.GetTempPath();
-                var installerPath = Path.Combine(tempPath, SptInstallUrls.InstallerFileName);
+                downloadInfo = await SptUpdateService.Instance.GetDownloadInfoAsync(downloadUrl);
+            }
+            catch
+            {
+                downloadInfo = new SptDownloadInfo
+                {
+                    Url = downloadUrl,
+                    FileName = SptInstallUrls.InstallerFileName
+                };
+            }
 
-                var downloadProgress = CreateDownloadProgress();
+            var preferredGamePath = EftDetectionService.Instance.TryGetGamePathFromSptLauncherConfig(
+                GetLauncherConfigJsonPath());
+            var eftCompatibility = EftDetectionService.Instance.EvaluateCompatibility(
+                _currentUpdateInfo.RequiredLiveEftVersion,
+                _currentUpdateInfo.RequiredEftVersion,
+                preferredGamePath);
+            _currentEftInfo = eftCompatibility;
+            InvokeOnUi(() => ApplyEftUiState(eftCompatibility));
 
+            var preflight = SptUpdatePreflight.Check(
+                sptPath,
+                downloadUrl,
+                downloadInfo.ContentLength,
+                requireBackupSpace: !installerOnly,
+                requireNoRunningProcesses: !installerOnly,
+                eftCompatibility: eftCompatibility,
+                requireCompatibleEft: !installerOnly);
+            if (!preflight.IsReady)
+            {
+                var result = System.Windows.MessageBox.Show(
+                    "Update preflight checks failed:\n\n" + preflight.GetSummary() +
+                    "\n\nWould you like to open the official Tarkov updater now?",
+                    "Cannot Update Yet",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                if (result == MessageBoxResult.Yes)
+                {
+                    UpdateTarkovButton_Click(sender: this, e: new RoutedEventArgs());
+                }
+                return;
+            }
+
+            if (preflight.Warnings.Count > 0)
+            {
+                var continueAnyway = System.Windows.MessageBox.Show(
+                    preflight.GetSummary() + "\n\nContinue anyway?",
+                    "Update Warning",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+                if (continueAnyway != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+            }
+
+            bool createBackup = false;
+            string? backupPath = null;
+            if (!installerOnly)
+            {
+                var modeConfirm = System.Windows.MessageBox.Show(
+                    "Full update will:\n" +
+                    "1. Download and validate the official SPT installer\n" +
+                    "2. Optionally back up your SPT folder\n" +
+                    "3. Clean the SPT folder and run the installer\n\n" +
+                    "Prefer a safer option? Use Download Installer Only instead.\n\n" +
+                    "Continue with full update?",
+                    "Confirm Full Update",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                if (modeConfirm != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+
+                var backupResult = System.Windows.MessageBox.Show(
+                    "Would you like to backup your current SPT folder before updating?\n\n" +
+                    "This may take a long time and consume large amounts of storage space.\n\n" +
+                    "Click Yes to create a backup, or No to skip backup.",
+                    "Backup SPT Folder?",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                createBackup = backupResult == MessageBoxResult.Yes;
+                if (createBackup && !TrySelectBackupPath(out backupPath, out createBackup))
+                {
+                    return;
+                }
+            }
+
+            _sptUpdateCts = new CancellationTokenSource();
+            _sptUpdateInProgress = true;
+            var installerPath = Path.Combine(Path.GetTempPath(), downloadInfo.FileName);
+
+            try
+            {
+                SetSptUpdateUiStarting(downloadInfo);
+
+                var downloadProgress = CreateDownloadProgress(downloadInfo);
                 await SptUpdateService.Instance.DownloadInstallerAsync(
-                    _currentUpdateInfo!.InstallerDownloadUrl!,
+                    downloadUrl,
                     installerPath,
-                    downloadProgress);
+                    downloadProgress,
+                    _sptUpdateCts.Token);
+
+                // Installer is validated before any destructive work.
+                if (installerOnly)
+                {
+                    InvokeOnUi(() =>
+                    {
+                        if (SptUpdateProgressText != null)
+                        {
+                            SptUpdateProgressText.Text = "Launching installer (SPT folder will not be wiped)...";
+                        }
+                    });
+
+                    await SptUpdateService.Instance.LaunchInstallerOnlyAsync(installerPath, sptPath);
+
+                    System.Windows.MessageBox.Show(
+                        "Installer downloaded and launched.\n\n" +
+                        "Your SPT folder was not modified by the launcher.\n" +
+                        "Follow the installer wizard to finish updating.",
+                        "Installer Launched",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
 
                 var statusProgress = CreateStatusProgress();
                 var progressProgress = CreatePercentProgress();
@@ -2624,83 +3148,51 @@ namespace SptLauncherWpf.Pages
 
                 await TryRefreshSptVersionAfterUpdateAsync();
             }
+            catch (OperationCanceledException)
+            {
+                InvokeOnUi(() =>
+                {
+                    if (SptUpdateProgressText != null)
+                    {
+                        SptUpdateProgressText.Text = "Update canceled.";
+                        SptUpdateProgressText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                    }
+                });
+            }
             catch (Exception ex)
             {
-                Dispatcher.Invoke(() =>
+                InvokeOnUi(() =>
                 {
                     if (SptUpdateProgressText != null)
                     {
                         SptUpdateProgressText.Text = $"Update failed: {ex.Message}";
-                        SptUpdateProgressText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)); // Red
-                    }
-                    if (UpdateNowButton != null)
-                    {
-                        UpdateNowButton.IsEnabled = true;
-                        UpdateNowButton.Visibility = Visibility.Visible;
+                        SptUpdateProgressText.Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
                     }
                 });
 
-                System.Windows.MessageBox.Show(
-                    $"Update failed: {ex.Message}\n\n" +
-                    (createBackup && !string.IsNullOrEmpty(backupPath) 
-                        ? $"A backup was created at: {backupPath}\nYou can restore from there if needed."
-                        : "No backup was created."),
-                    "Update Failed",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                ShowSptUpdateFailureDialog(ex.Message, createBackup, backupPath);
             }
             finally
             {
+                _sptUpdateInProgress = false;
+                _sptUpdateCts?.Dispose();
+                _sptUpdateCts = null;
                 await FinalizeSptUpdateUiAndStateAsync();
+                RefreshSptRecoveryPanel();
             }
         }
 
-        private bool TryPrepareSptUpdate(out string sptPath, out bool createBackup, out string? backupPath)
+        private void ShowSptUpdateFailureDialog(string errorMessage, bool createBackup, string? backupPath)
         {
-            sptPath = string.Empty;
-            createBackup = false;
-            backupPath = null;
+            var hasBackup = createBackup && !string.IsNullOrEmpty(backupPath) && Directory.Exists(backupPath);
+            var message =
+                $"Update failed: {errorMessage}\n\n" +
+                (hasBackup
+                    ? $"A backup is available at:\n{backupPath}\n\n"
+                    : "No backup was created for this attempt.\n\n") +
+                "Recovery options are available under the SPT Installation section.";
 
-            if (_currentUpdateInfo == null || !_currentUpdateInfo.IsUpdateAvailable)
-            {
-                System.Windows.MessageBox.Show("No update information available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return false;
-            }
-
-            sptPath = GetSptInstallPath();
-            if (string.IsNullOrEmpty(sptPath) || !Directory.Exists(sptPath))
-            {
-                System.Windows.MessageBox.Show("SPT installation directory not found. Please set the SPT launcher path in settings first.",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(_currentUpdateInfo.InstallerDownloadUrl))
-            {
-                ShowManualSptUpdatePrompt(_currentUpdateInfo.ReleaseUrl ?? "https://github.com/sp-tarkov/build/releases/latest");
-                return false;
-            }
-
-            var backupResult = System.Windows.MessageBox.Show(
-                "Would you like to backup your current SPT folder before updating?\n\n" +
-                "This may take a long time and consume large amounts of storage space.\n\n" +
-                "Click Yes to create a backup, or No to skip backup.",
-                "Backup SPT Folder?",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            createBackup = backupResult == MessageBoxResult.Yes;
-            if (createBackup && !TrySelectBackupPath(out backupPath, out createBackup))
-            {
-                return false;
-            }
-
-            if (UpdateNowButton != null)
-            {
-                UpdateNowButton.IsEnabled = false;
-            }
-
-            return true;
+            System.Windows.MessageBox.Show(message, "Update Failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
         private void ShowManualSptUpdatePrompt(string releaseUrl)
@@ -2765,7 +3257,7 @@ namespace SptLauncherWpf.Pages
             return false;
         }
 
-        private void SetSptUpdateUiStarting()
+        private void SetSptUpdateUiStarting(SptDownloadInfo downloadInfo)
         {
             InvokeOnUi(() =>
             {
@@ -2774,19 +3266,36 @@ namespace SptLauncherWpf.Pages
                     SptUpdateProgressBar.Visibility = Visibility.Visible;
                     SptUpdateProgressBar.Value = 0;
                 }
+
                 if (SptUpdateProgressText != null)
                 {
                     SptUpdateProgressText.Visibility = Visibility.Visible;
-                    SptUpdateProgressText.Text = "Starting update...";
+                    SptUpdateProgressText.Text = "Starting download...";
+                    SptUpdateProgressText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                 }
-                if (UpdateNowButton != null)
+
+                if (SptDownloadDetailsText != null)
                 {
-                    UpdateNowButton.Visibility = Visibility.Collapsed;
+                    SptDownloadDetailsText.Visibility = Visibility.Visible;
+                    SptDownloadDetailsText.Text =
+                        $"File: {downloadInfo.FileName}\n" +
+                        $"Size: {downloadInfo.DisplaySize}\n" +
+                        $"URL: {downloadInfo.Url}";
                 }
+
+                SetSptUpdateActionButtonsVisible(false, false);
+
+                if (CancelUpdateButton != null)
+                {
+                    CancelUpdateButton.Visibility = Visibility.Visible;
+                    CancelUpdateButton.IsEnabled = true;
+                }
+
+                RefreshSptRecoveryPanel();
             });
         }
 
-        private IProgress<double> CreateDownloadProgress()
+        private IProgress<double> CreateDownloadProgress(SptDownloadInfo downloadInfo)
         {
             return new Progress<double>(percent =>
             {
@@ -2796,9 +3305,13 @@ namespace SptLauncherWpf.Pages
                     {
                         SptUpdateProgressBar.Value = percent;
                     }
+
                     if (SptUpdateProgressText != null)
                     {
-                        SptUpdateProgressText.Text = $"Downloading installer... {percent:F0}%";
+                        var sizePart = downloadInfo.ContentLength.HasValue
+                            ? $" ({downloadInfo.DisplaySize})"
+                            : string.Empty;
+                        SptUpdateProgressText.Text = $"Downloading {downloadInfo.FileName}{sizePart}... {percent:F0}%";
                     }
                 });
             });
@@ -2870,58 +3383,174 @@ namespace SptLauncherWpf.Pages
 
         private async Task FinalizeSptUpdateUiAndStateAsync()
         {
-            await Task.Delay(3000);
+            await Task.Delay(2500);
             InvokeOnUi(() =>
             {
                 if (SptUpdateProgressBar != null)
                 {
                     SptUpdateProgressBar.Visibility = Visibility.Collapsed;
                 }
+
                 if (SptUpdateProgressText != null)
                 {
                     SptUpdateProgressText.Visibility = Visibility.Collapsed;
                 }
-                if (UpdateNowButton != null && _currentUpdateInfo != null && _currentUpdateInfo.IsUpdateAvailable)
+
+                if (SptDownloadDetailsText != null)
                 {
-                    UpdateNowButton.Visibility = Visibility.Visible;
-                    UpdateNowButton.IsEnabled = true;
+                    SptDownloadDetailsText.Visibility = Visibility.Collapsed;
                 }
+
+                if (CancelUpdateButton != null)
+                {
+                    CancelUpdateButton.Visibility = Visibility.Collapsed;
+                    CancelUpdateButton.IsEnabled = false;
+                }
+
+                var hasInstaller = _currentUpdateInfo?.IsUpdateAvailable == true &&
+                                   !string.IsNullOrWhiteSpace(_currentUpdateInfo.InstallerDownloadUrl);
+                SetSptUpdateActionButtonsVisible(hasInstaller, hasInstaller);
+                RefreshSptRecoveryPanel();
             });
 
-            await Task.Delay(2000);
+            await Task.Delay(1500);
             UpdateSptVersionDisplay();
+        }
 
-            await Task.Delay(1000);
-            var currentVersion = SptDetectionService.Instance.GetSptVersion(SettingsService.Instance.LauncherPath);
-            if (string.IsNullOrWhiteSpace(currentVersion))
+        private async void RestoreBackupButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_sptUpdateInProgress)
             {
                 return;
             }
 
-            var updateInfo = await SptDetectionService.Instance.CheckForUpdatesAsync(currentVersion);
-            _currentUpdateInfo = updateInfo;
-
-            InvokeOnUi(() =>
+            var sptPath = GetSptInstallPath();
+            var backupPath = SettingsService.Instance.LastSptBackupPath;
+            if (string.IsNullOrWhiteSpace(sptPath) || !Directory.Exists(sptPath))
             {
-                if (updateInfo != null && updateInfo.IsUpdateAvailable)
-                {
-                    return;
-                }
+                System.Windows.MessageBox.Show("SPT installation directory not found.", "Restore Backup",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-                if (SptUpdateStatusPanel != null)
+            if (string.IsNullOrWhiteSpace(backupPath) || !Directory.Exists(backupPath))
+            {
+                System.Windows.MessageBox.Show("No valid backup path is saved yet.", "Restore Backup",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var running = SptUpdatePreflight.GetRunningSptProcessNames();
+            if (running.Length > 0)
+            {
+                System.Windows.MessageBox.Show(
+                    "Stop SPT-related processes before restoring:\n" + string.Join(", ", running),
+                    "Restore Backup",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            var confirm = System.Windows.MessageBox.Show(
+                $"This will replace your current SPT folder with the backup:\n{backupPath}\n\nContinue?",
+                "Restore Backup",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            _sptUpdateInProgress = true;
+            try
+            {
+                InvokeOnUi(() =>
                 {
-                    SptUpdateStatusPanel.Visibility = Visibility.Visible;
-                }
-                if (SptUpdateStatusText != null)
+                    if (SptUpdateStatusPanel != null)
+                    {
+                        SptUpdateStatusPanel.Visibility = Visibility.Visible;
+                    }
+
+                    if (SptUpdateProgressBar != null)
+                    {
+                        SptUpdateProgressBar.Visibility = Visibility.Visible;
+                        SptUpdateProgressBar.Value = 0;
+                    }
+
+                    if (SptUpdateProgressText != null)
+                    {
+                        SptUpdateProgressText.Visibility = Visibility.Visible;
+                        SptUpdateProgressText.Text = "Restoring backup...";
+                        SptUpdateProgressText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+                    }
+
+                    SetSptUpdateActionButtonsVisible(false, false);
+                    RefreshSptRecoveryPanel();
+                });
+
+                await SptUpdateService.Instance.RestoreBackupAsync(
+                    sptPath,
+                    backupPath,
+                    CreateStatusProgress(),
+                    CreatePercentProgress());
+
+                System.Windows.MessageBox.Show("Backup restored successfully.", "Restore Complete",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                UpdateSptVersionDisplay();
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Restore failed: {ex.Message}", "Restore Failed",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                _sptUpdateInProgress = false;
+                InvokeOnUi(() =>
                 {
-                    SptUpdateStatusText.Text = "Up to date";
-                    SptUpdateStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
-                }
-                if (UpdateNowButton != null)
+                    if (SptUpdateProgressBar != null)
+                    {
+                        SptUpdateProgressBar.Visibility = Visibility.Collapsed;
+                    }
+
+                    if (SptUpdateProgressText != null)
+                    {
+                        SptUpdateProgressText.Visibility = Visibility.Collapsed;
+                    }
+
+                    RefreshSptRecoveryPanel();
+                });
+            }
+        }
+
+        private void OpenSptFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            var sptPath = GetSptInstallPath();
+            if (string.IsNullOrWhiteSpace(sptPath) || !Directory.Exists(sptPath))
+            {
+                System.Windows.MessageBox.Show("SPT installation directory not found.", "Open Folder",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
                 {
-                    UpdateNowButton.Visibility = Visibility.Collapsed;
-                }
-            });
+                    FileName = sptPath,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show($"Failed to open folder: {ex.Message}", "Open Folder",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ReinstallSptButton_Click(object sender, RoutedEventArgs e)
+        {
+            InstallSptButton_Click(sender, e);
         }
 
         private void InvokeOnUi(Action action)

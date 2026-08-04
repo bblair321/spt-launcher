@@ -191,5 +191,11 @@ namespace SptLauncherWpf.Services
             get => GetValue("FikaIpAddress", "127.0.0.1");
             set => SetValue("FikaIpAddress", value);
         }
+
+        public string LastSptBackupPath
+        {
+            get => GetValue("LastSptBackupPath", "");
+            set => SetValue("LastSptBackupPath", value);
+        }
     }
 }

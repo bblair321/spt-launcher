@@ -54,14 +54,15 @@
                     </StackPanel>
                     
                     <!-- Theme Toggle Button -->
-                    <Button Name="ThemeToggleButton" Grid.Column="1" Width="40" Height="32" Background="Transparent" BorderThickness="0" 
-                            Click="ThemeToggleButton_Click" Cursor="Hand" Margin="0,0,8,0" ToolTip="Toggle Theme" VerticalAlignment="Center">
+                    <Button Name="ThemeToggleButton" Grid.Column="1" Height="32" Background="Transparent" BorderThickness="0" 
+                            Click="ThemeToggleButton_Click" Cursor="Hand" Margin="0,0,8,0" ToolTip="Toggle theme" VerticalAlignment="Center"
+                            Padding="10,0">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Button">
-                                            <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                            <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                         </ControlTemplate>
@@ -77,7 +78,8 @@
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
-                        <TextBlock Name="ThemeToggleIcon" Text="🌙" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <TextBlock Name="ThemeToggleIcon" Text="Dark" Foreground="White" FontSize="12" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Button>
                     
                     <!-- Modern Window Controls -->
@@ -172,20 +174,17 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="🔄" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center"/>
-                        <StackPanel>
-                            <TextBlock Name="UpdateNotificationText" 
-                                       Text="A new version is available!" 
-                                       Foreground="White" 
-                                       FontWeight="SemiBold" 
-                                       FontSize="14"/>
-                            <TextBlock Name="UpdateVersionText" 
-                                       Text="" 
-                                       Foreground="#E0E7FF" 
-                                       FontSize="12" 
-                                       Margin="0,2,0,0"/>
-                        </StackPanel>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Name="UpdateNotificationText" 
+                                   Text="A new version is available" 
+                                   Foreground="White" 
+                                   FontWeight="SemiBold" 
+                                   FontSize="14"/>
+                        <TextBlock Name="UpdateVersionText" 
+                                   Text="" 
+                                   Foreground="#E0E7FF" 
+                                   FontSize="12" 
+                                   Margin="0,2,0,0"/>
                     </StackPanel>
                     
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -249,8 +248,8 @@
                 </Grid>
             </Border>
 
-        <!-- Modern Tab Navigation -->
-        <Border Grid.Row="2" BorderThickness="0" Padding="16,8">
+        <!-- Tab Navigation -->
+        <Border Grid.Row="2" BorderThickness="0" Padding="16,6">
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                     <GradientStop Color="#3B82F6" Offset="0"/>
@@ -258,34 +257,29 @@
                     <GradientStop Color="#1E40AF" Offset="1"/>
                 </LinearGradientBrush>
             </Border.Background>
-            <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden">
-                <StackPanel Orientation="Horizontal" Margin="0,0">
-                    <Button Name="LauncherTabButton" Content="Launcher" Tag="launcher" 
-                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
-                            Style="{StaticResource TabButtonStyle}" Background="{DynamicResource PrimaryColor}" FontWeight="SemiBold"/>
-                    <Rectangle Width="1" Height="28" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
-                    <Button Name="ServersTabButton" Content="Servers" Tag="servers" 
-                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
-                            Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="28" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
-                    <Button Name="ModsTabButton" Content="Mods" Tag="mods" 
-                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
-                            Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="28" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
-                    <Button Name="SettingsTabButton" Content="Settings" Tag="settings" 
-                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
-                            Style="{StaticResource TabButtonStyle}"/>
-                    <Rectangle Width="1" Height="28" Fill="{DynamicResource PrimaryColor}" VerticalAlignment="Center" Margin="8,0"/>
-                    <Button Name="DevToolsTabButton" Content="Tools" Tag="devtools" 
-                            Click="TabButton_Click" Height="40" Padding="20,10" Margin="0,0,0,0"
-                            Style="{StaticResource TabButtonStyle}"/>
-                </StackPanel>
-            </ScrollViewer>
+            <StackPanel Orientation="Horizontal">
+                <Button Name="LauncherTabButton" Content="Launcher" Tag="launcher"
+                        Click="TabButton_Click" Height="36" Padding="16,8"
+                        Style="{StaticResource TabButtonStyle}" Background="{DynamicResource PrimaryColor}" FontWeight="SemiBold"/>
+                <Button Name="ServersTabButton" Content="Servers" Tag="servers"
+                        Click="TabButton_Click" Height="36" Padding="16,8"
+                        Style="{StaticResource TabButtonStyle}"/>
+                <Button Name="ModsTabButton" Content="Mods" Tag="mods"
+                        Click="TabButton_Click" Height="36" Padding="16,8"
+                        Style="{StaticResource TabButtonStyle}"
+                        Visibility="Collapsed"/>
+                <Button Name="SettingsTabButton" Content="Settings" Tag="settings"
+                        Click="TabButton_Click" Height="36" Padding="16,8"
+                        Style="{StaticResource TabButtonStyle}"/>
+                <Button Name="DevToolsTabButton" Content="Tools" Tag="devtools"
+                        Click="TabButton_Click" Height="36" Padding="16,8"
+                        Style="{StaticResource TabButtonStyle}"/>
+            </StackPanel>
         </Border>
 
-            <!-- Modern Content Area -->
+            <!-- Content Area -->
             <Grid Grid.Row="3" Background="{DynamicResource BackgroundColor}" Margin="0">
-                <Frame Name="ContentFrame" NavigationUIVisibility="Hidden" Background="{DynamicResource BackgroundColor}" Margin="24"/>
+                <Frame Name="ContentFrame" NavigationUIVisibility="Hidden" Background="{DynamicResource BackgroundColor}" Margin="28,20"/>
             </Grid>
         </Grid>
     </Border>

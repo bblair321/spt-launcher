@@ -91,13 +91,12 @@ namespace SptLauncherWpf
             try
             {
                 var currentTheme = ThemeService.Instance.CurrentTheme;
-                // Show opposite icon: if light mode, show moon (to switch to dark), if dark mode, show sun (to switch to light)
-                ThemeToggleIcon.Text = currentTheme == "light" ? "🌙" : "🌞";
+                // Label shows the theme you can switch TO.
+                ThemeToggleIcon.Text = currentTheme == "light" ? "Dark" : "Light";
             }
             catch
             {
-                // Fallback if update fails
-                ThemeToggleIcon.Text = "🌙";
+                ThemeToggleIcon.Text = "Dark";
             }
         }
         

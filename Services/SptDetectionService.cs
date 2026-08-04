@@ -15,6 +15,15 @@ namespace SptLauncherWpf.Services
         public bool IsUpdateAvailable { get; set; }
         public string? ReleaseUrl { get; set; }
         public string? InstallerDownloadUrl { get; set; }
+        /// <summary>
+        /// SPT client target after downgrade (e.g. 0.16.9.5.40743 from "Requires EFT").
+        /// </summary>
+        public string? RequiredEftVersion { get; set; }
+
+        /// <summary>
+        /// Live Tarkov version required as downgrader input (e.g. 1.0.6.5.46221 from Patcher_X_to_Y).
+        /// </summary>
+        public string? RequiredLiveEftVersion { get; set; }
     }
 
     public class FikaUpdateInfo
@@ -36,6 +45,9 @@ namespace SptLauncherWpf.Services
         
         [JsonPropertyName("html_url")]
         public string HtmlUrl { get; set; } = "";
+
+        [JsonPropertyName("body")]
+        public string Body { get; set; } = "";
         
         [JsonPropertyName("assets")]
         public List<SptGitHubAsset> Assets { get; set; } = new();
@@ -336,12 +348,19 @@ namespace SptLauncherWpf.Services
                     System.Diagnostics.Debug.WriteLine($"[SptDetectionService] Using official SPT installer URL: {installerUrl}");
                 }
 
+                var requiredTargetEftVersion = EftDetectionService.ParseTargetEftVersionFromReleaseBody(release.Body);
+                var requiredLiveEftVersion = EftDetectionService.ParseLiveEftVersionFromReleaseBody(release.Body);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SptDetectionService] EFT versions from release: live/source={requiredLiveEftVersion ?? "(unknown)"}, target={requiredTargetEftVersion ?? "(unknown)"}");
+
                 return new SptUpdateInfo
                 {
                     LatestVersion = latestVersion,
                     IsUpdateAvailable = isUpdateAvailable,
                     ReleaseUrl = release.HtmlUrl,
-                    InstallerDownloadUrl = installerUrl
+                    InstallerDownloadUrl = installerUrl,
+                    RequiredEftVersion = requiredTargetEftVersion,
+                    RequiredLiveEftVersion = requiredLiveEftVersion
                 };
             }
             catch (HttpRequestException)
@@ -352,6 +371,46 @@ namespace SptLauncherWpf.Services
             catch (Exception)
             {
                 // Other errors - return null
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Fetches the latest SPT release metadata, including required EFT version.
+        /// </summary>
+        public async Task<SptUpdateInfo?> GetLatestReleaseInfoAsync()
+        {
+            try
+            {
+                var response = await _httpClient!.GetStringAsync(SptReleasesApiUrl);
+                var release = JsonSerializer.Deserialize<SptGitHubRelease>(response, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = false
+                });
+
+                if (release == null || string.IsNullOrWhiteSpace(release.TagName))
+                {
+                    return null;
+                }
+
+                var latestVersion = release.TagName.TrimStart('v', 'V');
+                var installerUrl = TryGetInstallerUrlFromReleaseAssets(release.Assets)
+                                   ?? await GetInstallerUrlFromForgeAsync()
+                                   ?? SptInstallUrls.InstallerDownloadUrl;
+
+                return new SptUpdateInfo
+                {
+                    LatestVersion = latestVersion,
+                    IsUpdateAvailable = false,
+                    ReleaseUrl = release.HtmlUrl,
+                    InstallerDownloadUrl = installerUrl,
+                    RequiredEftVersion = EftDetectionService.ParseTargetEftVersionFromReleaseBody(release.Body),
+                    RequiredLiveEftVersion = EftDetectionService.ParseLiveEftVersionFromReleaseBody(release.Body)
+                };
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SptDetectionService] GetLatestReleaseInfoAsync failed: {ex.Message}");
                 return null;
             }
         }

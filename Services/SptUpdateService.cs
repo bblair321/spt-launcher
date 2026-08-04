@@ -4,10 +4,21 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SptLauncherWpf.Services
 {
+    public class SptDownloadInfo
+    {
+        public string Url { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public long? ContentLength { get; set; }
+        public string DisplaySize => ContentLength.HasValue
+            ? SptUpdatePreflight.FormatBytes(ContentLength.Value)
+            : "Unknown size";
+    }
+
     public class SptUpdateService
     {
         private static SptUpdateService? _instance;
@@ -15,6 +26,55 @@ namespace SptLauncherWpf.Services
 
         private SptUpdateService()
         {
+        }
+
+        public async Task<SptDownloadInfo> GetDownloadInfoAsync(string downloadUrl, CancellationToken cancellationToken = default)
+        {
+            var info = new SptDownloadInfo
+            {
+                Url = downloadUrl,
+                FileName = GetFileNameFromUrl(downloadUrl)
+            };
+
+            try
+            {
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                using var request = new HttpRequestMessage(HttpMethod.Head, downloadUrl);
+                using var response = await client.SendAsync(request, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    info.ContentLength = response.Content.Headers.ContentLength;
+                    var contentDisposition = response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+                    if (!string.IsNullOrWhiteSpace(contentDisposition))
+                    {
+                        info.FileName = contentDisposition;
+                    }
+                }
+            }
+            catch
+            {
+                // HEAD may be blocked; download will still work
+            }
+
+            if (string.IsNullOrWhiteSpace(info.FileName))
+            {
+                info.FileName = SptInstallUrls.InstallerFileName;
+            }
+
+            return info;
+        }
+
+        private static string GetFileNameFromUrl(string url)
+        {
+            try
+            {
+                var name = Path.GetFileName(new Uri(url).LocalPath);
+                return string.IsNullOrWhiteSpace(name) ? SptInstallUrls.InstallerFileName : name;
+            }
+            catch
+            {
+                return SptInstallUrls.InstallerFileName;
+            }
         }
 
         /// <summary>
@@ -170,43 +230,56 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
-        /// Downloads the installer from the specified URL with progress reporting
+        /// Downloads the installer from the specified URL with progress reporting.
+        /// Validates that the file is a real Windows PE before returning.
         /// </summary>
-        public async Task DownloadInstallerAsync(string downloadUrl, string targetPath, IProgress<double>? progress = null)
+        public async Task DownloadInstallerAsync(
+            string downloadUrl,
+            string targetPath,
+            IProgress<double>? progress = null,
+            CancellationToken cancellationToken = default)
         {
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromMinutes(10);
 
-            using var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await client.GetAsync(
+                downloadUrl,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
             response.EnsureSuccessStatusCode();
 
             var totalBytes = response.Content.Headers.ContentLength ?? 0;
             var downloadedBytes = 0L;
 
-            // Ensure target directory exists
             var targetDir = Path.GetDirectoryName(targetPath);
             if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
             {
                 Directory.CreateDirectory(targetDir);
             }
 
-            using (var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None))
-            using (var contentStream = await response.Content.ReadAsStreamAsync())
+            try
             {
+                await using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                await using var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+
                 var buffer = new byte[8192];
                 int bytesRead;
 
-                while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                while ((bytesRead = await contentStream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
                 {
-                    await fileStream.WriteAsync(buffer, 0, bytesRead);
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken);
                     downloadedBytes += bytesRead;
 
                     if (totalBytes > 0 && progress != null)
                     {
-                        var percent = (double)downloadedBytes / totalBytes * 100;
-                        progress.Report(percent);
+                        progress.Report((double)downloadedBytes / totalBytes * 100);
                     }
                 }
+            }
+            catch
+            {
+                TryDeleteFile(targetPath);
+                throw;
             }
 
             if (!IsValidWindowsExecutable(targetPath))
@@ -217,7 +290,7 @@ namespace SptLauncherWpf.Services
             }
         }
 
-        private static bool IsValidWindowsExecutable(string path)
+        public static bool IsValidWindowsExecutable(string path)
         {
             if (!File.Exists(path))
             {
@@ -255,6 +328,73 @@ namespace SptLauncherWpf.Services
             {
                 // Best effort cleanup only
             }
+        }
+
+        /// <summary>
+        /// Launches a validated installer without wiping the SPT folder.
+        /// </summary>
+        public async Task LaunchInstallerOnlyAsync(string installerPath, string? workingDirectory = null)
+        {
+            if (!File.Exists(installerPath))
+            {
+                throw new FileNotFoundException($"Installer not found: {installerPath}");
+            }
+
+            if (!IsValidWindowsExecutable(installerPath))
+            {
+                throw new InvalidDataException("Installer file is not a valid Windows executable.");
+            }
+
+            var processInfo = new ProcessStartInfo
+            {
+                FileName = installerPath,
+                WorkingDirectory = workingDirectory ?? Path.GetDirectoryName(installerPath) ?? string.Empty,
+                UseShellExecute = true,
+                CreateNoWindow = false
+            };
+
+            var process = Process.Start(processInfo);
+            if (process == null)
+            {
+                throw new Exception("Failed to start installer process");
+            }
+
+            await Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Restores an SPT folder from a previously created backup directory.
+        /// </summary>
+        public async Task RestoreBackupAsync(
+            string sptPath,
+            string backupPath,
+            IProgress<string>? statusProgress = null,
+            IProgress<double>? progressProgress = null)
+        {
+            if (!Directory.Exists(backupPath))
+            {
+                throw new DirectoryNotFoundException($"Backup folder not found: {backupPath}");
+            }
+
+            if (string.IsNullOrWhiteSpace(sptPath))
+            {
+                throw new ArgumentException("SPT path is required.", nameof(sptPath));
+            }
+
+            statusProgress?.Report("Stopping check: ensuring SPT folder is ready...");
+            if (!Directory.Exists(sptPath))
+            {
+                Directory.CreateDirectory(sptPath);
+            }
+
+            statusProgress?.Report("Cleaning current SPT folder...");
+            await CleanSptFolderAsync(sptPath);
+
+            statusProgress?.Report("Restoring backup...");
+            await BackupSptFolderAsync(backupPath, sptPath, progressProgress);
+
+            statusProgress?.Report("Restore completed successfully!");
+            progressProgress?.Report(100);
         }
 
         /// <summary>
@@ -461,7 +601,8 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
-        /// Main orchestration method for updating SPT
+        /// Applies a validated installer to SPT. Caller must download+validate the installer first.
+        /// Never wipes the SPT folder unless the installer file is already a valid PE.
         /// </summary>
         public async Task UpdateSptAsync(
             string sptPath,
@@ -473,18 +614,26 @@ namespace SptLauncherWpf.Services
         {
             try
             {
-                // Step 1: Backup if requested
+                if (!IsValidWindowsExecutable(installerPath))
+                {
+                    throw new InvalidDataException(
+                        "Refusing to update: installer is missing or not a valid Windows executable.");
+                }
+
+                // Step 1: Backup if requested (before any destructive work)
                 if (createBackup && !string.IsNullOrEmpty(backupPath))
                 {
                     statusProgress?.Report("Backing up SPT folder...");
                     System.Diagnostics.Debug.WriteLine($"[UpdateSptAsync] Starting backup from {sptPath} to {backupPath}");
                     await BackupSptFolderAsync(sptPath, backupPath, progressProgress);
                     System.Diagnostics.Debug.WriteLine($"[UpdateSptAsync] Backup completed successfully");
+                    SettingsService.Instance.LastSptBackupPath = backupPath;
+                    SettingsService.Instance.SaveSettings();
                     statusProgress?.Report("Backup completed.");
                     progressProgress?.Report(0);
                 }
 
-                // Step 2: Clean SPT folder
+                // Step 2: Clean SPT folder only after installer validation
                 statusProgress?.Report("Cleaning SPT folder...");
                 progressProgress?.Report(0);
                 await CleanSptFolderAsync(sptPath);
@@ -501,7 +650,7 @@ namespace SptLauncherWpf.Services
                 statusProgress?.Report("Installing SPT...");
                 progressProgress?.Report(75);
                 await RunInstallerAsync(installerInSptPath, sptPath);
-                
+
                 // Step 5: Check if installer created a subdirectory and move contents up
                 statusProgress?.Report("Finalizing installation...");
                 progressProgress?.Report(85);
@@ -509,17 +658,7 @@ namespace SptLauncherWpf.Services
                 progressProgress?.Report(95);
 
                 // Step 6: Clean up installer file
-                try
-                {
-                    if (File.Exists(installerInSptPath))
-                    {
-                        File.Delete(installerInSptPath);
-                    }
-                }
-                catch
-                {
-                    // Ignore cleanup errors
-                }
+                TryDeleteFile(installerInSptPath);
 
                 progressProgress?.Report(100);
                 statusProgress?.Report("Update completed successfully!");
