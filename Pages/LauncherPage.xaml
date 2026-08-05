@@ -334,11 +334,34 @@
                             </CheckBox>
 
                             <StackPanel Name="FikaIpEditorPanel" Margin="0,10,0,0" Visibility="Collapsed">
-                                <TextBlock Text="Fika IP address"
+                                <TextBlock Text="Fika connection"
                                            FontWeight="Medium"
                                            Foreground="{DynamicResource TextPrimaryColor}"
-                                           Margin="0,0,0,6"
+                                           Margin="0,0,0,4"
                                            FontSize="13"/>
+                                <TextBlock Text="Host on this PC uses 127.0.0.1. Join a friend by pasting their IP, then Save."
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,8"/>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <Button Name="FikaHostLocallyButton"
+                                            Content="Host on this PC"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Click="FikaHostLocallyButton_Click"
+                                            Margin="0,0,8,0"/>
+                                    <Button Name="FikaJoinFriendButton"
+                                            Content="Join a friend"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Click="FikaJoinFriendButton_Click"
+                                            Margin="0,0,8,0"/>
+                                    <Button Name="FikaPasteIpButton"
+                                            Content="Paste IP"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Click="FikaPasteIpButton_Click"/>
+                                </StackPanel>
+
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -355,6 +378,12 @@
                                             Margin="8,0,0,0"
                                             Click="SaveFikaIpButton_Click"/>
                                 </Grid>
+                                <TextBlock Name="FikaIpStatusText"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           Margin="0,8,0,0"
+                                           TextWrapping="Wrap"
+                                           Text=""/>
                             </StackPanel>
                         </StackPanel>
                         </StackPanel>

@@ -107,6 +107,9 @@ namespace SptLauncherWpf.Pages
         // Compact readiness: user can pin details closed while something still needs attention
         private bool _readinessUserCollapsed;
 
+        // Avoid recursive saves when Host/Join helpers enable Fika + write IP together
+        private bool _suppressFikaCheckBoxHandler;
+
         public LauncherPage()
         {
             try
@@ -5169,6 +5172,11 @@ namespace SptLauncherWpf.Pages
         {
             try
             {
+                if (_suppressFikaCheckBoxHandler)
+                {
+                    return;
+                }
+
                 var checkBox = sender as System.Windows.Controls.CheckBox;
                 if (checkBox == null) return;
                 
@@ -5289,7 +5297,8 @@ namespace SptLauncherWpf.Pages
                                     System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] Verification - IsDevMode: {savedConfig.IsDevMode}, Server.Url: {actualUrl}");
                                     
                                     // Show success message with details
-                                    ShowToastNotification($"Fika Co-op enabled with IP: {ipToUse}");
+                                    ShowToastNotification($"Fika enabled — connecting to {ipToUse}");
+                                    SetFikaIpStatus($"Fika enabled — SPT will use https://{ipToUse}:6969");
                                     
                                     // Also show a detailed message in debug
                                     System.Diagnostics.Debug.WriteLine($"[EnableFikaCheckBox_Changed] SUCCESS - Config saved to: {configPath}");
@@ -5340,135 +5349,202 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        private void FikaHostLocallyButton_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyFikaIpAddress(_defaultIp, userInitiated: true, modeHint: "host");
+        }
+
+        private void FikaJoinFriendButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (FikaIpEditorPanel != null)
+            {
+                FikaIpEditorPanel.Visibility = Visibility.Visible;
+            }
+
+            if (FikaIpTextBox != null)
+            {
+                // Clear localhost so it's obvious they need a remote IP.
+                if (string.Equals(FikaIpTextBox.Text?.Trim(), _defaultIp, StringComparison.OrdinalIgnoreCase))
+                {
+                    FikaIpTextBox.Text = string.Empty;
+                }
+
+                FikaIpTextBox.Focus();
+                FikaIpTextBox.SelectAll();
+            }
+
+            SetFikaIpStatus("Paste your friend's IP (or type it), then click Save.");
+        }
+
+        private void FikaPasteIpButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (!System.Windows.Clipboard.ContainsText())
+                {
+                    SetFikaIpStatus("Clipboard is empty — copy an IP first.");
+                    return;
+                }
+
+                var raw = System.Windows.Clipboard.GetText()?.Trim() ?? string.Empty;
+                // Allow pasted "https://ip:6969" or "ip:6969"
+                if (Uri.TryCreate(raw, UriKind.Absolute, out var uri) &&
+                    !string.IsNullOrWhiteSpace(uri.Host))
+                {
+                    raw = uri.Host;
+                }
+                else
+                {
+                    var colon = raw.IndexOf(':');
+                    if (colon > 0 && System.Net.IPAddress.TryParse(raw.Substring(0, colon), out _))
+                    {
+                        raw = raw.Substring(0, colon);
+                    }
+                }
+
+                if (!System.Net.IPAddress.TryParse(raw, out _))
+                {
+                    SetFikaIpStatus("Clipboard doesn't look like an IP address.");
+                    return;
+                }
+
+                if (FikaIpTextBox != null)
+                {
+                    FikaIpTextBox.Text = raw;
+                    FikaIpTextBox.Focus();
+                    FikaIpTextBox.SelectAll();
+                }
+
+                SetFikaIpStatus($"Pasted {raw}. Click Save to write it to SPT's launcher config.");
+            }
+            catch (Exception ex)
+            {
+                SetFikaIpStatus($"Couldn't read clipboard: {ex.Message}");
+            }
+        }
+
+        private void SetFikaIpStatus(string message)
+        {
+            if (FikaIpStatusText == null)
+            {
+                return;
+            }
+
+            FikaIpStatusText.Text = message ?? string.Empty;
+            FikaIpStatusText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
+        }
+
+        private bool ApplyFikaIpAddress(string ipAddress, bool userInitiated, string? modeHint = null)
+        {
+            ipAddress = (ipAddress ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(ipAddress))
+            {
+                System.Windows.MessageBox.Show("Please enter an IP address.", "Invalid Input",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            if (!System.Net.IPAddress.TryParse(ipAddress, out _))
+            {
+                System.Windows.MessageBox.Show("Invalid IP address format. Please enter a valid IP address.",
+                    "Invalid IP", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            if (FikaIpTextBox != null)
+            {
+                FikaIpTextBox.Text = ipAddress;
+            }
+
+            SettingsService.Instance.FikaIpAddress = ipAddress;
+            SettingsService.Instance.SaveSettings();
+
+            if (!_fikaEnabled)
+            {
+                _suppressFikaCheckBoxHandler = true;
+                try
+                {
+                    _fikaEnabled = true;
+                    SettingsService.Instance.FikaEnabled = true;
+                    SettingsService.Instance.SaveSettings();
+                    if (EnableFikaCheckBox != null)
+                    {
+                        EnableFikaCheckBox.IsChecked = true;
+                    }
+
+                    if (FikaIpEditorPanel != null)
+                    {
+                        FikaIpEditorPanel.Visibility = Visibility.Visible;
+                    }
+                }
+                finally
+                {
+                    _suppressFikaCheckBoxHandler = false;
+                }
+            }
+
+            var configPath = GetLauncherConfigJsonPath();
+            var saved = SaveLauncherConfig(true, ipAddress);
+            if (!saved)
+            {
+                SetFikaIpStatus($"Couldn't write SPT config for {ipAddress}. Check the launcher path under setup.");
+                if (userInitiated)
+                {
+                    System.Windows.MessageBox.Show(
+                        $"Failed to save Fika IP to SPT's launcher config.\n\n" +
+                        $"IP: {ipAddress}\n" +
+                        $"Config: {configPath}\n\n" +
+                        "Confirm your SPT.Launcher.exe path and that the config isn't locked.",
+                        "Configuration Warning",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+
+                return false;
+            }
+
+            var expectedUrl = $"https://{ipAddress}:6969";
+            var savedConfig = LoadLauncherConfig();
+            var actualUrl = savedConfig?.Server?.Url;
+            if (!string.Equals(actualUrl, expectedUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                SetFikaIpStatus($"Saved settings, but config URL is {actualUrl ?? "missing"} (expected {expectedUrl}).");
+                return false;
+            }
+
+            var modeLabel = modeHint switch
+            {
+                "host" => "Hosting on this PC",
+                "join" => "Joining friend",
+                _ => string.Equals(ipAddress, _defaultIp, StringComparison.OrdinalIgnoreCase)
+                    ? "Hosting on this PC"
+                    : "Joining remote server"
+            };
+
+            var message = $"{modeLabel}: saved {ipAddress} → {expectedUrl}";
+            SetFikaIpStatus(message);
+            if (userInitiated)
+            {
+                ShowToastNotification(message);
+            }
+
+            return true;
+        }
+
         private void SaveFikaIpButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                var ipAddress = FikaIpTextBox.Text.Trim();
-                
-                if (string.IsNullOrEmpty(ipAddress))
-                {
-                    System.Windows.MessageBox.Show("Please enter an IP address.", "Invalid Input", 
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-                }
-                
-                // Validate IP address format
-                if (!System.Net.IPAddress.TryParse(ipAddress, out _))
-                {
-                    System.Windows.MessageBox.Show("Invalid IP address format. Please enter a valid IP address.", 
-                        "Invalid IP", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-                
-                // Always save to settings first (as backup)
-                SettingsService.Instance.FikaIpAddress = ipAddress;
-                SettingsService.Instance.SaveSettings();
-                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Saved IP to settings: {ipAddress}");
-                
-                // Save to config.json with dev mode enabled and IP address
-                // When dev mode is true, the URL in config.json will be updated with the user's IP
-                var configPath = GetLauncherConfigJsonPath();
-                var sptPath = GetSptInstallPath();
-                
-                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] SPT Path: {sptPath}");
-                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Config Path: {configPath}");
-                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Fika Enabled: {_fikaEnabled}");
-                System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] IP to save: {ipAddress}");
-                
-                if (_fikaEnabled)
-                {
-                    bool configJsonSaved = SaveLauncherConfig(true, ipAddress);
-                    System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] SaveLauncherConfig returned: {configJsonSaved}");
-                    
-                    if (!configJsonSaved)
-                    {
-                        System.Windows.MessageBox.Show(
-                            $"Failed to save IP address to config.json.\n\n" +
-                            $"SPT Path: {sptPath}\n" +
-                            $"Config path: {configPath}\n" +
-                            $"IP Address: {ipAddress}\n\n" +
-                            $"IP was saved to settings, but config.json could not be updated.\n" +
-                            $"Please ensure:\n" +
-                            $"1. Fika Co-op is enabled\n" +
-                            $"2. The SPT launcher path is correct\n" +
-                            $"3. You have write permissions\n" +
-                            $"4. Check the Debug output for more details",
-                            "Configuration Warning",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Warning);
-                        return;
-                    }
-                    
-                    // Verify the save
-                    if (File.Exists(configPath))
-                    {
-                        var savedConfig = LoadLauncherConfig();
-                        if (savedConfig != null)
-                        {
-                            var actualUrl = savedConfig.Server?.Url ?? "null";
-                            System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Verification - IsDevMode: {savedConfig.IsDevMode}, Server.Url: {actualUrl}");
-                            
-                            var expectedUrl = $"https://{ipAddress}:6969";
-                            if (actualUrl != expectedUrl)
-                            {
-                                System.Windows.MessageBox.Show(
-                                    $"Warning: IP address may not have been saved correctly.\n\n" +
-                                    $"Expected URL: {expectedUrl}\n" +
-                                    $"Actual URL: {actualUrl}\n\n" +
-                                    $"Please check the config.json file manually at:\n{configPath}",
-                                    "Verification Warning",
-                                    MessageBoxButton.OK,
-                                    MessageBoxImage.Warning);
-                            }
-                            else
-                            {
-                                // Show toast notification
-                                ShowToastNotification($"IP address saved: {ipAddress}");
-                            }
-                        }
-                        else
-                        {
-                            System.Windows.MessageBox.Show(
-                                $"Warning: Config file exists but could not be read.\n\n" +
-                                $"Path: {configPath}\n\n" +
-                                $"Please check the file manually.",
-                                "Verification Warning",
-                                MessageBoxButton.OK,
-                                MessageBoxImage.Warning);
-                        }
-                    }
-                    else
-                    {
-                        System.Windows.MessageBox.Show(
-                            $"Warning: SaveLauncherConfig returned true, but config file was not found.\n\n" +
-                            $"Expected path: {configPath}\n\n" +
-                            $"Please check the Debug output for more details.",
-                            "File Not Found",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Warning);
-                    }
-                }
-                else
-                {
-                    // If Fika is not enabled, enable it first
-                    if (EnableFikaCheckBox != null)
-                    {
-                        EnableFikaCheckBox.IsChecked = true;
-                        // The checkbox change handler will save the config with the IP
-                        System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Fika was not enabled, enabling it now (checkbox handler will save config)");
-                        ShowToastNotification($"IP address saved: {ipAddress}");
-                    }
-                    else
-                    {
-                        ShowToastNotification("IP was applied");
-                    }
-                }
+                var ipAddress = FikaIpTextBox?.Text?.Trim() ?? string.Empty;
+                var hint = string.Equals(ipAddress, _defaultIp, StringComparison.OrdinalIgnoreCase)
+                    ? "host"
+                    : "join";
+                ApplyFikaIpAddress(ipAddress, userInitiated: true, modeHint: hint);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[SaveFikaIpButton] Error: {ex.Message}\n{ex.StackTrace}");
-                System.Windows.MessageBox.Show($"Error saving IP address: {ex.Message}", "Error", 
+                System.Windows.MessageBox.Show($"Error saving IP address: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
