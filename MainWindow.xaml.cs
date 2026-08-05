@@ -65,6 +65,7 @@ namespace SptLauncherWpf
                 
                 // Update icon to reflect current theme
                 UpdateThemeIcon();
+                RefreshChromeTabStyles();
                 
                 // Extend window frame into client area to eliminate white border
                 Loaded += MainWindow_Loaded;
@@ -86,6 +87,7 @@ namespace SptLauncherWpf
             Dispatcher.Invoke(() =>
             {
                 UpdateThemeIcon();
+                RefreshChromeTabStyles();
             });
         }
         
@@ -160,12 +162,19 @@ namespace SptLauncherWpf
         {
             button.Background = System.Windows.Media.Brushes.Transparent;
             button.BorderThickness = new Thickness(0);
-            button.Padding = new Thickness(20, 12, 20, 12);
-            button.Margin = new Thickness(0, 0, 2, 0);
             button.Cursor = System.Windows.Input.Cursors.Hand;
-            button.FontSize = 14.0;
-            button.FontWeight = FontWeights.Normal;
-            button.Foreground = System.Windows.Media.Brushes.White; // White text for better visibility on blue background
+            button.FontSize = 13.0;
+            button.FontWeight = FontWeights.SemiBold;
+            button.Foreground = (System.Windows.Media.Brush)FindResource("ChromeMutedTextColor");
+        }
+
+        private void RefreshChromeTabStyles()
+        {
+            UpdateTabButtonStyle(LauncherTabButton, _currentTab == "launcher");
+            UpdateTabButtonStyle(ServersTabButton, _currentTab == "servers");
+            UpdateTabButtonStyle(ModsTabButton, _currentTab == "mods");
+            UpdateTabButtonStyle(SettingsTabButton, _currentTab == "settings");
+            UpdateTabButtonStyle(DevToolsTabButton, _currentTab == "devtools");
         }
 
         private void SetActiveTab(string tabId)
@@ -175,11 +184,7 @@ namespace SptLauncherWpf
                 _currentTab = tabId;
                 
                 // Update button styles
-                UpdateTabButtonStyle(LauncherTabButton, tabId == "launcher");
-                UpdateTabButtonStyle(ServersTabButton, tabId == "servers");
-                UpdateTabButtonStyle(ModsTabButton, tabId == "mods");
-                UpdateTabButtonStyle(SettingsTabButton, tabId == "settings");
-                UpdateTabButtonStyle(DevToolsTabButton, tabId == "devtools");
+                RefreshChromeTabStyles();
 
                 // Navigate to appropriate page
                 switch (tabId)
@@ -212,16 +217,40 @@ namespace SptLauncherWpf
         {
             if (isActive)
             {
-                button.Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 130, 246)); // #3B82F6 - brighter blue
+                button.Background = (System.Windows.Media.Brush)FindResource("HoverColor");
+                button.Foreground = (System.Windows.Media.Brush)FindResource("ChromeTextColor");
                 button.FontWeight = FontWeights.SemiBold;
                 button.Opacity = 1.0;
             }
             else
             {
                 button.Background = System.Windows.Media.Brushes.Transparent;
-                button.FontWeight = FontWeights.Normal;
-                button.Opacity = 0.9;
+                button.Foreground = (System.Windows.Media.Brush)FindResource("ChromeMutedTextColor");
+                button.FontWeight = FontWeights.SemiBold;
+                button.Opacity = 1.0;
             }
+        }
+
+        private void ApplyStatusBannerKind(bool? success)
+        {
+            var accent = success switch
+            {
+                true => (System.Windows.Media.Brush)FindResource("StatusSuccessColor"),
+                false => (System.Windows.Media.Brush)FindResource("StatusWarningColor"),
+                _ => (System.Windows.Media.Brush)FindResource("StatusInfoColor")
+            };
+
+            if (UpdateBannerAccent != null)
+            {
+                UpdateBannerAccent.Background = accent;
+            }
+
+            UpdateNotificationBanner.SetResourceReference(
+                System.Windows.Controls.Border.BackgroundProperty,
+                "HoverColor");
+            UpdateNotificationBanner.SetResourceReference(
+                System.Windows.Controls.Border.BorderBrushProperty,
+                "BorderColor");
         }
 
         private void TabButton_Click(object sender, RoutedEventArgs e)
@@ -337,10 +366,7 @@ namespace SptLauncherWpf
             UpdateNotificationText.Text = title;
             UpdateVersionText.Text = detail;
             UpdateDownloadButton.Visibility = Visibility.Collapsed;
-            UpdateNotificationBanner.Background = new System.Windows.Media.SolidColorBrush(
-                success
-                    ? System.Windows.Media.Color.FromRgb(5, 150, 105)   // green
-                    : System.Windows.Media.Color.FromRgb(180, 83, 9));  // amber
+            ApplyStatusBannerKind(success);
             UpdateNotificationBanner.Visibility = Visibility.Visible;
 
             _updateBannerAutoHideTimer?.Stop();
@@ -369,9 +395,7 @@ namespace SptLauncherWpf
             UpdateDownloadButton.Visibility = Visibility.Visible;
             UpdateDownloadButton.IsEnabled = true;
             UpdateDownloadButton.Content = "Download";
-            UpdateNotificationBanner.SetResourceReference(
-                System.Windows.Controls.Border.BackgroundProperty,
-                "PrimaryColor");
+            ApplyStatusBannerKind(null);
         }
 
         private void OnUpdateAvailable(object? sender, UpdateInfo updateInfo)
@@ -385,8 +409,8 @@ namespace SptLauncherWpf
 
                 _availableUpdate = updateInfo;
                 ResetUpdateBannerChrome();
-                UpdateNotificationText.Text = $"A new version is available!";
-                UpdateVersionText.Text = $"Version {updateInfo.Version} - Click Download to update";
+                UpdateNotificationText.Text = "A new version is available";
+                UpdateVersionText.Text = $"Version {updateInfo.Version} — click Download to update";
                 UpdateNotificationBanner.Visibility = Visibility.Visible;
             });
         }

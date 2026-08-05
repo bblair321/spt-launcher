@@ -178,8 +178,17 @@
 
                 <StackPanel Name="MainLauncherContent">
                 <!-- Play hero + compact readiness -->
-                <Border Style="{StaticResource ModernCardStyle}" Padding="24,20" Margin="0,0,0,12">
-                    <StackPanel>
+                <Border Name="PlayHeroCard" Style="{StaticResource ModernCardStyle}" Padding="0" Margin="0,0,0,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="5"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Name="PlayHeroAccent"
+                                Grid.Column="0"
+                                Background="{DynamicResource StatusInfoColor}"
+                                CornerRadius="16,0,0,16"/>
+                        <StackPanel Grid.Column="1" Margin="20,20,24,20">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -348,7 +357,8 @@
                                 </Grid>
                             </StackPanel>
                         </StackPanel>
-                    </StackPanel>
+                        </StackPanel>
+                    </Grid>
                 </Border>
 
                 <!-- Readiness details (collapsed when everything looks good) -->
@@ -422,44 +432,52 @@
 
                         <!-- Live Tarkov newer than SPT patcher -->
                         <Border Name="EftPatcherGuidancePanel"
-                                Background="{DynamicResource HoverColor}"
-                                CornerRadius="8"
-                                Padding="14,12"
+                                Style="{StaticResource StatusMessageStyle}"
                                 Margin="0,0,0,12"
                                 Visibility="Collapsed">
-                            <StackPanel>
-                                <TextBlock Text="No downgrade patcher found for your live Tarkov yet"
-                                           FontSize="13"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextPrimaryColor}"
-                                           Margin="0,0,0,6"/>
-                                <TextBlock Name="EftPatcherGuidanceText"
-                                           FontSize="12"
-                                           Foreground="{DynamicResource TextSecondaryColor}"
-                                           TextWrapping="Wrap"
-                                           Margin="0,0,0,10"/>
-                                <TextBlock FontSize="12"
-                                           Foreground="{DynamicResource TextSecondaryColor}"
-                                           TextWrapping="Wrap"
-                                           Margin="0,0,0,10"
-                                           Text="SPT needs a patcher from your live Tarkov version down to the SPT client version. New EFT updates usually get a patcher within a day or two.&#10;&#10;What you can do:&#10;1. Wait for the SPT team to publish a patcher for your version, then Recheck.&#10;2. Keep live Tarkov updated — the official SPT installer uses the newest matching patcher when it’s available.&#10;3. Check SPT Releases for installer/patcher notes."/>
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Name="OpenSptReleasesButton"
-                                            Content="Open SPT Releases"
-                                            Style="{StaticResource QuietButtonStyle}"
-                                            Click="OpenSptReleasesButton_Click"
-                                            Margin="0,0,8,0"/>
-                                    <Button Name="OpenBsgForPatcherButton"
-                                            Content="Open BSG Launcher"
-                                            Style="{StaticResource QuietButtonStyle}"
-                                            Click="UpdateTarkovButton_Click"
-                                            Margin="0,0,8,0"/>
-                                    <Button Name="RecheckPatcherButton"
-                                            Content="Recheck"
-                                            Style="{StaticResource QuietButtonStyle}"
-                                            Click="RefreshEftStatusButton_Click"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Background="{DynamicResource StatusWarningColor}"
+                                        CornerRadius="2"
+                                        Margin="0,0,12,0"/>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="No downgrade patcher found for your live Tarkov yet"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextPrimaryColor}"
+                                               Margin="0,0,0,6"/>
+                                    <TextBlock Name="EftPatcherGuidanceText"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,10"/>
+                                    <TextBlock FontSize="12"
+                                               Foreground="{DynamicResource TextSecondaryColor}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,10"
+                                               Text="SPT needs a patcher from your live Tarkov version down to the SPT client version. New EFT updates usually get a patcher within a day or two.&#10;&#10;What you can do:&#10;1. Wait for the SPT team to publish a patcher for your version, then Recheck.&#10;2. Keep live Tarkov updated — the official SPT installer uses the newest matching patcher when it’s available.&#10;3. Check SPT Releases for installer/patcher notes."/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Name="OpenSptReleasesButton"
+                                                Content="Open SPT Releases"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Click="OpenSptReleasesButton_Click"
+                                                Margin="0,0,8,0"/>
+                                        <Button Name="OpenBsgForPatcherButton"
+                                                Content="Open BSG Launcher"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Click="UpdateTarkovButton_Click"
+                                                Margin="0,0,8,0"/>
+                                        <Button Name="RecheckPatcherButton"
+                                                Content="Recheck"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Click="RefreshEftStatusButton_Click"/>
+                                    </StackPanel>
                                 </StackPanel>
-                            </StackPanel>
+                            </Grid>
                         </Border>
 
                         <!-- Fika row -->
@@ -523,20 +541,21 @@
 
                         <!-- Post-update / install verification -->
                         <Border Name="UpdateVerifyPanel"
-                                Background="{DynamicResource HoverColor}"
-                                CornerRadius="8"
-                                Padding="14,12"
+                                Style="{StaticResource StatusMessageStyle}"
                                 Margin="0,14,0,0"
                                 Visibility="Collapsed">
-                            <DockPanel LastChildFill="True">
-                                <Button Name="UpdateVerifyDismissButton"
-                                        Content="Dismiss"
-                                        Style="{StaticResource QuietButtonStyle}"
-                                        Click="UpdateVerifyDismissButton_Click"
-                                        DockPanel.Dock="Right"
-                                        Margin="12,0,0,0"
-                                        VerticalAlignment="Top"/>
-                                <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Name="UpdateVerifyAccent"
+                                        Grid.Column="0"
+                                        Background="{DynamicResource StatusInfoColor}"
+                                        CornerRadius="2"
+                                        Margin="0,0,12,0"/>
+                                <StackPanel Grid.Column="1">
                                     <TextBlock Name="UpdateVerifyTitleText"
                                                FontSize="13"
                                                FontWeight="SemiBold"
@@ -547,7 +566,14 @@
                                                Foreground="{DynamicResource TextSecondaryColor}"
                                                TextWrapping="Wrap"/>
                                 </StackPanel>
-                            </DockPanel>
+                                <Button Name="UpdateVerifyDismissButton"
+                                        Grid.Column="2"
+                                        Content="Dismiss"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="UpdateVerifyDismissButton_Click"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Top"/>
+                            </Grid>
                         </Border>
 
                         <!-- Hidden panel kept for Fika update visibility toggles -->
@@ -593,17 +619,7 @@
                                        Margin="0,0,0,0"
                                        TextWrapping="Wrap"/>
 
-                            <TextBlock Text="Recovery"
-                                       FontSize="13"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimaryColor}"
-                                       Margin="0,16,0,8"/>
-                            <StackPanel Name="SptRecoveryPanel" Orientation="Horizontal">
-                                <Button Name="RestoreBackupButton"
-                                        Content="Restore Backup"
-                                        Style="{StaticResource QuietButtonStyle}"
-                                        Click="RestoreBackupButton_Click"
-                                        Margin="0,0,8,0"/>
+                            <StackPanel Name="SptFolderActionsPanel" Orientation="Horizontal" Margin="0,16,0,0">
                                 <Button Name="OpenSptFolderButton"
                                         Content="Open SPT Folder"
                                         Style="{StaticResource QuietButtonStyle}"
@@ -614,12 +630,26 @@
                                         Style="{StaticResource QuietButtonStyle}"
                                         Click="ReinstallSptButton_Click"/>
                             </StackPanel>
-                            <TextBlock Name="LastBackupPathText"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource TextSecondaryColor}"
-                                       Margin="0,8,0,0"
-                                       TextWrapping="Wrap"
-                                       Visibility="Collapsed"/>
+
+                            <!-- Shown only when a backup path exists -->
+                            <StackPanel Name="SptRecoveryPanel" Margin="0,16,0,0" Visibility="Collapsed">
+                                <TextBlock Text="Recovery"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryColor}"
+                                           Margin="0,0,0,8"/>
+                                <Button Name="RestoreBackupButton"
+                                        Content="Restore Backup"
+                                        Style="{StaticResource QuietButtonStyle}"
+                                        Click="RestoreBackupButton_Click"
+                                        HorizontalAlignment="Left"/>
+                                <TextBlock Name="LastBackupPathText"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           Margin="0,8,0,0"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed"/>
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
                 </Border>

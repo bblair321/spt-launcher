@@ -1351,6 +1351,14 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        private enum PlayHeroState
+        {
+            Idle,
+            Ready,
+            Running,
+            Attention
+        }
+
         private void RefreshPlayHero(bool? launcherRunning = null, bool? anySptRunning = null)
         {
             if (PlayStatusHeadline == null || PlayStatusDetail == null)
@@ -1366,20 +1374,25 @@ namespace SptLauncherWpf.Pages
                                && File.Exists(path)
                                && path.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
 
+            var heroState = PlayHeroState.Idle;
+
             if (isLauncherRunning)
             {
                 PlayStatusHeadline.Text = "SPT is running";
                 PlayStatusDetail.Text = "Use Stop when you want to shut down the launcher and related processes.";
+                heroState = PlayHeroState.Running;
             }
             else if (isAnySptRunning)
             {
                 PlayStatusHeadline.Text = "SPT processes detected";
                 PlayStatusDetail.Text = "You can launch again, or Stop to close running SPT/Tarkov processes.";
+                heroState = PlayHeroState.Running;
             }
             else if (!hasValidPath)
             {
                 PlayStatusHeadline.Text = "Set your SPT launcher path to begin";
                 PlayStatusDetail.Text = "Browse to SPT.Launcher.exe below, then Launch when ready.";
+                heroState = PlayHeroState.Attention;
             }
             else
             {
@@ -1390,15 +1403,60 @@ namespace SptLauncherWpf.Pages
                 {
                     PlayStatusHeadline.Text = "SPT not detected";
                     PlayStatusDetail.Text = "Install SPT or point the path at a valid SPT launcher.";
+                    heroState = PlayHeroState.Attention;
                 }
                 else
                 {
                     PlayStatusHeadline.Text = "Ready to launch";
                     PlayStatusDetail.Text = "Your SPT launcher path looks good. Launch when you're ready.";
+                    heroState = PlayHeroState.Ready;
                 }
             }
 
+            // Attention from readiness (updates/patcher) takes priority over plain Ready.
+            if (heroState == PlayHeroState.Ready &&
+                TryGetReadinessAttention(out _, out _))
+            {
+                heroState = PlayHeroState.Attention;
+            }
+
+            ApplyPlayHeroAccent(heroState);
             RefreshReadinessSummary();
+        }
+
+        private void ApplyPlayHeroAccent(PlayHeroState state)
+        {
+            if (PlayHeroAccent == null)
+            {
+                return;
+            }
+
+            var resourceKey = state switch
+            {
+                PlayHeroState.Ready => "StatusSuccessColor",
+                PlayHeroState.Running => "StatusInfoColor",
+                PlayHeroState.Attention => "StatusWarningColor",
+                _ => "ChromeMutedTextColor"
+            };
+
+            PlayHeroAccent.SetResourceReference(Border.BackgroundProperty, resourceKey);
+        }
+
+        private void ApplyStatusMessageAccent(Border? accent, bool? kind)
+        {
+            if (accent == null)
+            {
+                return;
+            }
+
+            var resourceKey = kind switch
+            {
+                true => "StatusSuccessColor",
+                false => "StatusErrorColor",
+                _ => "StatusInfoColor"
+            };
+
+            accent.SetResourceReference(Border.BackgroundProperty, resourceKey);
         }
 
         private void ReadinessDetailsToggleButton_Click(object sender, RoutedEventArgs e)
@@ -2271,11 +2329,12 @@ namespace SptLauncherWpf.Pages
                 UpdateVerifyPanel.Visibility = Visibility.Visible;
                 UpdateVerifyTitleText.Text = title;
                 UpdateVerifyDetailText.Text = detail;
+                ApplyStatusMessageAccent(UpdateVerifyAccent, passed);
 
                 UpdateVerifyTitleText.Foreground = passed switch
                 {
-                    true => new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)),
-                    false => new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)),
+                    true => (System.Windows.Media.Brush)FindResource("StatusSuccessColor"),
+                    false => (System.Windows.Media.Brush)FindResource("StatusErrorColor"),
                     _ => (System.Windows.Media.Brush)FindResource("TextPrimaryColor")
                 };
 
@@ -3992,14 +4051,15 @@ namespace SptLauncherWpf.Pages
 
         private void RefreshSptRecoveryPanel()
         {
-            if (SptRecoveryPanel == null)
-            {
-                return;
-            }
-
             var sptPath = GetSptInstallPath();
             var hasSptPath = !string.IsNullOrWhiteSpace(sptPath) && Directory.Exists(sptPath);
-            SptRecoveryPanel.Visibility = hasSptPath ? Visibility.Visible : Visibility.Collapsed;
+            var lastBackup = SettingsService.Instance.LastSptBackupPath;
+            var hasBackup = !string.IsNullOrWhiteSpace(lastBackup) && Directory.Exists(lastBackup);
+
+            if (SptFolderActionsPanel != null)
+            {
+                SptFolderActionsPanel.Visibility = hasSptPath ? Visibility.Visible : Visibility.Collapsed;
+            }
 
             if (OpenSptFolderButton != null)
             {
@@ -4011,8 +4071,12 @@ namespace SptLauncherWpf.Pages
                 ReinstallSptButton.IsEnabled = !_sptUpdateInProgress;
             }
 
-            var lastBackup = SettingsService.Instance.LastSptBackupPath;
-            var hasBackup = !string.IsNullOrWhiteSpace(lastBackup) && Directory.Exists(lastBackup);
+            // Recovery (restore) only appears once a backup exists.
+            if (SptRecoveryPanel != null)
+            {
+                SptRecoveryPanel.Visibility = hasBackup ? Visibility.Visible : Visibility.Collapsed;
+            }
+
             if (RestoreBackupButton != null)
             {
                 RestoreBackupButton.IsEnabled = hasBackup && hasSptPath && !_sptUpdateInProgress;

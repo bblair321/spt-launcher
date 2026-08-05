@@ -4,7 +4,7 @@
         Title="SPT Launcher" Height="800" Width="1200"
         MinHeight="600" MinWidth="800"
         WindowStartupLocation="CenterScreen"
-        Background="#2563EB"
+        Background="{DynamicResource ChromeBackgroundColor}"
         WindowStyle="None"
         AllowsTransparency="True"
         ResizeMode="CanResize"
@@ -16,28 +16,23 @@
         RenderOptions.ClearTypeHint="Enabled"
         RenderOptions.EdgeMode="Unspecified">
     
-    <Border Background="#2563EB" Margin="0">
+    <Border Background="{DynamicResource ChromeBackgroundColor}" Margin="0"
+            BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
         <Grid Margin="0">
             
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/> <!-- Title Bar -->
-                <RowDefinition Height="Auto"/> <!-- Update Notification Banner -->
+                <RowDefinition Height="Auto"/> <!-- Status / update banner -->
                 <RowDefinition Height="Auto"/> <!-- Tab Navigation -->
                 <RowDefinition Height="*"/>     <!-- Content -->
             </Grid.RowDefinitions>
 
-            <!-- Modern Title Bar -->
-            <Border Grid.Row="0" Height="48" Margin="0,0,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#3B82F6" Offset="0"/>
-                        <GradientStop Color="#2563EB" Offset="0.35"/>
-                        <GradientStop Color="#1E40AF" Offset="1"/>
-                    </LinearGradientBrush>
-                </Border.Background>
-                <Border.Effect>
-                    <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="2" Opacity="0.15" Direction="270"/>
-                </Border.Effect>
+            <!-- Quiet title bar -->
+            <Border Name="TitleBarBorder" Grid.Row="0" Height="48" Margin="0"
+                    Background="{DynamicResource ChromeBackgroundColor}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,0,1"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -45,24 +40,31 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
-                    <!-- Modern App Title -->
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="24,0,0,0">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0">
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="SPT Launcher" Foreground="White" FontWeight="SemiBold" FontSize="18" VerticalAlignment="Center" LineHeight="20"/>
-                            <TextBlock Name="VersionText" Text="v3.0.0" Foreground="#E0E7FF" FontSize="11" VerticalAlignment="Center" Margin="0,0,0,0" Opacity="0.9"/>
+                            <TextBlock Text="SPT Launcher"
+                                       Foreground="{DynamicResource ChromeTextColor}"
+                                       FontWeight="SemiBold"
+                                       FontSize="16"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Name="VersionText"
+                                       Text="v3.0.0"
+                                       Foreground="{DynamicResource ChromeMutedTextColor}"
+                                       FontSize="11"
+                                       VerticalAlignment="Center"
+                                       Margin="0,1,0,0"/>
                         </StackPanel>
                     </StackPanel>
                     
-                    <!-- Theme Toggle Button -->
-                    <Button Name="ThemeToggleButton" Grid.Column="1" Height="32" Background="Transparent" BorderThickness="0" 
-                            Click="ThemeToggleButton_Click" Cursor="Hand" Margin="0,0,8,0" ToolTip="Toggle theme" VerticalAlignment="Center"
+                    <Button Name="ThemeToggleButton" Grid.Column="1" Height="30" Background="Transparent" BorderThickness="0" 
+                            Click="ThemeToggleButton_Click" Cursor="Hand" Margin="0,0,6,0" ToolTip="Toggle theme" VerticalAlignment="Center"
                             Padding="10,0">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Button">
-                                            <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                            <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                         </ControlTemplate>
@@ -70,28 +72,26 @@
                                 </Setter>
                                 <Style.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#3B82F6"/>
-                                    </Trigger>
-                                    <Trigger Property="IsPressed" Value="True">
-                                        <Setter Property="Background" Value="#60A5FA"/>
+                                        <Setter Property="Background" Value="{DynamicResource HoverColor}"/>
                                     </Trigger>
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
-                        <TextBlock Name="ThemeToggleIcon" Text="Dark" Foreground="White" FontSize="12" FontWeight="SemiBold"
+                        <TextBlock Name="ThemeToggleIcon" Text="Dark"
+                                   Foreground="{DynamicResource ChromeMutedTextColor}"
+                                   FontSize="12" FontWeight="SemiBold"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Button>
                     
-                    <!-- Modern Window Controls -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,8,0">
-                        <Button Name="MinimizeButton" Width="46" Height="32" Background="Transparent" BorderThickness="0" 
+                        <Button Name="MinimizeButton" Width="40" Height="30" Background="Transparent" BorderThickness="0" 
                                 Click="MinimizeButton_Click" Cursor="Hand" Margin="2">
                             <Button.Style>
                                 <Style TargetType="Button">
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="6">
                                                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                             </ControlTemplate>
@@ -99,24 +99,22 @@
                                     </Setter>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#3B82F6"/>
-                                        </Trigger>
-                                        <Trigger Property="IsPressed" Value="True">
-                                            <Setter Property="Background" Value="#60A5FA"/>
+                                            <Setter Property="Background" Value="{DynamicResource HoverColor}"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Button.Style>
-                            <TextBlock Text="−" Foreground="White" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <TextBlock Text="−" Foreground="{DynamicResource ChromeTextColor}" FontSize="16" FontWeight="Bold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Button>
-                        <Button Name="MaximizeButton" Width="46" Height="32" Background="Transparent" BorderThickness="0" 
+                        <Button Name="MaximizeButton" Width="40" Height="30" Background="Transparent" BorderThickness="0" 
                                 Click="MaximizeButton_Click" Cursor="Hand" Margin="2">
                             <Button.Style>
                                 <Style TargetType="Button">
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="6">
                                                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                             </ControlTemplate>
@@ -124,24 +122,22 @@
                                     </Setter>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#3B82F6"/>
-                                        </Trigger>
-                                        <Trigger Property="IsPressed" Value="True">
-                                            <Setter Property="Background" Value="#60A5FA"/>
+                                            <Setter Property="Background" Value="{DynamicResource HoverColor}"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Button.Style>
-                            <TextBlock Text="□" Foreground="White" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <TextBlock Text="□" Foreground="{DynamicResource ChromeTextColor}" FontSize="13" FontWeight="Bold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Button>
-                        <Button Name="CloseButton" Width="46" Height="32" Background="#EF4444" BorderThickness="0" 
+                        <Button Name="CloseButton" Width="40" Height="30" Background="Transparent" BorderThickness="0" 
                                 Click="CloseButton_Click" Cursor="Hand" Margin="2">
                             <Button.Style>
                                 <Style TargetType="Button">
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                                <Border Background="{TemplateBinding Background}" CornerRadius="6">
                                                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                             </ControlTemplate>
@@ -149,133 +145,92 @@
                                     </Setter>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#DC2626"/>
-                                        </Trigger>
-                                        <Trigger Property="IsPressed" Value="True">
-                                            <Setter Property="Background" Value="#B91C1C"/>
+                                            <Setter Property="Background" Value="{DynamicResource StatusErrorColor}"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Button.Style>
-                            <TextBlock Text="×" Foreground="White" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <TextBlock Text="×" Foreground="{DynamicResource ChromeTextColor}" FontSize="16" FontWeight="Bold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Button>
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- Update Notification Banner -->
-            <Border Name="UpdateNotificationBanner" Grid.Row="1" 
-                    Background="{DynamicResource PrimaryColor}" 
-                    Padding="16,12" 
+            <!-- Unified status / update banner -->
+            <Border Name="UpdateNotificationBanner" Grid.Row="1"
+                    Style="{StaticResource StatusMessageStyle}"
+                    Margin="16,10,16,0"
                     Visibility="Collapsed">
                 <Grid>
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="4"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
+
+                    <Border Name="UpdateBannerAccent" Grid.Column="0"
+                            Background="{DynamicResource StatusInfoColor}"
+                            CornerRadius="2"
+                            Margin="0,0,12,0"/>
                     
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Name="UpdateNotificationText" 
                                    Text="A new version is available" 
-                                   Foreground="White" 
+                                   Foreground="{DynamicResource TextPrimaryColor}" 
                                    FontWeight="SemiBold" 
                                    FontSize="14"/>
                         <TextBlock Name="UpdateVersionText" 
                                    Text="" 
-                                   Foreground="#E0E7FF" 
+                                   Foreground="{DynamicResource TextSecondaryColor}" 
                                    FontSize="12" 
-                                   Margin="0,2,0,0"/>
+                                   Margin="0,2,0,0"
+                                   TextWrapping="Wrap"/>
                     </StackPanel>
                     
-                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Name="UpdateDownloadButton" 
                                 Content="Download" 
-                                Background="#10B981" 
-                                Foreground="White" 
-                                BorderThickness="0" 
-                                Padding="16,8" 
+                                Style="{StaticResource ModernButtonStyle}"
+                                Background="{DynamicResource StatusSuccessColor}"
+                                Padding="14,8" 
                                 Margin="0,0,8,0"
-                                Cursor="Hand"
-                                Click="UpdateDownloadButton_Click">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#059669"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                                Click="UpdateDownloadButton_Click"/>
                         <Button Name="UpdateDismissButton" 
-                                Content="✕" 
-                                Background="Transparent" 
-                                Foreground="White" 
-                                BorderThickness="0" 
-                                Width="32" 
-                                Height="32"
-                                Cursor="Hand"
-                                Click="UpdateDismissButton_Click">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#3B82F6"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                                Content="Dismiss" 
+                                Style="{StaticResource ModernButtonStyle}"
+                                Background="#4B5563"
+                                Padding="12,8"
+                                Click="UpdateDismissButton_Click"/>
                     </StackPanel>
                 </Grid>
             </Border>
 
-        <!-- Tab Navigation -->
-        <Border Grid.Row="2" BorderThickness="0" Padding="16,6">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop Color="#3B82F6" Offset="0"/>
-                    <GradientStop Color="#2563EB" Offset="0.35"/>
-                    <GradientStop Color="#1E40AF" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.Background>
-            <StackPanel Orientation="Horizontal">
-                <Button Name="LauncherTabButton" Content="Launcher" Tag="launcher"
-                        Click="TabButton_Click" Height="36" Padding="16,8"
-                        Style="{StaticResource TabButtonStyle}" Background="{DynamicResource PrimaryColor}" FontWeight="SemiBold"/>
-                <Button Name="ServersTabButton" Content="Servers" Tag="servers"
-                        Click="TabButton_Click" Height="36" Padding="16,8"
-                        Style="{StaticResource TabButtonStyle}"/>
-                <Button Name="ModsTabButton" Content="Mods" Tag="mods"
-                        Click="TabButton_Click" Height="36" Padding="16,8"
-                        Style="{StaticResource TabButtonStyle}"
-                        Visibility="Collapsed"/>
-                <Button Name="SettingsTabButton" Content="Settings" Tag="settings"
-                        Click="TabButton_Click" Height="36" Padding="16,8"
-                        Style="{StaticResource TabButtonStyle}"/>
-                <Button Name="DevToolsTabButton" Content="Tools" Tag="devtools"
-                        Click="TabButton_Click" Height="36" Padding="16,8"
-                        Style="{StaticResource TabButtonStyle}"/>
-            </StackPanel>
-        </Border>
+            <!-- Quiet tabs -->
+            <Border Grid.Row="2"
+                    Background="{DynamicResource ChromeBackgroundColor}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,0,1"
+                    Padding="16,8">
+                <StackPanel Orientation="Horizontal">
+                    <Button Name="LauncherTabButton" Content="Launcher" Tag="launcher"
+                            Click="TabButton_Click"
+                            Style="{StaticResource TabButtonStyle}"/>
+                    <Button Name="ServersTabButton" Content="Servers" Tag="servers"
+                            Click="TabButton_Click"
+                            Style="{StaticResource TabButtonStyle}"/>
+                    <Button Name="ModsTabButton" Content="Mods" Tag="mods"
+                            Click="TabButton_Click"
+                            Style="{StaticResource TabButtonStyle}"
+                            Visibility="Collapsed"/>
+                    <Button Name="SettingsTabButton" Content="Settings" Tag="settings"
+                            Click="TabButton_Click"
+                            Style="{StaticResource TabButtonStyle}"/>
+                    <Button Name="DevToolsTabButton" Content="Tools" Tag="devtools"
+                            Click="TabButton_Click"
+                            Style="{StaticResource TabButtonStyle}"/>
+                </StackPanel>
+            </Border>
 
             <!-- Content Area -->
             <Grid Grid.Row="3" Background="{DynamicResource BackgroundColor}" Margin="0">

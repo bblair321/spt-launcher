@@ -181,6 +181,13 @@ namespace SptLauncherWpf.Services
             System.Windows.Application.Current.Resources["BorderColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(200, 200, 200)); // Light gray border
             System.Windows.Application.Current.Resources["CardBackgroundColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 250, 250)); // Very light gray
             System.Windows.Application.Current.Resources["HoverColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 220, 220)); // Medium gray
+            System.Windows.Application.Current.Resources["ChromeBackgroundColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(243, 244, 246));
+            System.Windows.Application.Current.Resources["ChromeTextColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(31, 41, 55));
+            System.Windows.Application.Current.Resources["ChromeMutedTextColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(107, 114, 128));
+            System.Windows.Application.Current.Resources["StatusSuccessColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(5, 150, 105));
+            System.Windows.Application.Current.Resources["StatusWarningColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(217, 119, 6));
+            System.Windows.Application.Current.Resources["StatusErrorColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38));
+            System.Windows.Application.Current.Resources["StatusInfoColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(37, 99, 235));
             
             // Force resource refresh
             System.Windows.Application.Current.Resources.MergedDictionaries.Clear();
@@ -205,6 +212,13 @@ namespace SptLauncherWpf.Services
             System.Windows.Application.Current.Resources["BorderColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(55, 65, 81));
             System.Windows.Application.Current.Resources["CardBackgroundColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(31, 41, 55));
             System.Windows.Application.Current.Resources["HoverColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(55, 65, 81));
+            System.Windows.Application.Current.Resources["ChromeBackgroundColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(15, 23, 42));
+            System.Windows.Application.Current.Resources["ChromeTextColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(241, 245, 249));
+            System.Windows.Application.Current.Resources["ChromeMutedTextColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184));
+            System.Windows.Application.Current.Resources["StatusSuccessColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 185, 129));
+            System.Windows.Application.Current.Resources["StatusWarningColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11));
+            System.Windows.Application.Current.Resources["StatusErrorColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+            System.Windows.Application.Current.Resources["StatusInfoColor"] = new SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 130, 246));
             
             // Force resource refresh
             System.Windows.Application.Current.Resources.MergedDictionaries.Clear();

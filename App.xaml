@@ -11,6 +11,13 @@
         <SolidColorBrush x:Key="BorderColor" Color="#E5E7EB"/>
         <SolidColorBrush x:Key="CardBackgroundColor" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="HoverColor" Color="#F3F4F6"/>
+        <SolidColorBrush x:Key="ChromeBackgroundColor" Color="#F3F4F6"/>
+        <SolidColorBrush x:Key="ChromeTextColor" Color="#1F2937"/>
+        <SolidColorBrush x:Key="ChromeMutedTextColor" Color="#6B7280"/>
+        <SolidColorBrush x:Key="StatusSuccessColor" Color="#059669"/>
+        <SolidColorBrush x:Key="StatusWarningColor" Color="#D97706"/>
+        <SolidColorBrush x:Key="StatusErrorColor" Color="#DC2626"/>
+        <SolidColorBrush x:Key="StatusInfoColor" Color="#2563EB"/>
         
                 <!-- Modern Card Style -->
                 <Style x:Key="ModernCardStyle" TargetType="Border">
@@ -23,6 +30,15 @@
                             <DropShadowEffect Color="#000000" BlurRadius="20" ShadowDepth="4" Opacity="0.1"/>
                         </Setter.Value>
                     </Setter>
+                </Style>
+
+                <!-- Shared status / alert strip used by update, verify, and patcher panels -->
+                <Style x:Key="StatusMessageStyle" TargetType="Border">
+                    <Setter Property="Background" Value="{DynamicResource HoverColor}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="CornerRadius" Value="10"/>
+                    <Setter Property="Padding" Value="14,12"/>
                 </Style>
         
         <!-- Modern Button Style -->
@@ -68,37 +84,30 @@
             </Setter>
         </Style>
         
-        <!-- Modern Tab Button Style -->
+        <!-- Quiet tab buttons for theme-matched chrome -->
         <Style x:Key="TabButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChromeMutedTextColor}"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Padding" Value="14,8"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" 
-                                BorderBrush="{TemplateBinding BorderBrush}" 
-                                BorderThickness="{TemplateBinding BorderThickness}"
+                        <Border x:Name="Root"
+                                Background="{TemplateBinding Background}"
                                 CornerRadius="8"
-                                Margin="2"
-                                MinHeight="48"
-                                Opacity="0.9">
-                            <ContentPresenter HorizontalAlignment="Center" 
-                                            VerticalAlignment="Center" 
-                                            Margin="{TemplateBinding Padding}"/>
+                                Margin="0,0,4,0"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#3B82F6"/>
-                                <Setter Property="Opacity" Value="1"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#2563EB"/>
-                                <Setter Property="Opacity" Value="1"/>
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource HoverColor}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
