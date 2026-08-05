@@ -511,8 +511,12 @@ namespace SptLauncherWpf.Pages
             if (!LaunchButton.IsEnabled)
             {
                 System.Diagnostics.Debug.WriteLine("[LaunchButton_Click] WARNING: Button is disabled but click was received!");
-                System.Windows.MessageBox.Show("The Launch button is currently disabled. Please wait a moment and try again.", 
-                    "Button Disabled", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show(
+                    "Launch is unavailable right now (SPT may already be running, or an update is in progress).\n\n" +
+                    "If SPT is already open, use Stop — or wait a moment and try again.",
+                    "Can't launch yet",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
                 return;
             }
             
@@ -520,8 +524,12 @@ namespace SptLauncherWpf.Pages
             if (string.IsNullOrWhiteSpace(LauncherPathTextBox.Text))
             {
                 System.Diagnostics.Debug.WriteLine("[LaunchButton_Click] Path is empty");
-                System.Windows.MessageBox.Show("Please select a launcher path first.\n\nUse the 'Browse' button to locate your SPT Launcher executable.", 
-                    "Invalid Path", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show(
+                    "No SPT launcher path is set.\n\n" +
+                    "Use Auto-detect or Browse to select SPT.Launcher.exe in your SPT install folder.",
+                    "Path needed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
                 return;
             }
 
@@ -532,8 +540,13 @@ namespace SptLauncherWpf.Pages
             if (!File.Exists(launcherPath))
             {
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] File does not exist: {launcherPath}");
-                System.Windows.MessageBox.Show($"The specified launcher path does not exist:\n\n{launcherPath}\n\nPlease use the 'Browse' button to select the correct SPT Launcher executable.", 
-                    "File Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(
+                    "That launcher path doesn't exist anymore:\n\n" +
+                    $"{launcherPath}\n\n" +
+                    "Use Auto-detect or Browse to pick SPT.Launcher.exe again.",
+                    "Path not found",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
                 return;
             }
 
@@ -541,8 +554,24 @@ namespace SptLauncherWpf.Pages
             if (!launcherPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             {
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] File is not an .exe: {launcherPath}");
-                System.Windows.MessageBox.Show("The selected file is not an executable (.exe file).\n\nPlease select a valid SPT Launcher executable.", 
-                    "Invalid File Type", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(
+                    "That file isn't an executable.\n\n" +
+                    "Browse to SPT.Launcher.exe (not a folder, shortcut without .exe, or config file).",
+                    "Wrong file type",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
+
+            if (TryAttachToAlreadyRunningLauncher(launcherPath, out var alreadyRunningPid))
+            {
+                System.Windows.MessageBox.Show(
+                    "SPT launcher is already running.\n\n" +
+                    $"Process ID: {alreadyRunningPid}\n\n" +
+                    "Use Stop if you need to close it before launching again.",
+                    "Already running",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
                 return;
             }
 
@@ -585,7 +614,8 @@ namespace SptLauncherWpf.Pages
                 if (_launcherProcess == null)
                 {
                     System.Diagnostics.Debug.WriteLine("[LaunchButton_Click] Process.Start returned null");
-                    throw new Exception("Process.Start returned null - the process could not be started. This may be due to security restrictions or file blocking.");
+                    throw new Exception(
+                        "Windows refused to start the executable (often antivirus, SmartScreen, or a blocked download).");
                 }
                 
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] Process started, PID: {_launcherProcess.Id}");
@@ -597,7 +627,12 @@ namespace SptLauncherWpf.Pages
                 {
                     int exitCode = _launcherProcess.ExitCode;
                     System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] Process exited immediately with code: {exitCode}");
-                    throw new Exception($"Process started but exited immediately with code {exitCode}. This may indicate a security restriction or the executable is blocked.");
+                    throw new Exception(
+                        $"SPT.Launcher started then closed immediately (exit code {exitCode}).\n\n" +
+                        "Common fixes:\n" +
+                        "• Right-click SPT.Launcher.exe → Properties → Unblock (if shown)\n" +
+                        "• Allow it in Windows Defender / antivirus\n" +
+                        "• Confirm you selected the real SPT.Launcher.exe, not a different tool");
                 }
                 
                     _isLauncherRunning = true;
@@ -624,33 +659,8 @@ namespace SptLauncherWpf.Pages
             }
             catch (System.ComponentModel.Win32Exception winEx)
             {
-                string errorMsg = $"Failed to launch SPT launcher.\n\n";
-                string solution = "";
-                
-                if (winEx.NativeErrorCode == 2)
-                {
-                    errorMsg += "Error: File not found or path is incorrect.";
-                }
-                else if (winEx.NativeErrorCode == 5)
-                {
-                    errorMsg += "Error: Access denied. This may be due to Windows security restrictions on downloaded files.";
-                    solution = "\n\nSolution: Right-click the SPT Launcher executable, select 'Properties', and click 'Unblock' if available. Then try again.";
-                }
-                else if (winEx.NativeErrorCode == 1223) // ERROR_CANCELLED
-                {
-                    errorMsg += "Error: Operation was cancelled by the user or blocked by Windows security.";
-                    solution = "\n\nSolution: The file may be blocked. Right-click the executable, select 'Properties', and click 'Unblock' if available.";
-                }
-                else
-                {
-                    errorMsg += $"Error: {winEx.Message}";
-                    solution = "\n\nIf this file was downloaded from the internet, try right-clicking it, selecting 'Properties', and clicking 'Unblock'.";
-                }
-                
-                errorMsg += $"\n\nPath: {launcherPath}";
-                errorMsg += solution;
-                
-                System.Windows.MessageBox.Show(errorMsg, "Launch Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                var (title, errorMsg) = DescribeLaunchWin32Failure(winEx, launcherPath);
+                System.Windows.MessageBox.Show(errorMsg, title, MessageBoxButton.OK, MessageBoxImage.Error);
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] Win32Exception: {winEx.Message} (Error Code: {winEx.NativeErrorCode})");
                 
                 LaunchButton.IsEnabled = true;
@@ -661,14 +671,16 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
-                string errorMsg = $"Failed to launch SPT launcher.\n\nError: {ex.Message}";
+                string errorMsg =
+                    "Couldn't start SPT.Launcher.\n\n" +
+                    $"{ex.Message}";
                 if (ex.InnerException != null)
                 {
                     errorMsg += $"\n\nDetails: {ex.InnerException.Message}";
                 }
-                errorMsg += $"\n\nPath: {launcherPath}";
+                errorMsg += $"\n\nPath:\n{launcherPath}";
                 
-                System.Windows.MessageBox.Show(errorMsg, "Launch Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(errorMsg, "Launch failed", MessageBoxButton.OK, MessageBoxImage.Error);
                 System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] Exception: {ex.Message}\nStack trace: {ex.StackTrace}");
                 
                 LaunchButton.IsEnabled = true;
@@ -677,6 +689,104 @@ namespace SptLauncherWpf.Pages
                     StopButtonBorder.Opacity = 0.6;
                 }
             }
+        }
+
+        private bool TryAttachToAlreadyRunningLauncher(string launcherPath, out int pid)
+        {
+            pid = 0;
+            try
+            {
+                int currentProcessId = Process.GetCurrentProcess().Id;
+                var existing = Process.GetProcessesByName("SPT.Launcher")
+                    .Concat(Process.GetProcessesByName("Aki.Launcher"))
+                    .Where(p => p.Id != currentProcessId && !p.HasExited)
+                    .ToList();
+
+                if (existing.Count == 0)
+                {
+                    return false;
+                }
+
+                Process? match = null;
+                foreach (var process in existing)
+                {
+                    try
+                    {
+                        var path = process.MainModule?.FileName;
+                        if (!string.IsNullOrWhiteSpace(path) &&
+                            string.Equals(path, launcherPath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            match = process;
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        // Access denied reading MainModule — still treat as running
+                    }
+                }
+
+                match ??= existing[0];
+                pid = match.Id;
+                _launcherProcess = match;
+                _launcherPid = match.Id;
+                _isLauncherRunning = true;
+                _launcherPath = launcherPath;
+
+                LaunchButton.IsEnabled = false;
+                if (StopButtonBorder != null)
+                {
+                    StopButtonBorder.Opacity = 1.0;
+                    StopButtonBorder.IsHitTestVisible = true;
+                    StopButtonBorder.Visibility = Visibility.Visible;
+                }
+
+                _ = Task.Run(() => MonitorForServerProcess());
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static (string Title, string Message) DescribeLaunchWin32Failure(
+            System.ComponentModel.Win32Exception winEx,
+            string launcherPath)
+        {
+            const string unblockHint =
+                "Right-click SPT.Launcher.exe → Properties → check Unblock (if shown) → Apply.";
+            const string antivirusHint =
+                "Temporarily allow the file in Windows Defender / antivirus if it was quarantined.";
+
+            return winEx.NativeErrorCode switch
+            {
+                2 => (
+                    "Path not found",
+                    "Windows couldn't find that executable.\n\n" +
+                    "Browse again to SPT.Launcher.exe in your SPT folder.\n\n" +
+                    $"Path:\n{launcherPath}"),
+                3 => (
+                    "Path not found",
+                    "Part of that path is missing (folder moved or renamed).\n\n" +
+                    "Use Auto-detect or Browse to locate SPT.Launcher.exe again.\n\n" +
+                    $"Path:\n{launcherPath}"),
+                5 => (
+                    "Blocked or access denied",
+                    "Windows blocked SPT.Launcher from starting (access denied).\n\n" +
+                    $"Try:\n• {unblockHint}\n• {antivirusHint}\n• Run this app as Administrator only if your SPT folder needs elevated rights\n\n" +
+                    $"Path:\n{launcherPath}"),
+                1223 => (
+                    "Blocked by Windows",
+                    "Windows cancelled the launch (SmartScreen / UAC / security policy).\n\n" +
+                    $"Try:\n• {unblockHint}\n• {antivirusHint}\n• If SmartScreen appears, choose More info → Run anyway\n\n" +
+                    $"Path:\n{launcherPath}"),
+                _ => (
+                    "Launch failed",
+                    $"Couldn't start SPT.Launcher.\n\n{winEx.Message} (code {winEx.NativeErrorCode})\n\n" +
+                    $"If this file came from a download, try:\n• {unblockHint}\n• {antivirusHint}\n\n" +
+                    $"Path:\n{launcherPath}")
+            };
         }
 
 
@@ -3288,29 +3398,35 @@ namespace SptLauncherWpf.Pages
             if (EftStatusText != null)
             {
                 EftStatusText.Text = eftInfo.GetStatusText(sptAlreadyInstalled);
-                EftStatusText.Foreground = eftInfo.Status switch
+                EftStatusText.Foreground = (sptAlreadyInstalled, eftInfo.Status) switch
                 {
-                    EftCompatibilityStatus.Compatible =>
+                    (true, _) =>
+                        (System.Windows.Media.Brush)FindResource("TextSecondaryColor"),
+                    (_, EftCompatibilityStatus.Compatible) =>
                         new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94)),
-                    EftCompatibilityStatus.UpdateRequired =>
+                    (_, EftCompatibilityStatus.UpdateRequired) =>
                         new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)),
-                    EftCompatibilityStatus.NotDetected =>
+                    (_, EftCompatibilityStatus.NotDetected) =>
                         new SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68)),
+                    (_, EftCompatibilityStatus.NewerThanSupported) =>
+                        new SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)),
                     _ => (System.Windows.Media.Brush)FindResource("TextSecondaryColor")
                 };
             }
 
             var isNewerThanPatcher = eftInfo.Status == EftCompatibilityStatus.NewerThanSupported;
-            var showUpdateButton = eftInfo.Status is
-                EftCompatibilityStatus.UpdateRequired or
-                EftCompatibilityStatus.NotDetected or
-                EftCompatibilityStatus.RequiredUnknown;
+            // Day-to-day play doesn't need Tarkov update actions once SPT is installed.
+            var showUpdateButton = !sptAlreadyInstalled &&
+                eftInfo.Status is
+                    EftCompatibilityStatus.UpdateRequired or
+                    EftCompatibilityStatus.NotDetected or
+                    EftCompatibilityStatus.RequiredUnknown;
 
             if (EftRequiredVersionText != null)
             {
-                if (isNewerThanPatcher)
+                if (sptAlreadyInstalled || isNewerThanPatcher)
                 {
-                    // Detailed copy lives in EftPatcherGuidancePanel.
+                    // Keep the home screen quiet once SPT is installed; patcher detail is for install/reinstall.
                     EftRequiredVersionText.Visibility = Visibility.Collapsed;
                     EftRequiredVersionText.Text = string.Empty;
                 }
@@ -3323,8 +3439,7 @@ namespace SptLauncherWpf.Pages
                     EftRequiredVersionText.Text =
                         $"Downgrade patcher available: {eftInfo.InstalledVersion} → {target}";
                 }
-                else if (!sptAlreadyInstalled &&
-                         (showUpdateButton || eftInfo.Status == EftCompatibilityStatus.RequiredUnknown))
+                else if (showUpdateButton || eftInfo.Status == EftCompatibilityStatus.RequiredUnknown)
                 {
                     EftRequiredVersionText.Visibility = Visibility.Visible;
                     if (!string.IsNullOrWhiteSpace(eftInfo.RequiredLiveVersion))
@@ -3356,9 +3471,11 @@ namespace SptLauncherWpf.Pages
 
             if (EftPatcherGuidancePanel != null)
             {
-                // Still warn when no patcher exists — matters for reinstall/update even if SPT is present.
+                // Only crowd the UI when SPT still needs install/reinstall help.
                 EftPatcherGuidancePanel.Visibility =
-                    isNewerThanPatcher ? Visibility.Visible : Visibility.Collapsed;
+                    !sptAlreadyInstalled && isNewerThanPatcher
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
             }
 
             if (EftPatcherGuidanceText != null)

@@ -41,8 +41,14 @@ namespace SptLauncherWpf.Services
                     : string.IsNullOrWhiteSpace(AvailablePatcherUrl)
                         ? "Ready for SPT installer"
                         : "Patcher available for install",
-            EftCompatibilityStatus.UpdateRequired => "Update Tarkov (for downgrader)",
-            EftCompatibilityStatus.NewerThanSupported => "No patcher for this Tarkov version yet",
+            EftCompatibilityStatus.UpdateRequired =>
+                sptAlreadyInstalled
+                    ? "Live Tarkov (older than latest patcher source)"
+                    : "Update Tarkov (for downgrader)",
+            EftCompatibilityStatus.NewerThanSupported =>
+                sptAlreadyInstalled
+                    ? "Live Tarkov OK for play"
+                    : "No patcher for this Tarkov version yet",
             EftCompatibilityStatus.RequiredUnknown => "Required live version unknown",
             _ => "Not detected"
         };

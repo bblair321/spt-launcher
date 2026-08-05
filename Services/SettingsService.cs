@@ -212,5 +212,35 @@ namespace SptLauncherWpf.Services
             get => GetValue("FirstRunWizardDismissed", false);
             set => SetValue("FirstRunWizardDismissed", value);
         }
+
+        public double WindowLeft
+        {
+            get => GetValue("WindowLeft", double.NaN);
+            set => SetValue("WindowLeft", value);
+        }
+
+        public double WindowTop
+        {
+            get => GetValue("WindowTop", double.NaN);
+            set => SetValue("WindowTop", value);
+        }
+
+        public double WindowWidth
+        {
+            get => GetValue("WindowWidth", 0d);
+            set => SetValue("WindowWidth", value);
+        }
+
+        public double WindowHeight
+        {
+            get => GetValue("WindowHeight", 0d);
+            set => SetValue("WindowHeight", value);
+        }
+
+        public bool WindowMaximized
+        {
+            get => GetValue("WindowMaximized", false);
+            set => SetValue("WindowMaximized", value);
+        }
     }
 }

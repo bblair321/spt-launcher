@@ -69,6 +69,10 @@ namespace SptLauncherWpf
                 
                 // Extend window frame into client area to eliminate white border
                 Loaded += MainWindow_Loaded;
+                Closing += MainWindow_Closing;
+                StateChanged += MainWindow_StateChanged;
+
+                RestoreWindowBounds();
 
                 // Handle post-restart self-update confirmation / .old.exe cleanup
                 Loaded += (_, _) => TryShowSelfUpdateCompletion();
@@ -83,12 +87,18 @@ namespace SptLauncherWpf
         
         private void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
         {
-            // Update icon on UI thread
-            Dispatcher.Invoke(() =>
+            if (!Dispatcher.CheckAccess())
             {
-                UpdateThemeIcon();
-                RefreshChromeTabStyles();
-            });
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    UpdateThemeIcon();
+                    RefreshChromeTabStyles();
+                }));
+                return;
+            }
+
+            UpdateThemeIcon();
+            RefreshChromeTabStyles();
         }
         
         private void UpdateThemeIcon()
@@ -109,27 +119,20 @@ namespace SptLauncherWpf
         {
             try
             {
-                // Disable button temporarily to prevent rapid clicking
                 ThemeToggleButton.IsEnabled = false;
-                
+
                 var currentTheme = ThemeService.Instance.CurrentTheme;
                 var newTheme = currentTheme == "light" ? "dark" : "light";
-                
-                // Apply theme synchronously
                 ThemeService.Instance.ApplyTheme(newTheme);
-                
-                // Re-enable button after a short delay
-                Dispatcher.BeginInvoke(new Action(() => 
-                {
-                    ThemeToggleButton.IsEnabled = true;
-                }), System.Windows.Threading.DispatcherPriority.Loaded);
             }
             catch (Exception ex)
             {
-                // Re-enable button on error
-                ThemeToggleButton.IsEnabled = true;
                 System.Windows.MessageBox.Show($"Failed to toggle theme: {ex.Message}", "Theme Error", 
                     MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                ThemeToggleButton.IsEnabled = true;
             }
         }
 
@@ -146,6 +149,84 @@ namespace SptLauncherWpf
             {
                 // Ignore if DWM extension fails
             }
+        }
+
+        private void MainWindow_StateChanged(object? sender, EventArgs e)
+        {
+            _isMaximized = WindowState == WindowState.Maximized;
+            if (MaximizeButton != null)
+            {
+                MaximizeButton.Content = _isMaximized ? "❐" : "□";
+            }
+        }
+
+        private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            try
+            {
+                SaveWindowBounds();
+            }
+            catch
+            {
+                // Don't block close on settings write failure
+            }
+        }
+
+        private void RestoreWindowBounds()
+        {
+            var settings = SettingsService.Instance;
+            var width = settings.WindowWidth;
+            var height = settings.WindowHeight;
+            if (width < MinWidth || height < MinHeight)
+            {
+                return;
+            }
+
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Width = width;
+            Height = height;
+
+            var left = settings.WindowLeft;
+            var top = settings.WindowTop;
+            if (!double.IsNaN(left) && !double.IsNaN(top) && IsOnAnyScreen(left, top, width, height))
+            {
+                Left = left;
+                Top = top;
+            }
+
+            if (settings.WindowMaximized)
+            {
+                WindowState = WindowState.Maximized;
+                _isMaximized = true;
+                MaximizeButton.Content = "❐";
+            }
+        }
+
+        private void SaveWindowBounds()
+        {
+            var settings = SettingsService.Instance;
+            var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+
+            settings.WindowLeft = bounds.Left;
+            settings.WindowTop = bounds.Top;
+            settings.WindowWidth = bounds.Width;
+            settings.WindowHeight = bounds.Height;
+            settings.WindowMaximized = WindowState == WindowState.Maximized || _isMaximized;
+            settings.SaveSettings();
+        }
+
+        private static bool IsOnAnyScreen(double left, double top, double width, double height)
+        {
+            var vsLeft = SystemParameters.VirtualScreenLeft;
+            var vsTop = SystemParameters.VirtualScreenTop;
+            var vsRight = vsLeft + SystemParameters.VirtualScreenWidth;
+            var vsBottom = vsTop + SystemParameters.VirtualScreenHeight;
+            const double margin = 48;
+
+            return left < vsRight - margin
+                   && left + width > vsLeft + margin
+                   && top < vsBottom - margin
+                   && top + margin > vsTop;
         }
 
         private void InitializeStyles()
