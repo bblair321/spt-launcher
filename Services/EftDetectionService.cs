@@ -55,7 +55,10 @@ namespace SptLauncherWpf.Services
 
         private const string EftExeName = "EscapeFromTarkov.exe";
         private const string EftOfficialSiteUrl = "https://www.escapefromtarkov.com/";
-        private const string PatcherHost = "https://slugma.waffle-lord.net";
+        private const string PatcherHostSlugma = "https://slugma.waffle-lord.net";
+        private const string PatcherHostMirror = "https://mirror.spt.dev/patchers";
+        // Keep old name for any callers; prefer mirror (slugma currently 404s everything).
+        private const string PatcherHost = PatcherHostMirror;
 
         private static readonly HttpClient PatcherHttpClient = new()
         {
@@ -125,7 +128,8 @@ namespace SptLauncherWpf.Services
 
         /// <summary>
         /// Confirms whether a Patcher_{live}_to_{target}.7z exists.
-        /// The warning panel is only used when live Tarkov has no matching patcher yet.
+        /// The warning panel is only used when live Tarkov is newer than the published
+        /// patcher source version AND no CDN file can be found.
         /// </summary>
         public async Task ResolveCurrentPatcherAvailabilityAsync(EftCompatibilityInfo info)
         {
@@ -157,6 +161,21 @@ namespace SptLauncherWpf.Services
                 return;
             }
 
+            // SPT release notes advertise the live Tarkov version the downgrader starts from
+            // (RequiredLiveVersion). If the user is exactly on that build, a patcher was published
+            // for them — even when the CDN host is temporarily returning 404 (slugma outage).
+            if (!string.IsNullOrWhiteSpace(info.RequiredLiveVersion) &&
+                CompareNormalizedVersions(info.InstalledVersion!, info.RequiredLiveVersion) == 0)
+            {
+                info.AvailablePatcherUrl =
+                    BuildPreferredPatcherUrl(info.InstalledVersion!, info.TargetSptClientVersion!);
+                info.Status = EftCompatibilityStatus.Compatible;
+                Debug.WriteLine(
+                    $"[EftDetectionService] Live {info.InstalledVersion} matches release patcher source; " +
+                    $"treating as available ({info.AvailablePatcherUrl}). Probe={probe.Result}");
+                return;
+            }
+
             if (probe.Result == PatcherProbeResult.Error)
             {
                 // Network/CDN glitch — don't scare the user with a false "no patcher" warning.
@@ -164,7 +183,7 @@ namespace SptLauncherWpf.Services
                 return;
             }
 
-            // Confirmed missing: live Tarkov has no downgrade patcher for the SPT target yet.
+            // Confirmed missing: live Tarkov is newer than the published patcher source, and CDN has no file.
             info.AvailablePatcherUrl = null;
             info.Status = EftCompatibilityStatus.NewerThanSupported;
             Debug.WriteLine(
@@ -189,9 +208,8 @@ namespace SptLauncherWpf.Services
             }
 
             var sawMissing = false;
-            foreach (var targetVariant in GetPatcherTargetVariants(target))
+            foreach (var url in GetPatcherCandidateUrls(live!, target!))
             {
-                var url = BuildPatcherUrl(live!, targetVariant);
                 var result = await ProbeUrlAsync(url);
                 if (result == PatcherProbeResult.Exists)
                 {
@@ -204,7 +222,8 @@ namespace SptLauncherWpf.Services
                 }
                 else
                 {
-                    return (PatcherProbeResult.Error, null);
+                    // Keep trying other hosts on transient errors.
+                    Debug.WriteLine($"[EftDetectionService] Patcher probe error for {url}; trying next host.");
                 }
             }
 
@@ -219,7 +238,38 @@ namespace SptLauncherWpf.Services
         }
 
         public static string BuildPatcherUrl(string liveVersion, string targetVariant) =>
-            $"{PatcherHost}/Patcher_{liveVersion}_to_{targetVariant}.7z";
+            BuildPatcherUrl(PatcherHostMirror, liveVersion, targetVariant);
+
+        public static string BuildPatcherUrl(string hostBase, string liveVersion, string targetVariant)
+        {
+            var fileName = $"Patcher_{liveVersion}_to_{targetVariant}.7z";
+            return hostBase.TrimEnd('/') + "/" + fileName;
+        }
+
+        public static string BuildPreferredPatcherUrl(string liveVersion, string targetVersion)
+        {
+            var live = NormalizeEftVersion(liveVersion) ?? liveVersion;
+            var targetVariant = GetPatcherTargetVariants(NormalizeEftVersion(targetVersion) ?? targetVersion)
+                .FirstOrDefault(v => !v.StartsWith("0.", StringComparison.Ordinal))
+                ?? (NormalizeEftVersion(targetVersion) ?? targetVersion);
+            return BuildPatcherUrl(PatcherHostMirror, live, targetVariant);
+        }
+
+        /// <summary>
+        /// Candidate download URLs across known SPT patcher mirrors.
+        /// </summary>
+        public static IReadOnlyList<string> GetPatcherCandidateUrls(string liveVersion, string targetVersion)
+        {
+            var urls = new List<string>();
+            foreach (var targetVariant in GetPatcherTargetVariants(targetVersion))
+            {
+                // Prefer the working mirror; keep slugma as a fallback for older links.
+                urls.Add(BuildPatcherUrl(PatcherHostMirror, liveVersion, targetVariant));
+                urls.Add(BuildPatcherUrl(PatcherHostSlugma, liveVersion, targetVariant));
+            }
+
+            return urls;
+        }
 
         /// <summary>
         /// CDN patcher filenames sometimes drop a leading "0." from SPT target versions.

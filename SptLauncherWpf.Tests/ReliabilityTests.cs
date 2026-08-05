@@ -43,7 +43,25 @@ public class PatcherUrlTests
     {
         var url = EftDetectionService.BuildPatcherUrl("1.0.6.5.46221", "16.9.5.40743");
         Assert.Equal(
-            "https://slugma.waffle-lord.net/Patcher_1.0.6.5.46221_to_16.9.5.40743.7z",
+            "https://mirror.spt.dev/patchers/Patcher_1.0.6.5.46221_to_16.9.5.40743.7z",
+            url);
+    }
+
+    [Fact]
+    public void GetPatcherCandidateUrls_includes_mirror_and_slugma()
+    {
+        var urls = EftDetectionService.GetPatcherCandidateUrls("1.1.0.0.46624", "0.16.9.5.40743");
+        Assert.Contains(urls, u => u.Contains("mirror.spt.dev/patchers/", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(urls, u => u.Contains("slugma.waffle-lord.net/", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(urls, u => u.EndsWith("Patcher_1.1.0.0.46624_to_16.9.5.40743.7z", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void BuildPreferredPatcherUrl_prefers_mirror_and_zero_stripped_target()
+    {
+        var url = EftDetectionService.BuildPreferredPatcherUrl("1.1.0.0.46624", "0.16.9.5.40743");
+        Assert.Equal(
+            "https://mirror.spt.dev/patchers/Patcher_1.1.0.0.46624_to_16.9.5.40743.7z",
             url);
     }
 }
