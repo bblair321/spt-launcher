@@ -17,6 +17,13 @@ namespace SptLauncherWpf
         private string _currentTab = "launcher";
         private bool _isMaximized = false;
 
+        // Keep pages alive so tab switches don't reset first-run / UI state.
+        private LauncherPage? _launcherPage;
+        private ServersPage? _serversPage;
+        private ModsPage? _modsPage;
+        private SettingsPage? _settingsPage;
+        private DevToolsPage? _devToolsPage;
+
         [DllImport("dwmapi.dll")]
         private static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
 
@@ -267,23 +274,28 @@ namespace SptLauncherWpf
                 // Update button styles
                 RefreshChromeTabStyles();
 
-                // Navigate to appropriate page
+                // Navigate to a cached page instance (recreating LauncherPage restarted first-run setup).
                 switch (tabId)
                 {
                     case "launcher":
-                        ContentFrame.Navigate(new LauncherPage());
+                        _launcherPage ??= new LauncherPage();
+                        ContentFrame.Navigate(_launcherPage);
                         break;
                     case "servers":
-                        ContentFrame.Navigate(new ServersPage());
+                        _serversPage ??= new ServersPage();
+                        ContentFrame.Navigate(_serversPage);
                         break;
                     case "mods":
-                        ContentFrame.Navigate(new ModsPage());
+                        _modsPage ??= new ModsPage();
+                        ContentFrame.Navigate(_modsPage);
                         break;
                     case "settings":
-                        ContentFrame.Navigate(new SettingsPage());
+                        _settingsPage ??= new SettingsPage();
+                        ContentFrame.Navigate(_settingsPage);
                         break;
                     case "devtools":
-                        ContentFrame.Navigate(new DevToolsPage());
+                        _devToolsPage ??= new DevToolsPage();
+                        ContentFrame.Navigate(_devToolsPage);
                         break;
                 }
             }

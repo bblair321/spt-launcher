@@ -221,8 +221,7 @@
                             Style="{StaticResource TabButtonStyle}"/>
                     <Button Name="ModsTabButton" Content="Mods" Tag="mods"
                             Click="TabButton_Click"
-                            Style="{StaticResource TabButtonStyle}"
-                            Visibility="Collapsed"/>
+                            Style="{StaticResource TabButtonStyle}"/>
                     <Button Name="SettingsTabButton" Content="Settings" Tag="settings"
                             Click="TabButton_Click"
                             Style="{StaticResource TabButtonStyle}"/>

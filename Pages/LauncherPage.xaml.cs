@@ -104,8 +104,9 @@ namespace SptLauncherWpf.Pages
         // Post-update verify panel
         private CancellationTokenSource? _updateVerifyCts;
 
-        // Compact readiness: user can pin details closed while something still needs attention
-        private bool _readinessUserCollapsed;
+        // Compact readiness: remember the user's Details preference across async refreshes
+        private bool _readinessUserCollapsed; // hid details while Needs attention
+        private bool _readinessUserExpanded;  // opened details (keep open even when Ready)
 
         // Avoid recursive saves when Host/Join helpers enable Fika + write IP together
         private bool _suppressFikaCheckBoxHandler;
@@ -265,7 +266,14 @@ namespace SptLauncherWpf.Pages
         {
             // Load launcher path from settings
             var savedPath = SettingsService.Instance.LauncherPath;
-            if (!string.IsNullOrEmpty(savedPath) && File.Exists(savedPath))
+            var forceFirstRun = App.ForceFirstRun && !SettingsService.Instance.FirstRunWizardDismissed;
+
+            if (forceFirstRun)
+            {
+                // New-user test mode: start with an empty path so the walkthrough is shown.
+                LauncherPathTextBox.Text = string.Empty;
+            }
+            else if (!string.IsNullOrEmpty(savedPath) && File.Exists(savedPath))
             {
                 LauncherPathTextBox.Text = savedPath;
             }
@@ -1610,11 +1618,13 @@ namespace SptLauncherWpf.Pages
             if (expanded)
             {
                 _readinessUserCollapsed = true;
+                _readinessUserExpanded = false;
                 SetReadinessDetailsExpanded(false);
             }
             else
             {
                 _readinessUserCollapsed = false;
+                _readinessUserExpanded = true;
                 SetReadinessDetailsExpanded(true);
             }
         }
@@ -1649,18 +1659,18 @@ namespace SptLauncherWpf.Pages
                 ReadinessSummaryDetail.Text = reason;
                 ReadinessSummaryDot.Background = attentionBrush;
 
-                if (!_readinessUserCollapsed)
-                {
-                    SetReadinessDetailsExpanded(true);
-                }
+                // Auto-open unless the user explicitly hid details.
+                SetReadinessDetailsExpanded(!_readinessUserCollapsed || _readinessUserExpanded);
             }
             else
             {
-                _readinessUserCollapsed = false;
                 ReadinessSummaryTitle.Text = "Ready";
                 ReadinessSummaryDetail.Text = summaryLine;
                 ReadinessSummaryDot.Background = readyBrush;
-                SetReadinessDetailsExpanded(false);
+
+                // Ready defaults to collapsed, but keep Details open if the user opened it.
+                // (Previously every version/refresh pass forced-collapse after ~1s.)
+                SetReadinessDetailsExpanded(_readinessUserExpanded);
             }
         }
 
@@ -1817,21 +1827,18 @@ namespace SptLauncherWpf.Pages
                 return;
             }
 
-            // Path + SPT ready: existing users skip the wizard; in-progress setup gets step 3.
+            // Path + SPT ready.
+            // If the user is mid-walkthrough, always advance to step 3.
+            // Only silent-skip the wizard for returning users who never opened it.
             if (hasValidPath && sptReady)
             {
-                if (wizardWasVisible || _firstRunAwaitingFinish)
-                {
-                    _firstRunAwaitingFinish = true;
-                    FirstRunWizardPanel.Visibility = Visibility.Visible;
-                    MainLauncherContent.Visibility = Visibility.Collapsed;
-                    ShowFirstRunStep(3);
-                    if (FirstRunReadyDetailText != null && !string.IsNullOrWhiteSpace(path))
-                    {
-                        FirstRunReadyDetailText.Text =
-                            $"SPT looks good at:\n{path}\n\nYou can launch from the Play card, check Tarkov/Fika readiness, or tweak setup anytime.";
-                    }
+                var inWalkthrough = wizardWasVisible
+                                    || _firstRunAwaitingFinish
+                                    || _firstRunPreferLocateStep;
 
+                if (inWalkthrough)
+                {
+                    AdvanceFirstRunToReadyStep(path);
                     return;
                 }
 
@@ -1839,6 +1846,7 @@ namespace SptLauncherWpf.Pages
                 {
                     SettingsService.Instance.FirstRunWizardDismissed = true;
                     SettingsService.Instance.SaveSettings();
+                    App.ClearForceFirstRun();
                 }
 
                 FirstRunWizardPanel.Visibility = Visibility.Collapsed;
@@ -1871,7 +1879,9 @@ namespace SptLauncherWpf.Pages
                 }
                 else if (string.IsNullOrWhiteSpace(FirstRunPathStatusText.Text) ||
                          FirstRunPathStatusText.Text.StartsWith("No launcher", StringComparison.OrdinalIgnoreCase) ||
-                         FirstRunPathStatusText.Text.StartsWith("That path", StringComparison.OrdinalIgnoreCase))
+                         FirstRunPathStatusText.Text.StartsWith("That path", StringComparison.OrdinalIgnoreCase) ||
+                         FirstRunPathStatusText.Text.StartsWith("Could not auto-detect", StringComparison.OrdinalIgnoreCase) ||
+                         FirstRunPathStatusText.Text.StartsWith("Still could", StringComparison.OrdinalIgnoreCase))
                 {
                     FirstRunPathStatusText.Text =
                         "Click Auto-detect after the installer finishes, or Browse to SPT.Launcher.exe.";
@@ -1879,6 +1889,39 @@ namespace SptLauncherWpf.Pages
                         (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
                 }
             }
+        }
+
+        private void AdvanceFirstRunToReadyStep(string? path = null)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                HasValidLauncherPath(out path);
+            }
+
+            _firstRunAwaitingFinish = true;
+            _firstRunPreferLocateStep = true;
+
+            if (FirstRunWizardPanel != null)
+            {
+                FirstRunWizardPanel.Visibility = Visibility.Visible;
+            }
+
+            if (MainLauncherContent != null)
+            {
+                MainLauncherContent.Visibility = Visibility.Collapsed;
+            }
+
+            ShowFirstRunStep(3);
+            if (FirstRunReadyDetailText != null && !string.IsNullOrWhiteSpace(path))
+            {
+                FirstRunReadyDetailText.Text =
+                    $"SPT looks good at:\n{path}\n\nYou can launch from the Play card, check Tarkov/Fika readiness, or tweak setup anytime.";
+            }
+
+            // Path was often empty on first Loaded pass — refresh dependent status now.
+            UpdateSptVersionDisplay();
+            UpdateEftVersionDisplay();
+            UpdateFikaVersionDisplay();
         }
 
         private void ShowFirstRunStep(int step)
@@ -1916,6 +1959,7 @@ namespace SptLauncherWpf.Pages
             _firstRunPreferLocateStep = false;
             SettingsService.Instance.FirstRunWizardDismissed = true;
             SettingsService.Instance.SaveSettings();
+            App.ClearForceFirstRun();
 
             if (FirstRunWizardPanel != null)
             {
@@ -1928,6 +1972,10 @@ namespace SptLauncherWpf.Pages
             }
 
             RefreshPlayHero();
+            UpdateSptVersionDisplay();
+            UpdateEftVersionDisplay();
+            UpdateFikaVersionDisplay();
+            RefreshReadinessSummary();
         }
 
         private void FirstRunInstallSptButton_Click(object sender, RoutedEventArgs e)
@@ -1955,7 +2003,6 @@ namespace SptLauncherWpf.Pages
         private void FirstRunAlreadyInstalledButton_Click(object sender, RoutedEventArgs e)
         {
             _firstRunPreferLocateStep = true;
-            ShowFirstRunStep(2);
 
             var detected = AutoDetectSptLauncher();
             if (!string.IsNullOrWhiteSpace(detected))
@@ -1964,10 +2011,11 @@ namespace SptLauncherWpf.Pages
                 SaveSettings();
                 UpdatePathStatus();
                 UpdateSptVersionDisplay();
-                RefreshFirstRunWizard();
+                AdvanceFirstRunToReadyStep(detected);
                 return;
             }
 
+            ShowFirstRunStep(2);
             if (FirstRunPathStatusText != null)
             {
                 FirstRunPathStatusText.Text =
@@ -1987,6 +2035,12 @@ namespace SptLauncherWpf.Pages
         {
             _firstRunPreferLocateStep = true;
             BrowseButton_Click(sender, e);
+            if (HasValidLauncherPath(out var path) && IsSptDetectedAtCurrentPath())
+            {
+                AdvanceFirstRunToReadyStep(path);
+                return;
+            }
+
             RefreshFirstRunWizard();
         }
 
@@ -2011,14 +2065,7 @@ namespace SptLauncherWpf.Pages
             SaveSettings();
             UpdatePathStatus();
             UpdateSptVersionDisplay();
-            RefreshFirstRunWizard();
-
-            if (FirstRunPathStatusText != null)
-            {
-                FirstRunPathStatusText.Text = $"Found: {detected}";
-                FirstRunPathStatusText.Foreground =
-                    new SolidColorBrush(System.Windows.Media.Color.FromRgb(34, 197, 94));
-            }
+            AdvanceFirstRunToReadyStep(detected);
         }
 
         private void FirstRunRecheckSptButton_Click(object sender, RoutedEventArgs e)
@@ -2036,17 +2083,20 @@ namespace SptLauncherWpf.Pages
             }
 
             UpdateSptVersionDisplay();
-            RefreshFirstRunWizard();
 
-            if (!IsSptDetectedAtCurrentPath())
+            if (HasValidLauncherPath(out var path) && IsSptDetectedAtCurrentPath())
             {
-                System.Windows.MessageBox.Show(
-                    "SPT.Launcher.exe still wasn’t found.\n\n" +
-                    "Finish the official installer, then use Auto-detect or Browse to the SPT.Launcher.exe in your install folder.",
-                    "SPT not found",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                AdvanceFirstRunToReadyStep(path);
+                return;
             }
+
+            RefreshFirstRunWizard();
+            System.Windows.MessageBox.Show(
+                "SPT.Launcher.exe still wasn’t found.\n\n" +
+                "Finish the official installer, then use Auto-detect or Browse to the SPT.Launcher.exe in your install folder.",
+                "SPT not found",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
 
         private void FirstRunFinishButton_Click(object sender, RoutedEventArgs e)
@@ -2453,6 +2503,7 @@ namespace SptLauncherWpf.Pages
 
                 // Verify results should surface in the compact readiness strip.
                 _readinessUserCollapsed = false;
+                _readinessUserExpanded = true;
                 RefreshReadinessSummary();
             });
         }
@@ -2506,15 +2557,15 @@ namespace SptLauncherWpf.Pages
                     UpdateSptVersionDisplay();
                     await Task.Delay(400, ct);
 
-                    detectedVersion = await Task.Run(() =>
-                    {
-                        if (!HasValidLauncherPath(out var path))
-                        {
-                            return null;
-                        }
+                    // Read the TextBox on the UI thread — Task.Run cannot touch DependencyObjects.
+                    var launcherPath = InvokeOnUi(() =>
+                        HasValidLauncherPath(out var path) ? path : string.Empty);
 
-                        return SptDetectionService.Instance.GetSptVersion(path);
-                    }, ct);
+                    detectedVersion = string.IsNullOrWhiteSpace(launcherPath)
+                        ? null
+                        : await Task.Run(
+                            () => SptDetectionService.Instance.GetSptVersion(launcherPath),
+                            ct);
 
                     if (string.IsNullOrWhiteSpace(detectedVersion))
                     {
@@ -3139,11 +3190,13 @@ namespace SptLauncherWpf.Pages
                 var fikaModNames = new[] { "Fika", "Fika-Coop", "FikaCoop", "FIKA", "fika", "fika-server" };
                 var modsDirectories = new[]
                 {
-                    Path.Combine(sptPath, "user", "mods"),           // Standard SPT mods location
-                    Path.Combine(sptPath, "BepInEx", "plugins"),     // BepInEx plugins location
-                    Path.Combine(sptPath, "mods"),                   // Alternative mods location
-                    Path.Combine(sptPath, "SPT", "user", "mods"),    // Nested SPT structure
-                    Path.Combine(sptPath, "SPT", "BepInEx", "plugins") // Nested BepInEx structure
+                    Path.Combine(sptPath, "user", "mods"),
+                    Path.Combine(sptPath, "BepInEx", "plugins"),
+                    Path.Combine(sptPath, "mods"),
+                    Path.Combine(sptPath, "SPT", "user", "mods"),
+                    Path.Combine(sptPath, "SPT", "BepInEx", "plugins"),
+                    Path.Combine(sptPath, "SPT_Runtime", "user", "mods"),
+                    Path.Combine(sptPath, "SPT_Runtime", "BepInEx", "plugins")
                 };
 
                 System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Checking {modsDirectories.Length} mod directories");
@@ -3624,19 +3677,43 @@ namespace SptLauncherWpf.Pages
                 return null;
             }
 
-            var clientPaths = new[]
+            var pluginRoots = new[]
             {
-                Path.Combine(sptPath, "BepInEx", "plugins", "Fika"),
-                Path.Combine(sptPath, "SPT", "BepInEx", "plugins", "Fika")
+                Path.Combine(sptPath, "BepInEx", "plugins"),
+                Path.Combine(sptPath, "SPT", "BepInEx", "plugins"),
+                Path.Combine(sptPath, "SPT_Runtime", "BepInEx", "plugins")
             };
 
-            foreach (var clientPath in clientPaths)
+            foreach (var pluginsRoot in pluginRoots)
             {
-                if (Directory.Exists(clientPath) &&
-                    (File.Exists(Path.Combine(clientPath, "Fika.Core.dll")) ||
-                     File.Exists(Path.Combine(clientPath, "Fika.dll"))))
+                if (!Directory.Exists(pluginsRoot))
                 {
-                    return clientPath;
+                    continue;
+                }
+
+                // Folder installs: BepInEx/plugins/Fika/Fika.Core.dll
+                foreach (var folderName in new[] { "Fika", "Fika.Core", "Fika-Core" })
+                {
+                    var folder = Path.Combine(pluginsRoot, folderName);
+                    if (Directory.Exists(folder) &&
+                        (File.Exists(Path.Combine(folder, "Fika.Core.dll")) ||
+                         File.Exists(Path.Combine(folder, "Fika.dll"))))
+                    {
+                        return folder;
+                    }
+                }
+
+                // Loose plugin installs: BepInEx/plugins/Fika.Core.dll
+                var looseCore = Path.Combine(pluginsRoot, "Fika.Core.dll");
+                if (File.Exists(looseCore))
+                {
+                    return pluginsRoot;
+                }
+
+                var looseFika = Path.Combine(pluginsRoot, "Fika.dll");
+                if (File.Exists(looseFika))
+                {
+                    return pluginsRoot;
                 }
             }
 
@@ -3653,7 +3730,8 @@ namespace SptLauncherWpf.Pages
             var serverPaths = new[]
             {
                 Path.Combine(sptPath, "user", "mods", "fika-server"),
-                Path.Combine(sptPath, "SPT", "user", "mods", "fika-server")
+                Path.Combine(sptPath, "SPT", "user", "mods", "fika-server"),
+                Path.Combine(sptPath, "SPT_Runtime", "user", "mods", "fika-server")
             };
 
             foreach (var serverPath in serverPaths)
@@ -3664,9 +3742,55 @@ namespace SptLauncherWpf.Pages
                 }
 
                 var packageJsonPath = Path.Combine(serverPath, "package.json");
-                if (File.Exists(packageJsonPath) && CheckIfFikaPackageJson(packageJsonPath))
+                if (File.Exists(packageJsonPath))
                 {
+                    // Prefer package.json match, but accept fika-server folder name as fallback.
+                    if (CheckIfFikaPackageJson(packageJsonPath) ||
+                        Path.GetFileName(serverPath).Contains("fika", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return serverPath;
+                    }
+                }
+                else if (Directory.EnumerateFileSystemEntries(serverPath).Any())
+                {
+                    // Installer layouts sometimes omit package.json until first server run.
                     return serverPath;
+                }
+            }
+
+            // Broader search under known mods roots for folders/files that look like Fika server.
+            var modsRoots = new[]
+            {
+                Path.Combine(sptPath, "user", "mods"),
+                Path.Combine(sptPath, "SPT", "user", "mods"),
+                Path.Combine(sptPath, "SPT_Runtime", "user", "mods")
+            };
+
+            foreach (var modsRoot in modsRoots)
+            {
+                if (!Directory.Exists(modsRoot))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    foreach (var dir in Directory.EnumerateDirectories(modsRoot))
+                    {
+                        var name = Path.GetFileName(dir);
+                        if (name.Contains("fika", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var packageJsonPath = Path.Combine(dir, "package.json");
+                            if (!File.Exists(packageJsonPath) || CheckIfFikaPackageJson(packageJsonPath))
+                            {
+                                return dir;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore enumeration failures
                 }
             }
 
@@ -3972,8 +4096,8 @@ namespace SptLauncherWpf.Pages
                     return;
                 }
 
-                // Get launcher path from text box or settings
-                var launcherPath = LauncherPathTextBox.Text;
+                // Get launcher path from text box or settings (TextBox must be read on the UI thread)
+                var launcherPath = InvokeOnUi(() => LauncherPathTextBox?.Text);
                 if (string.IsNullOrWhiteSpace(launcherPath))
                 {
                     launcherPath = SettingsService.Instance.LauncherPath;
@@ -4415,7 +4539,19 @@ namespace SptLauncherWpf.Pages
                     MessageBoxImage.Information);
 
                 var expectedVersion = _currentUpdateInfo?.LatestVersion;
-                await VerifySptAfterUpdateAsync(expectedVersion);
+                try
+                {
+                    await VerifySptAfterUpdateAsync(expectedVersion);
+                }
+                catch (Exception verifyEx) when (verifyEx is not OperationCanceledException)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[RunSptUpdateFlowAsync] Post-update verify failed: {verifyEx}");
+                    ShowUpdateVerifyResult(
+                        passed: false,
+                        title: "Could not verify SPT update",
+                        detail: "The update finished, but automatic version check failed. Click Recheck on Readiness.");
+                }
             }
             catch (OperationCanceledException)
             {
@@ -4447,7 +4583,7 @@ namespace SptLauncherWpf.Pages
                 _sptUpdateCts?.Dispose();
                 _sptUpdateCts = null;
                 await FinalizeSptUpdateUiAndStateAsync();
-                RefreshSptRecoveryPanel();
+                InvokeOnUi(RefreshSptRecoveryPanel);
                 InvokeOnUi(RefreshReadinessSummary);
             }
         }

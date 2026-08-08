@@ -151,6 +151,37 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="Medium"/>
         </Style>
+
+        <!-- ComboBox: keep closed + dropdown text readable in light/dark themes -->
+        <Style x:Key="ModernComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="Padding" Value="10,6"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource HoverColor}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource HoverColor}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryColor}"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
         
         <!-- Icon Ellipse Style for smooth rendering - applies to all Ellipse elements -->
         <Style TargetType="Ellipse">

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
@@ -10,6 +11,15 @@ namespace SptLauncherWpf
 {
     public partial class App : System.Windows.Application
     {
+        /// <summary>
+        /// When true, skip SPT auto-detect and show the first-run walkthrough.
+        /// Enabled with --force-first-run (used by scripts/Test-AsNewUser.ps1).
+        /// Cleared once the user finishes or skips the walkthrough.
+        /// </summary>
+        public static bool ForceFirstRun { get; private set; }
+
+        public static void ClearForceFirstRun() => ForceFirstRun = false;
+
         [DllImport("user32.dll")]
         private static extern bool SetProcessDPIAware();
 
@@ -43,6 +53,11 @@ namespace SptLauncherWpf
 
         protected override void OnStartup(StartupEventArgs e)
         {
+            ForceFirstRun = e.Args.Any(a =>
+                string.Equals(a, "--force-first-run", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a, "-force-first-run", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(a, "/force-first-run", StringComparison.OrdinalIgnoreCase));
+
             base.OnStartup(e);
             
             // Unblock the current executable if it was downloaded from the internet
