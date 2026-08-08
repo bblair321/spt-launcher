@@ -151,7 +151,10 @@ namespace SptLauncherWpf.Services
         {
             var url = $"{BaseUrl}/mod/{modId}/versions/{versionId}/file-tree";
             using var response = await _http.GetAsync(url, cancellationToken);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            // Some versions return 403/404 even when the download itself works (e.g. LootNET 1.1.0).
+            if (response.StatusCode is System.Net.HttpStatusCode.NotFound
+                or System.Net.HttpStatusCode.Forbidden
+                or System.Net.HttpStatusCode.Unauthorized)
             {
                 return null;
             }

@@ -136,6 +136,19 @@ namespace SptLauncherWpf.Services
             // Only strip when the wrap is NOT already a known root.
             path = MaybeUnwrapSingleRoot(path);
 
+            // Archives often nest under a literal "SPT/" folder (Forge file trees do this too).
+            if (StartsWithSegment(path, "SPT") && !StartsWithSegment(path, "SPT_Runtime"))
+            {
+                var afterSpt = TrimPrefix(path, "SPT/");
+                if (StartsWithSegment(afterSpt, "BepInEx") ||
+                    StartsWithSegment(afterSpt, "user/mods") ||
+                    StartsWithSegment(afterSpt, "user\\mods") ||
+                    StartsWithSegment(afterSpt, "SPT_Runtime"))
+                {
+                    path = afterSpt;
+                }
+            }
+
             if (StartsWithSegment(path, "BepInEx"))
             {
                 installRelativePath = path;
@@ -223,7 +236,8 @@ namespace SptLauncherWpf.Services
             // Do not unwrap known roots.
             if (StartsWithSegment(path, "BepInEx")
                 || StartsWithSegment(path, "SPT_Runtime")
-                || StartsWithSegment(path, "user"))
+                || StartsWithSegment(path, "user")
+                || (StartsWithSegment(path, "SPT") && !StartsWithSegment(path, "SPT_Runtime")))
             {
                 return path;
             }
@@ -237,7 +251,8 @@ namespace SptLauncherWpf.Services
             var remainder = path[(slash + 1)..];
             if (StartsWithSegment(remainder, "BepInEx")
                 || StartsWithSegment(remainder, "SPT_Runtime")
-                || StartsWithSegment(remainder, "user/mods"))
+                || StartsWithSegment(remainder, "user/mods")
+                || (StartsWithSegment(remainder, "SPT") && !StartsWithSegment(remainder, "SPT_Runtime")))
             {
                 return remainder;
             }

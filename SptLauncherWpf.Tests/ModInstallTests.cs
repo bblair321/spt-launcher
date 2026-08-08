@@ -123,6 +123,31 @@ public class ModPathClassifierTests
         Assert.Equal(ModInstallKind.ServerOnly, kind);
         Assert.Equal("SPT_Runtime/user/mods/Foo/mod.js", mapped);
     }
+
+    [Fact]
+    public void Classify_lootnet_style_spt_prefixed_mixed_package()
+    {
+        var files = new[]
+        {
+            "BepInEx/plugins/LootNet/LootNet.dll",
+            "BepInEx/plugins/LootNet/LootNetFika.dll",
+            "BepInEx/plugins/LootNet/weii weii.mp4",
+            "SPT/user/mods/LootNetServer/LootNetServer.dll"
+        };
+
+        var result = ModPathClassifier.Classify(files, installHasSptRuntime: true);
+
+        Assert.Equal(ModInstallKind.Mixed, result.Kind);
+        Assert.True(result.CanAutoInstall);
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals("BepInEx/plugins/LootNet/LootNet.dll", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals(
+                "SPT_Runtime/user/mods/LootNetServer/LootNetServer.dll",
+                StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 public class ModInstallSafetyTests

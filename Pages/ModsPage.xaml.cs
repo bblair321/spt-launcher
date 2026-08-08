@@ -595,11 +595,14 @@ namespace SptLauncherWpf.Pages
                 Margin = new Thickness(0, 16, 0, 0)
             };
 
+            // File-tree preview is best-effort. Forge sometimes 403s it even when download works
+            // (LootNET 1.1.0). Install can still classify from the archive after download.
+            var layoutUnsupported = _selectedClassification is { CanAutoInstall: false };
             var canInstall = !isTools
                              && _selectedVersion != null
                              && !string.IsNullOrWhiteSpace(_selectedVersion.Link)
-                             && (_selectedClassification?.CanAutoInstall ?? false)
-                             && !string.IsNullOrWhiteSpace(_sptRoot);
+                             && !string.IsNullOrWhiteSpace(_sptRoot)
+                             && !layoutUnsupported;
 
             var installButton = new System.Windows.Controls.Button
             {
@@ -637,11 +640,22 @@ namespace SptLauncherWpf.Pages
                     Margin = new Thickness(0, 12, 0, 0)
                 });
             }
-            else if (!canInstall && !isTools && _selectedClassification is { CanAutoInstall: false })
+            else if (layoutUnsupported)
             {
                 ModDetailsPanel.Children.Add(new TextBlock
                 {
                     Text = "Auto-install isn’t available for this package layout. Use Open on Forge.",
+                    FontSize = 12,
+                    Foreground = (Brush)FindResource("TextSecondaryColor"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 12, 0, 0)
+                });
+            }
+            else if (_selectedClassification == null && canInstall)
+            {
+                ModDetailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Forge didn’t provide a file preview for this version. Install will inspect the archive after download.",
                     FontSize = 12,
                     Foreground = (Brush)FindResource("TextSecondaryColor"),
                     TextWrapping = TextWrapping.Wrap,
