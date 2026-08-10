@@ -42,9 +42,11 @@ namespace SptLauncherWpf.Services
                         ? "Ready for SPT installer"
                         : "Patcher available for install",
             EftCompatibilityStatus.UpdateRequired =>
-                sptAlreadyInstalled
-                    ? "Live Tarkov (older than latest patcher source)"
-                    : "Update Tarkov (for downgrader)",
+                string.IsNullOrWhiteSpace(AvailablePatcherUrl)
+                    ? (sptAlreadyInstalled
+                        ? "Live Tarkov (older than latest patcher source)"
+                        : "Update Tarkov (for downgrader)")
+                    : "Update live Tarkov for patcher",
             EftCompatibilityStatus.NewerThanSupported =>
                 sptAlreadyInstalled
                     ? "Live Tarkov OK for play"
@@ -136,6 +138,8 @@ namespace SptLauncherWpf.Services
         /// Confirms whether a Patcher_{live}_to_{target}.7z exists.
         /// The warning panel is only used when live Tarkov is newer than the published
         /// patcher source version AND no CDN file can be found.
+        /// When live is older than the patcher source (UpdateRequired), probes the
+        /// required live → target patcher so the UI can prompt updating live Tarkov.
         /// </summary>
         public async Task ResolveCurrentPatcherAvailabilityAsync(EftCompatibilityInfo info)
         {
@@ -144,13 +148,46 @@ namespace SptLauncherWpf.Services
                 return;
             }
 
-            if (info.Status is EftCompatibilityStatus.NotDetected or EftCompatibilityStatus.UpdateRequired)
+            if (info.Status == EftCompatibilityStatus.NotDetected)
             {
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(info.InstalledVersion) ||
-                string.IsNullOrWhiteSpace(info.TargetSptClientVersion))
+            if (string.IsNullOrWhiteSpace(info.TargetSptClientVersion))
+            {
+                return;
+            }
+
+            // Live is behind the patcher source: check that the downgrader exists for the
+            // version they need to update TO, so we can tell them to update live Tarkov first.
+            if (info.Status == EftCompatibilityStatus.UpdateRequired)
+            {
+                if (string.IsNullOrWhiteSpace(info.RequiredLiveVersion))
+                {
+                    return;
+                }
+
+                var waitingProbe = await ProbeAvailablePatcherUrlAsync(
+                    info.RequiredLiveVersion,
+                    info.TargetSptClientVersion);
+                if (waitingProbe.Result == PatcherProbeResult.Exists)
+                {
+                    info.AvailablePatcherUrl = waitingProbe.Url;
+                    Debug.WriteLine(
+                        $"[EftDetectionService] Patcher waiting after live update: {waitingProbe.Url}");
+                }
+                else if (waitingProbe.Result != PatcherProbeResult.Error)
+                {
+                    // Release notes still advertise this source version even if CDN 404s briefly.
+                    info.AvailablePatcherUrl =
+                        BuildPreferredPatcherUrl(info.RequiredLiveVersion, info.TargetSptClientVersion);
+                }
+
+                // Keep UpdateRequired — user must update live before SPT can copy + patch.
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(info.InstalledVersion))
             {
                 return;
             }

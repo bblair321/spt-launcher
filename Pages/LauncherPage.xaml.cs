@@ -1740,10 +1740,17 @@ namespace SptLauncherWpf.Pages
                 return true;
             }
 
-            // Tarkov only matters for install/downgrade. Once SPT is installed, play doesn't need live EFT.
+            // Live Tarkov must match the patcher source before SPT can copy + downgrade.
+            if (_currentEftInfo?.Status == EftCompatibilityStatus.UpdateRequired)
+            {
+                reason = string.IsNullOrWhiteSpace(eftStatus) || eftStatus == "—"
+                    ? "Update live Tarkov so SPT can copy and run the patcher."
+                    : $"Tarkov: {eftStatus}.";
+                return true;
+            }
+
             if (!IsSptDetectedAtCurrentPath() &&
-                _currentEftInfo?.Status is EftCompatibilityStatus.UpdateRequired
-                    or EftCompatibilityStatus.NotDetected
+                _currentEftInfo?.Status is EftCompatibilityStatus.NotDetected
                     or EftCompatibilityStatus.RequiredUnknown)
             {
                 reason = string.IsNullOrWhiteSpace(eftStatus) || eftStatus == "—"
@@ -3468,18 +3475,43 @@ namespace SptLauncherWpf.Pages
             }
 
             var isNewerThanPatcher = eftInfo.Status == EftCompatibilityStatus.NewerThanSupported;
-            // Day-to-day play doesn't need Tarkov update actions once SPT is installed.
-            var showUpdateButton = !sptAlreadyInstalled &&
-                eftInfo.Status is
-                    EftCompatibilityStatus.UpdateRequired or
-                    EftCompatibilityStatus.NotDetected or
-                    EftCompatibilityStatus.RequiredUnknown;
+            var needsLiveUpdate = eftInfo.Status == EftCompatibilityStatus.UpdateRequired;
+            // Live Tarkov must be updated (via BSG) before SPT can copy it and run the downgrader.
+            // Keep this visible even when SPT is already installed so users can prep for reinstall/update.
+            var showUpdateButton =
+                needsLiveUpdate ||
+                (!sptAlreadyInstalled &&
+                 eftInfo.Status is
+                     EftCompatibilityStatus.NotDetected or
+                     EftCompatibilityStatus.RequiredUnknown);
 
             if (EftRequiredVersionText != null)
             {
-                if (sptAlreadyInstalled || isNewerThanPatcher)
+                if (isNewerThanPatcher && !needsLiveUpdate)
                 {
-                    // Keep the home screen quiet once SPT is installed; patcher detail is for install/reinstall.
+                    // No-patcher warning uses the dedicated guidance panel.
+                    EftRequiredVersionText.Visibility = Visibility.Collapsed;
+                    EftRequiredVersionText.Text = string.Empty;
+                }
+                else if (needsLiveUpdate)
+                {
+                    EftRequiredVersionText.Visibility = Visibility.Visible;
+                    var required = string.IsNullOrWhiteSpace(eftInfo.RequiredLiveVersion)
+                        ? "the patcher source version"
+                        : eftInfo.RequiredLiveVersion;
+                    var target = string.IsNullOrWhiteSpace(eftInfo.TargetSptClientVersion)
+                        ? "SPT client"
+                        : eftInfo.TargetSptClientVersion;
+                    EftRequiredVersionText.Text = !string.IsNullOrWhiteSpace(eftInfo.AvailablePatcherUrl)
+                        ? $"Update live Tarkov to {required}, then SPT can copy it and run the patcher ({required} → {target})."
+                        : $"Update live Tarkov to {required}" +
+                          (string.IsNullOrWhiteSpace(eftInfo.TargetSptClientVersion)
+                              ? " so SPT can copy and downgrade."
+                              : $" → SPT {target}.");
+                }
+                else if (sptAlreadyInstalled)
+                {
+                    // Keep the home screen quiet once SPT is installed and live is not behind.
                     EftRequiredVersionText.Visibility = Visibility.Collapsed;
                     EftRequiredVersionText.Text = string.Empty;
                 }
@@ -3490,7 +3522,7 @@ namespace SptLauncherWpf.Pages
                         ? "SPT client"
                         : eftInfo.TargetSptClientVersion;
                     EftRequiredVersionText.Text =
-                        $"Downgrade patcher available: {eftInfo.InstalledVersion} → {target}";
+                        $"Live Tarkov is ready. Install SPT to copy it and run the patcher ({eftInfo.InstalledVersion} → {target}).";
                 }
                 else if (showUpdateButton || eftInfo.Status == EftCompatibilityStatus.RequiredUnknown)
                 {
@@ -3563,24 +3595,36 @@ namespace SptLauncherWpf.Pages
 
         private void UpdateTarkovButton_Click(object sender, RoutedEventArgs e)
         {
+            var requiredLive = _currentEftInfo?.RequiredLiveVersion;
+            var targetClient = _currentEftInfo?.TargetSptClientVersion;
+            var hasPatcherWaiting = !string.IsNullOrWhiteSpace(_currentEftInfo?.AvailablePatcherUrl);
+
             var launched = EftDetectionService.Instance.TryLaunchOfficialUpdater();
             if (!launched)
             {
                 System.Windows.MessageBox.Show(
                     "Could not find the Battlestate Games launcher.\n\n" +
                     "Most Tarkov copies are updated through the BSG launcher (not Steam).\n" +
-                    "Open your Battlestate Games launcher manually, update Escape From Tarkov, " +
-                    "then click Recheck.",
+                    "Open your Battlestate Games launcher manually, update Escape From Tarkov" +
+                    (string.IsNullOrWhiteSpace(requiredLive) ? "" : $" to {requiredLive}") +
+                    ", then click Recheck.",
                     "Update Tarkov",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 return;
             }
 
+            var detail = string.IsNullOrWhiteSpace(requiredLive)
+                ? "Update Escape From Tarkov in the Battlestate Games launcher, then return here and click Recheck."
+                : hasPatcherWaiting && !string.IsNullOrWhiteSpace(targetClient)
+                    ? $"Update your live Tarkov install to {requiredLive}.\n\n" +
+                      $"Once live matches, SPT can copy that install and run the downgrade patcher " +
+                      $"({requiredLive} → {targetClient}) on the copy — your live game stays untouched.\n\n" +
+                      "When the BSG update finishes, return here and Recheck."
+                    : $"Update your live Tarkov install to {requiredLive}, then return here and click Recheck.";
+
             System.Windows.MessageBox.Show(
-                "Opened the Battlestate Games updater when available " +
-                "(or the official Tarkov site / Steam only if Tarkov itself is installed there).\n\n" +
-                "Update Escape From Tarkov, then return here and click Recheck.",
+                detail,
                 "Update Tarkov",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
