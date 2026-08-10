@@ -2079,24 +2079,15 @@ namespace SptLauncherWpf.Pages
         {
             _firstRunPreferLocateStep = true;
 
-            if (!HasValidLauncherPath(out _))
+            // Always re-scan after install — a stale/empty path should not block detection.
+            if (TryAutoDetectAndApplySptLauncher(out var path))
             {
-                var detected = AutoDetectSptLauncher();
-                if (!string.IsNullOrWhiteSpace(detected))
-                {
-                    LauncherPathTextBox.Text = detected;
-                    SaveSettings();
-                }
-            }
-
-            UpdateSptVersionDisplay();
-
-            if (HasValidLauncherPath(out var path) && IsSptDetectedAtCurrentPath())
-            {
+                UpdateSptVersionDisplay();
                 AdvanceFirstRunToReadyStep(path);
                 return;
             }
 
+            UpdateSptVersionDisplay();
             RefreshFirstRunWizard();
             System.Windows.MessageBox.Show(
                 "SPT.Launcher.exe still wasn’t found.\n\n" +
@@ -2882,12 +2873,29 @@ namespace SptLauncherWpf.Pages
                     "SPT", "SPT-AKI", "SPTarkov", "SinglePlayerTarkov", "spt", "SP-Tarkov"
                 };
 
-                // Explicit modern + legacy layouts under common folder names
+                // Common parent folders the official installer / users pick (e.g. C:\Games\SPT).
+                var parentFolders = new List<string>(drives);
                 foreach (var drive in drives)
+                {
+                    foreach (var parent in new[] { "Games", "Game", "SPTarkov", "Program Files", "Program Files (x86)" })
+                    {
+                        parentFolders.Add(Path.Combine(drive, parent));
+                    }
+                }
+
+                var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                if (!string.IsNullOrWhiteSpace(userProfile))
+                {
+                    parentFolders.Add(Path.Combine(userProfile, "Games"));
+                    parentFolders.Add(Path.Combine(userProfile, "SPT"));
+                }
+
+                // Explicit modern + legacy layouts under common folder names
+                foreach (var parent in parentFolders.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     foreach (var folderName in folderNames)
                     {
-                        var root = Path.Combine(drive, folderName);
+                        var root = Path.Combine(parent, folderName);
                         foreach (var relative in new[]
                                  {
                                      "SPT.Launcher.exe",
@@ -2906,14 +2914,25 @@ namespace SptLauncherWpf.Pages
                         // Installer often drops shortcuts in the chosen install folder.
                         Consider(TryResolveShortcutTarget(Path.Combine(root, "SPT.Launcher.lnk")));
                     }
+
+                    // Also accept the parent itself when the user installed directly into Games\SPT_Runtime etc.
+                    foreach (var relative in new[]
+                             {
+                                 "SPT.Launcher.exe",
+                                 Path.Combine("SPT_Runtime", "SPT.Launcher.exe"),
+                                 "Aki.Launcher.exe"
+                             })
+                    {
+                        Consider(Path.Combine(parent, relative));
+                    }
                 }
 
                 // Deeper scan under likely SPT roots (covers custom subfolders)
-                foreach (var drive in drives)
+                foreach (var parent in parentFolders.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     foreach (var folderName in folderNames)
                     {
-                        var root = Path.Combine(drive, folderName);
+                        var root = Path.Combine(parent, folderName);
                         if (!Directory.Exists(root))
                         {
                             continue;
@@ -2921,6 +2940,13 @@ namespace SptLauncherWpf.Pages
 
                         var found = SearchForLauncherRecursive(root, maxDepth: 4);
                         Consider(found);
+                    }
+
+                    if (Directory.Exists(parent) &&
+                        folderNames.Any(n => parent.EndsWith(n, StringComparison.OrdinalIgnoreCase) ||
+                                             parent.IndexOf($"\\{n}", StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        Consider(SearchForLauncherRecursive(parent, maxDepth: 4));
                     }
                 }
 
@@ -3590,7 +3616,54 @@ namespace SptLauncherWpf.Pages
 
         private void RefreshEftStatusButton_Click(object sender, RoutedEventArgs e)
         {
+            RefreshAllReadiness(forceSptRescan: true);
+        }
+
+        /// <summary>
+        /// Re-checks SPT / Tarkov / Fika readiness. After a fresh SPT install the launcher path
+        /// is often still empty, so Recheck must re-run auto-detect — not only refresh Tarkov.
+        /// </summary>
+        private void RefreshAllReadiness(bool forceSptRescan = false)
+        {
+            if (forceSptRescan || !IsSptDetectedAtCurrentPath())
+            {
+                TryAutoDetectAndApplySptLauncher(out _, forceRescan: forceSptRescan);
+            }
+
+            UpdatePathStatus();
+            UpdateSptVersionDisplay();
             UpdateEftVersionDisplay();
+            UpdateFikaVersionDisplay();
+            RefreshReadinessSummary();
+            RefreshFirstRunWizard();
+            RefreshPlayHero();
+        }
+
+        /// <summary>
+        /// Scans for SPT.Launcher.exe and applies it when found. Returns true when the current
+        /// (or newly detected) path is a valid SPT install.
+        /// </summary>
+        private bool TryAutoDetectAndApplySptLauncher(out string path, bool forceRescan = false)
+        {
+            path = string.Empty;
+
+            if (!forceRescan && IsSptDetectedAtCurrentPath() && HasValidLauncherPath(out path))
+            {
+                return true;
+            }
+
+            var detected = AutoDetectSptLauncher();
+            if (string.IsNullOrWhiteSpace(detected))
+            {
+                HasValidLauncherPath(out path);
+                return IsSptDetectedAtCurrentPath();
+            }
+
+            LauncherPathTextBox.Text = detected;
+            SaveSettings();
+            UpdatePathStatus();
+            path = detected;
+            return IsSptDetectedAtCurrentPath();
         }
 
         private void UpdateTarkovButton_Click(object sender, RoutedEventArgs e)
