@@ -2,7 +2,7 @@ namespace SptLauncherWpf.Services
 {
     internal static class SptInstallUrls
     {
-        public const string InstallerDownloadUrl = "https://ligma.waffle-lord.net/SPTInstaller.exe";
+        public const string InstallerDownloadUrl = "https://patcher.sp-tushonka.com/SPTInstaller.exe";
 
         public const string InstallerFileName = "SPTInstaller.exe";
 
