@@ -8,7 +8,7 @@ A native WPF launcher for [SPT](https://sp-tarkov.com/) (Single Player Tarkov) w
 - **Guided first-run setup** — Install SPT first, then auto-detect or browse for `SPT.Launcher.exe` (including modern `SPT_Runtime` installs)
 - **Safer SPT updates** — Preflight checks, download details, cancel, installer-only mode, and backup/restore recovery
 - **Live Tarkov / patcher awareness** — Detects your live EFT version and checks the SPT patcher CDN; only warns when no downgrade patcher exists for your build
-- **Fika co-op** — Install/update Fika, enable co-op, and set host IP
+- **Fika co-op** — Install/update Fika, then Host / Join with a saved connection IP
 - **Mods (Forge)** — Browse/install from The Forge (zip + 7z), manage installed mods (enable/disable/remove), update checks, and dependency hints
 - **Servers & Tools** — Local/remote server helpers and developer utilities
 - **Self-update** — Checks GitHub releases and replaces the installed launcher in place
@@ -120,7 +120,7 @@ SPT’s own launcher config (including Fika IP / dev mode) lives next to your SP
 **Fika**
 
 - Install Fika into your SPT folder when prompted
-- Enable Fika co-op and save the host IP under **Show setup**
+- Use **Host on this PC** / **Join a friend** to save the connection IP
 
 ## Contributing
 

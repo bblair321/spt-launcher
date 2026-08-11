@@ -180,12 +180,6 @@ namespace SptLauncherWpf.Services
             set => SetValue("VerboseLogging", value);
         }
 
-        public bool FikaEnabled
-        {
-            get => GetValue("FikaEnabled", false);
-            set => SetValue("FikaEnabled", value);
-        }
-
         public string FikaIpAddress
         {
             get => GetValue("FikaIpAddress", "127.0.0.1");
