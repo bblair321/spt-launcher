@@ -180,12 +180,6 @@ namespace SptLauncherWpf.Services
             set => SetValue("VerboseLogging", value);
         }
 
-        public string FikaIpAddress
-        {
-            get => GetValue("FikaIpAddress", "127.0.0.1");
-            set => SetValue("FikaIpAddress", value);
-        }
-
         public string LastSptBackupPath
         {
             get => GetValue("LastSptBackupPath", "");
