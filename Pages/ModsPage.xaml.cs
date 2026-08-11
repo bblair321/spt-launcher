@@ -77,7 +77,7 @@ namespace SptLauncherWpf.Pages
 
             HeaderSubtitleText.Text = _showInstalled
                 ? "Enable, disable, open, or remove mods already in your SPT folder."
-                : "Browse The Forge and install into your SPT folder. Server mods go to user/mods; client mods go to BepInEx.";
+                : "Browse sp-mod.com and install into your SPT folder. Server mods go to user/mods; client mods go to BepInEx.";
         }
 
         private void RefreshInstalledModsCache()
@@ -178,7 +178,7 @@ namespace SptLauncherWpf.Pages
 
             try
             {
-                SetBusy(true, "Loading mods from Forge…");
+                SetBusy(true, "Loading mods…");
                 var query = SearchTextBox?.Text?.Trim();
                 if (string.Equals(query, "Search mods…", StringComparison.OrdinalIgnoreCase))
                 {
@@ -206,7 +206,7 @@ namespace SptLauncherWpf.Pages
                 UpdatePagination();
                 StatusText.Text = _mods.Count == 0
                     ? "No mods matched."
-                    : $"Loaded {_mods.Count} mods from Forge.";
+                    : $"Loaded {_mods.Count} mods.";
             }
             catch (OperationCanceledException)
             {
@@ -216,8 +216,8 @@ namespace SptLauncherWpf.Pages
             {
                 StatusText.Text = $"Failed to load mods: {ex.Message}";
                 System.Windows.MessageBox.Show(
-                    $"Could not reach The Forge.\n\n{ex.Message}",
-                    "Forge error",
+                    $"Could not reach the mods site (sp-mod.com).\n\n{ex.Message}",
+                    "Mods error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
@@ -618,7 +618,7 @@ namespace SptLauncherWpf.Pages
 
             var openButton = new System.Windows.Controls.Button
             {
-                Content = "Open on Forge",
+                Content = "Open on website",
                 Style = (Style)FindResource("ModernButtonStyle"),
                 Background = (Brush)new BrushConverter().ConvertFrom("#6B7280")!,
                 Padding = new Thickness(16, 8, 16, 8),
@@ -644,7 +644,7 @@ namespace SptLauncherWpf.Pages
             {
                 ModDetailsPanel.Children.Add(new TextBlock
                 {
-                    Text = "Auto-install isn’t available for this package layout. Use Open on Forge.",
+                    Text = "Auto-install isn’t available for this package layout. Use Open on website.",
                     FontSize = 12,
                     Foreground = (Brush)FindResource("TextSecondaryColor"),
                     TextWrapping = TextWrapping.Wrap,
@@ -655,7 +655,7 @@ namespace SptLauncherWpf.Pages
             {
                 ModDetailsPanel.Children.Add(new TextBlock
                 {
-                    Text = "Forge didn’t provide a file preview for this version. Install will inspect the archive after download.",
+                    Text = "No file preview for this version. Install will inspect the archive after download.",
                     FontSize = 12,
                     Foreground = (Brush)FindResource("TextSecondaryColor"),
                     TextWrapping = TextWrapping.Wrap,
@@ -776,7 +776,7 @@ namespace SptLauncherWpf.Pages
             var url = _selectedMod?.DetailUrl;
             if (string.IsNullOrWhiteSpace(url) && _selectedMod != null)
             {
-                url = $"https://forge.sp-tarkov.com/mod/{_selectedMod.Id}/{_selectedMod.Slug}";
+                url = $"{ForgeApiService.WebsiteBaseUrl}/mod/{_selectedMod.Id}/{_selectedMod.Slug}";
             }
 
             if (string.IsNullOrWhiteSpace(url))
@@ -880,7 +880,7 @@ namespace SptLauncherWpf.Pages
 
                 if (!string.IsNullOrWhiteSpace(_sptVersion))
                 {
-                    StatusText.Text = "Checking Forge for updates…";
+                    StatusText.Text = "Checking for mod updates…";
                     await ApplyUpdateChecksAsync(_installedMods, _sptVersion);
                 }
 
@@ -1150,7 +1150,7 @@ namespace SptLauncherWpf.Pages
             if (_busy || mod.AvailableUpdate == null || mod.ForgeModId is not int forgeId)
             {
                 System.Windows.MessageBox.Show(
-                    "This mod doesn't have Forge metadata for one-click update. Reinstall it once from Browse Forge.",
+                    "This mod doesn't have site metadata for one-click update. Reinstall it once from Browse Mods.",
                     "Update unavailable",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);

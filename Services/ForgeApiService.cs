@@ -9,7 +9,8 @@ namespace SptLauncherWpf.Services
         private static ForgeApiService? _instance;
         public static ForgeApiService Instance => _instance ??= new ForgeApiService();
 
-        public const string BaseUrl = "https://forge.sp-tarkov.com/api/v0";
+        public const string BaseUrl = "https://sp-mod.com/api/v0";
+        public const string WebsiteBaseUrl = "https://sp-mod.com";
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNameCaseInsensitive = true

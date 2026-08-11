@@ -8,6 +8,6 @@ namespace SptLauncherWpf.Services
 
         public const string ReleasesPageUrl = "https://github.com/sp-tarkov/build/releases/latest";
 
-        public const string ForgeInstallerPageUrl = "https://forge.sp-tarkov.com/installer";
+        public const string ForgeInstallerPageUrl = "https://sp-mod.com/installer";
     }
 }

@@ -9,7 +9,7 @@ A native WPF launcher for [SPT](https://sp-tarkov.com/) (Single Player Tarkov) w
 - **Safer SPT updates** — Preflight checks, download details, cancel, installer-only mode, and backup/restore recovery
 - **Live Tarkov / patcher awareness** — Detects your live EFT version and checks the SPT patcher CDN; only warns when no downgrade patcher exists for your build
 - **Fika co-op** — Install and update Fika from readiness
-- **Mods (Forge)** — Browse/install from The Forge (zip + 7z), manage installed mods (enable/disable/remove), update checks, and dependency hints
+- **Mods** — Browse/install from [sp-mod.com](https://sp-mod.com/mods) (zip + 7z), manage installed mods (enable/disable/remove), update checks, and dependency hints
 - **Servers & Tools** — Local/remote server helpers and developer utilities
 - **Self-update** — Checks GitHub releases and replaces the installed launcher in place
 
