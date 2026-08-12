@@ -248,6 +248,16 @@ namespace SptLauncherWpf.Services
             return Array.Empty<ForgeDependencyNode>();
         }
 
+        public static string BuildModPageUrl(int modId, string? slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug))
+            {
+                return $"{WebsiteBaseUrl}/mod/{modId}";
+            }
+
+            return $"{WebsiteBaseUrl}/mod/{modId}/{slug.Trim()}";
+        }
+
         /// <summary>
         /// Builds a Forge filter constraint from a detected SPT version string.
         /// </summary>

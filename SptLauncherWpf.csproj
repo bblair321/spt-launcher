@@ -18,8 +18,8 @@
     <AssemblyName>SPTLauncher</AssemblyName>
     <AssemblyTitle>SPT Launcher</AssemblyTitle>
     <AssemblyDescription>SPT-AKI Launcher with Fika Co-op Support - Modern WPF Version</AssemblyDescription>
-    <AssemblyVersion>4.0.7.0</AssemblyVersion>
-    <FileVersion>4.0.7.0</FileVersion>
+    <AssemblyVersion>4.1.0.0</AssemblyVersion>
+    <FileVersion>4.1.0.0</FileVersion>
     <Product>SPT Launcher</Product>
     <Company>SPT Launcher Team</Company>
     <Copyright>Copyright © 2025 SPT Launcher Team</Copyright>
@@ -49,6 +49,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3179.45" />
     <PackageReference Include="SharpCompress" Version="0.50.4" />
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>

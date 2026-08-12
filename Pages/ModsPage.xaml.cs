@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.Web.WebView2.Core;
 using SptLauncherWpf.Services;
 using Brush = System.Windows.Media.Brush;
 
@@ -10,6 +11,12 @@ namespace SptLauncherWpf.Pages
 {
     public partial class ModsPage : Page
     {
+        private enum ModDetailView
+        {
+            Page,
+            Versions
+        }
+
         private readonly List<ForgeModSummary> _mods = new();
         private ForgeModSummary? _selectedMod;
         private List<ForgeModVersion> _selectedVersions = new();
@@ -27,10 +34,16 @@ namespace SptLauncherWpf.Pages
         private bool _showInstalled;
         private List<InstalledModInfo> _installedMods = new();
         private List<ForgeDependencyNode> _selectedDependencies = new();
+        private ModDetailView _detailView = ModDetailView.Page;
+        private bool _webViewReady;
+        private string? _loadedModPageUrl;
+        private Task? _webViewInitTask;
+        private int _selectionEpoch;
 
         public ModsPage()
         {
             InitializeComponent();
+            IsVisibleChanged += ModsPage_IsVisibleChanged;
         }
 
         private void Page_Loaded(object sender, RoutedEventArgs e)
@@ -42,6 +55,14 @@ namespace SptLauncherWpf.Pages
             {
                 _ = LoadModsAsync(resetPage: true);
             }
+
+            UpdateDetailChrome();
+            _ = EnsureWebViewAsync();
+        }
+
+        private void ModsPage_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            UpdateModPageEmbedVisibility();
         }
 
         private void BrowseModeButton_Click(object sender, RoutedEventArgs e)
@@ -78,6 +99,39 @@ namespace SptLauncherWpf.Pages
             HeaderSubtitleText.Text = _showInstalled
                 ? "Enable, disable, open, or remove mods already in your SPT folder."
                 : "Browse sp-mod.com and install into your SPT folder. Server mods go to user/mods; client mods go to BepInEx.";
+
+            UpdateDetailChrome();
+            UpdateModPageEmbedVisibility();
+            ApplyBrowseSplitWidths();
+        }
+
+        private void ApplyBrowseSplitWidths()
+        {
+            if (ModsListColumn == null)
+            {
+                return;
+            }
+
+            // Give the embedded page as much width as possible once a mod is open.
+            ModsListColumn.Width = _selectedMod != null && !_showInstalled
+                ? new GridLength(220)
+                : new GridLength(260);
+        }
+
+        private void ModPageTabButton_Click(object sender, RoutedEventArgs e)
+        {
+            _detailView = ModDetailView.Page;
+            UpdateDetailChrome();
+            UpdateModPageEmbedVisibility();
+            _ = NavigateSelectedModPageAsync();
+        }
+
+        private void ModVersionsTabButton_Click(object sender, RoutedEventArgs e)
+        {
+            _detailView = ModDetailView.Versions;
+            UpdateDetailChrome();
+            UpdateModPageEmbedVisibility();
+            RenderDetails();
         }
 
         private void RefreshInstalledModsCache()
@@ -261,73 +315,61 @@ namespace SptLauncherWpf.Pages
                 Background = selected
                     ? (Brush)FindResource("HoverColor")
                     : (Brush)FindResource("CardBackgroundColor"),
-                BorderBrush = (Brush)FindResource("BorderColor"),
+                BorderBrush = selected
+                    ? (Brush)FindResource("PrimaryColor")
+                    : (Brush)FindResource("BorderColor"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(12),
-                Margin = new Thickness(0, 0, 0, 8),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(8, 7, 8, 7),
+                Margin = new Thickness(0, 0, 0, 4),
                 Cursor = System.Windows.Input.Cursors.Hand
             };
 
             var panel = new StackPanel();
-            var titleRow = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+            var titleRow = new DockPanel { LastChildFill = true };
+            if (IsForgeModInstalled(mod))
+            {
+                var badge = new Border
+                {
+                    Background = (Brush)FindResource("StatusSuccessColor"),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(5, 1, 5, 1),
+                    Margin = new Thickness(6, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock
+                    {
+                        Text = "In",
+                        FontSize = 9,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = System.Windows.Media.Brushes.White
+                    }
+                };
+                DockPanel.SetDock(badge, Dock.Right);
+                titleRow.Children.Add(badge);
+            }
+
             titleRow.Children.Add(new TextBlock
             {
                 Text = mod.Name,
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 14,
+                FontSize = 12,
                 Foreground = (Brush)FindResource("TextPrimaryColor"),
-                TextWrapping = TextWrapping.Wrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap,
                 VerticalAlignment = VerticalAlignment.Center
             });
-
-            if (IsForgeModInstalled(mod))
-            {
-                titleRow.Children.Add(new Border
-                {
-                    Background = (Brush)FindResource("StatusSuccessColor"),
-                    CornerRadius = new CornerRadius(6),
-                    Padding = new Thickness(8, 2, 8, 2),
-                    Margin = new Thickness(8, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock
-                    {
-                        Text = "Installed",
-                        FontSize = 10,
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = System.Windows.Media.Brushes.White
-                    }
-                });
-            }
-
             panel.Children.Add(titleRow);
 
-            var meta = new TextBlock
+            panel.Children.Add(new TextBlock
             {
                 Text =
-                    $"{mod.Owner?.Name ?? "Unknown"} · {FormatCount(mod.Downloads)} downloads" +
-                    (mod.FikaCompatibility ? " · Fika" : "") +
-                    (string.IsNullOrWhiteSpace(mod.Category?.Title ?? mod.Category?.Slug)
-                        ? ""
-                        : $" · {mod.Category?.Title ?? mod.Category?.Slug}"),
-                FontSize = 11,
+                    $"{mod.Owner?.Name ?? "Unknown"} · {FormatCount(mod.Downloads)}" +
+                    (mod.FikaCompatibility ? " · Fika" : ""),
+                FontSize = 10,
                 Foreground = (Brush)FindResource("TextSecondaryColor"),
-                Margin = new Thickness(0, 4, 0, 0)
-            };
-            panel.Children.Add(meta);
-
-            if (!string.IsNullOrWhiteSpace(mod.Teaser))
-            {
-                panel.Children.Add(new TextBlock
-                {
-                    Text = mod.Teaser,
-                    FontSize = 12,
-                    Foreground = (Brush)FindResource("TextSecondaryColor"),
-                    TextWrapping = TextWrapping.Wrap,
-                    MaxHeight = 36,
-                    Margin = new Thickness(0, 6, 0, 0)
-                });
-            }
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 2, 0, 0)
+            });
 
             card.Child = panel;
             card.MouseLeftButtonUp += async (_, _) => await SelectModAsync(mod);
@@ -336,21 +378,41 @@ namespace SptLauncherWpf.Pages
 
         private async Task SelectModAsync(ForgeModSummary summary)
         {
-            if (_busy)
-            {
-                return;
-            }
+            // Optimistic selection: paint chrome + navigate the page immediately,
+            // then fill versions/classification without locking the whole UI.
+            var epoch = ++_selectionEpoch;
+            _selectedMod = summary;
+            _selectedVersions = summary.Versions?.ToList() ?? new List<ForgeModVersion>();
+            _selectedVersion = _selectedVersions.FirstOrDefault();
+            _selectedFileTree = null;
+            _selectedClassification = null;
+            _selectedDependencies = new List<ForgeDependencyNode>();
+            _detailView = ModDetailView.Page;
+
+            RenderModsList();
+            UpdateDetailChrome();
+            ApplyBrowseSplitWidths();
+            UpdateModPageEmbedVisibility();
+            _ = NavigateSelectedModPageAsync();
+            StatusText.Text = $"Opening {summary.Name}…";
 
             try
             {
-                SetBusy(true, $"Loading {summary.Name}…");
                 RefreshSptContext();
 
-                var detail = await ForgeApiService.Instance.GetModAsync(summary.Id);
-                var versions = await ForgeApiService.Instance.GetModVersionsAsync(
+                var detailTask = ForgeApiService.Instance.GetModAsync(summary.Id);
+                var versionsTask = ForgeApiService.Instance.GetModVersionsAsync(
                     summary.Id,
                     FilterBySptCheckBox?.IsChecked == true ? _sptVersion : null);
 
+                await Task.WhenAll(detailTask, versionsTask);
+                if (epoch != _selectionEpoch)
+                {
+                    return;
+                }
+
+                var detail = await detailTask;
+                var versions = await versionsTask;
                 if (versions.Count == 0)
                 {
                     versions = detail.Versions ?? new List<ForgeModVersion>();
@@ -358,28 +420,35 @@ namespace SptLauncherWpf.Pages
 
                 _selectedMod = detail;
                 _selectedVersions = versions;
-                _selectedVersion = versions.FirstOrDefault();
-                _selectedFileTree = null;
-                _selectedClassification = null;
-                _selectedDependencies = new List<ForgeDependencyNode>();
+                _selectedVersion = versions.FirstOrDefault(v => v.Id == _selectedVersion?.Id)
+                                   ?? versions.FirstOrDefault();
 
                 if (_selectedVersion != null)
                 {
                     await LoadClassificationForSelectedVersionAsync();
+                    if (epoch != _selectionEpoch)
+                    {
+                        return;
+                    }
+
                     await LoadDependenciesForSelectedVersionAsync();
+                    if (epoch != _selectionEpoch)
+                    {
+                        return;
+                    }
                 }
 
                 RenderModsList();
                 RenderDetails();
+                UpdateDetailChrome();
                 StatusText.Text = $"Selected {detail.Name}";
             }
             catch (Exception ex)
             {
-                StatusText.Text = $"Failed to load mod: {ex.Message}";
-            }
-            finally
-            {
-                SetBusy(false);
+                if (epoch == _selectionEpoch)
+                {
+                    StatusText.Text = $"Failed to load mod: {ex.Message}";
+                }
             }
         }
 
@@ -434,11 +503,13 @@ namespace SptLauncherWpf.Pages
         private void RenderDetails()
         {
             ModDetailsPanel.Children.Clear();
+            UpdateDetailHeaderAndActions();
+
             if (_selectedMod == null)
             {
                 ModDetailsPanel.Children.Add(new TextBlock
                 {
-                    Text = "Select a mod",
+                    Text = "Select a mod to see its page and install options.",
                     FontSize = 14,
                     Foreground = (Brush)FindResource("TextSecondaryColor"),
                     HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
@@ -447,23 +518,19 @@ namespace SptLauncherWpf.Pages
                 return;
             }
 
-            ModDetailsPanel.Children.Add(new TextBlock
+            var isTools = ModInstallService.IsToolsCategory(_selectedMod);
+            if (isTools)
             {
-                Text = _selectedMod.Name,
-                FontSize = 18,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextPrimaryColor"),
-                TextWrapping = TextWrapping.Wrap
-            });
-
-            ModDetailsPanel.Children.Add(new TextBlock
-            {
-                Text =
-                    $"By {_selectedMod.Owner?.Name ?? "Unknown"} · {FormatCount(_selectedMod.Downloads)} downloads",
-                FontSize = 12,
-                Foreground = (Brush)FindResource("TextSecondaryColor"),
-                Margin = new Thickness(0, 6, 0, 0)
-            });
+                ModDetailsPanel.Children.Add(new TextBlock
+                {
+                    Text = "This is a Tool — open it on the website instead of auto-installing.",
+                    FontSize = 12,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = (Brush)FindResource("StatusWarningColor"),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 12)
+                });
+            }
 
             if (!string.IsNullOrWhiteSpace(_selectedMod.Teaser))
             {
@@ -473,21 +540,7 @@ namespace SptLauncherWpf.Pages
                     FontSize = 13,
                     TextWrapping = TextWrapping.Wrap,
                     Foreground = (Brush)FindResource("TextSecondaryColor"),
-                    Margin = new Thickness(0, 12, 0, 0)
-                });
-            }
-
-            var isTools = ModInstallService.IsToolsCategory(_selectedMod);
-            if (isTools)
-            {
-                ModDetailsPanel.Children.Add(new TextBlock
-                {
-                    Text = "This is a Forge Tool — open it on the website instead of auto-installing.",
-                    FontSize = 12,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)FindResource("StatusWarningColor"),
-                    TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 12, 0, 0)
+                    Margin = new Thickness(0, 0, 0, 12)
                 });
             }
 
@@ -497,7 +550,7 @@ namespace SptLauncherWpf.Pages
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextPrimaryColor"),
-                Margin = new Thickness(0, 16, 0, 6)
+                Margin = new Thickness(0, 4, 0, 6)
             });
 
             if (_selectedVersions.Count == 0)
@@ -521,7 +574,7 @@ namespace SptLauncherWpf.Pages
                 {
                     versionList.Children.Add(new TextBlock
                     {
-                        Text = $"+ {_selectedVersions.Count - 12} older versions on Forge",
+                        Text = $"+ {_selectedVersions.Count - 12} older versions on the website",
                         FontSize = 11,
                         Foreground = (Brush)FindResource("TextSecondaryColor"),
                         Margin = new Thickness(0, 6, 0, 0)
@@ -567,7 +620,7 @@ namespace SptLauncherWpf.Pages
                 ModDetailsPanel.Children.Add(new TextBlock
                 {
                     Text = depNames.Count == 0
-                        ? "This version lists dependencies on Forge."
+                        ? "This version lists dependencies on the website."
                         : $"Also needs: {string.Join(", ", depNames.Take(8))}" +
                           (depNames.Count > 8 ? $" (+{depNames.Count - 8} more)" : ""),
                     FontSize = 12,
@@ -577,7 +630,7 @@ namespace SptLauncherWpf.Pages
                 });
             }
 
-            if (_selectedMod != null && IsForgeModInstalled(_selectedMod))
+            if (IsForgeModInstalled(_selectedMod))
             {
                 ModDetailsPanel.Children.Add(new TextBlock
                 {
@@ -589,45 +642,12 @@ namespace SptLauncherWpf.Pages
                 });
             }
 
-            var actions = new StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                Margin = new Thickness(0, 16, 0, 0)
-            };
-
-            // File-tree preview is best-effort. Forge sometimes 403s it even when download works
-            // (LootNET 1.1.0). Install can still classify from the archive after download.
             var layoutUnsupported = _selectedClassification is { CanAutoInstall: false };
             var canInstall = !isTools
                              && _selectedVersion != null
                              && !string.IsNullOrWhiteSpace(_selectedVersion.Link)
                              && !string.IsNullOrWhiteSpace(_sptRoot)
                              && !layoutUnsupported;
-
-            var installButton = new System.Windows.Controls.Button
-            {
-                Content = "Install",
-                Style = (Style)FindResource("ModernButtonStyle"),
-                Padding = new Thickness(16, 8, 16, 8),
-                FontSize = 13,
-                IsEnabled = canInstall,
-                Margin = new Thickness(0, 0, 8, 0)
-            };
-            installButton.Click += async (_, _) => await InstallSelectedAsync();
-            actions.Children.Add(installButton);
-
-            var openButton = new System.Windows.Controls.Button
-            {
-                Content = "Open on website",
-                Style = (Style)FindResource("ModernButtonStyle"),
-                Background = (Brush)new BrushConverter().ConvertFrom("#6B7280")!,
-                Padding = new Thickness(16, 8, 16, 8),
-                FontSize = 13
-            };
-            openButton.Click += (_, _) => OpenSelectedOnForge();
-            actions.Children.Add(openButton);
-
-            ModDetailsPanel.Children.Add(actions);
 
             if (string.IsNullOrWhiteSpace(_sptRoot))
             {
@@ -664,6 +684,321 @@ namespace SptLauncherWpf.Pages
             }
         }
 
+        private void UpdateDetailHeaderAndActions()
+        {
+            if (ModDetailTitleText == null)
+            {
+                return;
+            }
+
+            if (_selectedMod == null)
+            {
+                ModDetailTitleText.Text = "Select a mod";
+                if (ModDetailMetaText != null)
+                {
+                    ModDetailMetaText.Visibility = Visibility.Collapsed;
+                    ModDetailMetaText.Text = string.Empty;
+                }
+
+                if (ModDetailActionsPanel != null)
+                {
+                    ModDetailActionsPanel.Children.Clear();
+                    ModDetailActionsPanel.Visibility = Visibility.Collapsed;
+                }
+
+                if (ModDetailTabsPanel != null)
+                {
+                    ModDetailTabsPanel.Visibility = Visibility.Collapsed;
+                }
+
+                return;
+            }
+
+            ModDetailTitleText.Text = _selectedMod.Name;
+            if (ModDetailMetaText != null)
+            {
+                ModDetailMetaText.Text =
+                    $"By {_selectedMod.Owner?.Name ?? "Unknown"} · {FormatCount(_selectedMod.Downloads)} downloads";
+                ModDetailMetaText.Visibility = Visibility.Visible;
+            }
+
+            if (ModDetailTabsPanel != null)
+            {
+                ModDetailTabsPanel.Visibility = Visibility.Visible;
+            }
+
+            if (ModDetailActionsPanel == null)
+            {
+                return;
+            }
+
+            ModDetailActionsPanel.Children.Clear();
+            ModDetailActionsPanel.Visibility = Visibility.Visible;
+
+            var isTools = ModInstallService.IsToolsCategory(_selectedMod);
+            var layoutUnsupported = _selectedClassification is { CanAutoInstall: false };
+            var canInstall = !isTools
+                             && _selectedVersion != null
+                             && !string.IsNullOrWhiteSpace(_selectedVersion.Link)
+                             && !string.IsNullOrWhiteSpace(_sptRoot)
+                             && !layoutUnsupported;
+
+            var installButton = new System.Windows.Controls.Button
+            {
+                Content = "Install",
+                Style = (Style)FindResource("ModernButtonStyle"),
+                Padding = new Thickness(12, 5, 12, 5),
+                FontSize = 12,
+                IsEnabled = canInstall,
+                Margin = new Thickness(0, 0, 6, 0)
+            };
+            installButton.Click += async (_, _) => await InstallSelectedAsync();
+            ModDetailActionsPanel.Children.Add(installButton);
+
+            var openButton = new System.Windows.Controls.Button
+            {
+                Content = "External",
+                Style = (Style)FindResource("ModernButtonStyle"),
+                Background = (Brush)new BrushConverter().ConvertFrom("#6B7280")!,
+                Padding = new Thickness(12, 5, 12, 5),
+                FontSize = 12
+            };
+            openButton.Click += (_, _) => OpenSelectedOnForge();
+            ModDetailActionsPanel.Children.Add(openButton);
+        }
+
+        private void UpdateDetailChrome()
+        {
+            UpdateDetailHeaderAndActions();
+
+            var showPage = !_showInstalled
+                           && _selectedMod != null
+                           && _detailView == ModDetailView.Page;
+            var showVersions = !_showInstalled
+                               && _selectedMod != null
+                               && _detailView == ModDetailView.Versions;
+
+            if (ModPageEmbedHost != null)
+            {
+                ModPageEmbedHost.Visibility = showPage ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (ModVersionsScrollViewer != null)
+            {
+                ModVersionsScrollViewer.Visibility =
+                    (_selectedMod == null && !_showInstalled) || showVersions
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+            }
+
+            StyleDetailTab(ModPageTabButton, _detailView == ModDetailView.Page);
+            StyleDetailTab(ModVersionsTabButton, _detailView == ModDetailView.Versions);
+        }
+
+        private void StyleDetailTab(System.Windows.Controls.Button? button, bool active)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.Background = active
+                ? (Brush)FindResource("PrimaryColor")
+                : (Brush)new BrushConverter().ConvertFrom("#6B7280")!;
+            button.Foreground = System.Windows.Media.Brushes.White;
+        }
+
+        private void UpdateModPageEmbedVisibility()
+        {
+            var shouldShow = IsVisible
+                             && !_showInstalled
+                             && _selectedMod != null
+                             && _detailView == ModDetailView.Page;
+
+            if (ModPageEmbedHost != null)
+            {
+                ModPageEmbedHost.Visibility = shouldShow ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            // Only tear down when leaving the Mods tab or Browse mode — keep the page cached
+            // while switching between Mod page / Versions.
+            var leaveBrowseEmbed = !IsVisible || _showInstalled;
+            if (leaveBrowseEmbed && ModPageWebView?.CoreWebView2 != null)
+            {
+                try
+                {
+                    ModPageWebView.CoreWebView2.Navigate("about:blank");
+                    _loadedModPageUrl = null;
+                }
+                catch
+                {
+                    // Ignore teardown races
+                }
+            }
+        }
+
+        private async Task EnsureWebViewAsync()
+        {
+            if (_webViewReady || ModPageWebView == null)
+            {
+                return;
+            }
+
+            if (_webViewInitTask != null)
+            {
+                await _webViewInitTask;
+                return;
+            }
+
+            _webViewInitTask = InitializeWebViewCoreAsync();
+            try
+            {
+                await _webViewInitTask;
+            }
+            finally
+            {
+                _webViewInitTask = null;
+            }
+        }
+
+        private async Task InitializeWebViewCoreAsync()
+        {
+            if (ModPageWebView == null || _webViewReady)
+            {
+                return;
+            }
+
+            try
+            {
+                if (ModPageEmbedStatusText != null)
+                {
+                    ModPageEmbedStatusText.Text = "Loading mod page…";
+                    ModPageEmbedStatusText.Visibility = Visibility.Visible;
+                }
+
+                await ModPageWebView.EnsureCoreWebView2Async();
+                ModPageWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                ModPageWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                ModPageWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                ModPageWebView.CoreWebView2.Settings.IsZoomControlEnabled = true;
+                // Slightly zoomed out so more of the site fits in the pane.
+                ModPageWebView.ZoomFactor = 0.9;
+                ModPageWebView.NavigationCompleted += ModPageWebView_NavigationCompleted;
+                _webViewReady = true;
+
+                if (ModPageEmbedStatusText != null)
+                {
+                    ModPageEmbedStatusText.Visibility = Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                _webViewReady = false;
+                if (ModPageEmbedStatusText != null)
+                {
+                    ModPageEmbedStatusText.Text =
+                        "Could not load the embedded browser. Use Open externally instead.\n\n" +
+                        ex.Message;
+                    ModPageEmbedStatusText.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
+        private void ModPageWebView_NavigationCompleted(
+            object? sender,
+            CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (ModPageEmbedStatusText == null)
+            {
+                return;
+            }
+
+            if (!e.IsSuccess &&
+                !string.Equals(_loadedModPageUrl, "about:blank", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(_loadedModPageUrl))
+            {
+                ModPageEmbedStatusText.Text =
+                    "Could not load this mod page. Use Open externally instead.";
+                ModPageEmbedStatusText.Visibility = Visibility.Visible;
+                return;
+            }
+
+            ModPageEmbedStatusText.Visibility = Visibility.Collapsed;
+        }
+
+        private async Task NavigateSelectedModPageAsync()
+        {
+            if (_selectedMod == null || _detailView != ModDetailView.Page || _showInstalled)
+            {
+                return;
+            }
+
+            var url = ForgeApiService.BuildModPageUrl(_selectedMod.Id, _selectedMod.Slug);
+            if (string.Equals(_loadedModPageUrl, url, StringComparison.OrdinalIgnoreCase) &&
+                ModPageWebView?.CoreWebView2 != null)
+            {
+                return;
+            }
+
+            await EnsureWebViewAsync();
+            if (!_webViewReady || ModPageWebView?.CoreWebView2 == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (ModPageEmbedStatusText != null)
+                {
+                    ModPageEmbedStatusText.Text = "Loading mod page…";
+                    ModPageEmbedStatusText.Visibility = Visibility.Visible;
+                }
+
+                _loadedModPageUrl = url;
+                ModPageWebView.CoreWebView2.Navigate(url);
+            }
+            catch (Exception ex)
+            {
+                if (ModPageEmbedStatusText != null)
+                {
+                    ModPageEmbedStatusText.Text =
+                        "Could not open the mod page. Use Open externally instead.\n\n" +
+                        ex.Message;
+                    ModPageEmbedStatusText.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
+        private void OpenSelectedOnForge()
+        {
+            try
+            {
+                string url;
+                if (_selectedMod != null)
+                {
+                    url = ForgeApiService.BuildModPageUrl(_selectedMod.Id, _selectedMod.Slug);
+                }
+                else
+                {
+                    url = $"{ForgeApiService.WebsiteBaseUrl}/mods";
+                }
+
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(
+                    $"Could not open the website.\n\n{ex.Message}",
+                    "Open website",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+        }
+
         private async Task InstallSelectedAsync()
         {
             if (_selectedMod == null || _selectedVersion == null || _busy)
@@ -692,7 +1027,7 @@ namespace SptLauncherWpf.Pages
             if (depNames.Count > 0)
             {
                 confirmMessage +=
-                    "\n\nForge lists these dependencies (not auto-installed):\n" +
+                    "\n\nThese dependencies are listed (not auto-installed):\n" +
                     string.Join("\n", depNames.Take(10).Select(n => "• " + n));
             }
 
@@ -768,37 +1103,6 @@ namespace SptLauncherWpf.Pages
             finally
             {
                 SetBusy(false);
-            }
-        }
-
-        private void OpenSelectedOnForge()
-        {
-            var url = _selectedMod?.DetailUrl;
-            if (string.IsNullOrWhiteSpace(url) && _selectedMod != null)
-            {
-                url = $"{ForgeApiService.WebsiteBaseUrl}/mod/{_selectedMod.Id}/{_selectedMod.Slug}";
-            }
-
-            if (string.IsNullOrWhiteSpace(url))
-            {
-                return;
-            }
-
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = url,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                System.Windows.MessageBox.Show(
-                    $"Could not open browser.\n\n{ex.Message}",
-                    "Open failed",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
             }
         }
 
