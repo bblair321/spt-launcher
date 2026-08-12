@@ -85,6 +85,89 @@
                 </StackPanel>
             </Border>
 
+            <Border Style="{StaticResource ModernCardStyle}" Padding="20" Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="Server required mods"
+                               FontSize="15"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimaryColor}"
+                               Margin="0,0,0,6"/>
+                    <TextBlock Text="Enter the same host players use to join. The launcher fetches https://host:6969/mod-pack (SPT HTTPS; self-signed cert OK)."
+                               Foreground="{DynamicResource TextSecondaryColor}"
+                               FontSize="12"
+                               Margin="0,0,0,14"
+                               TextWrapping="Wrap"/>
+
+                    <TextBlock Text="Game server host"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondaryColor}"
+                               Margin="0,0,0,4"/>
+                    <TextBox Name="RequiredModsServerHostTextBox"
+                             Style="{StaticResource ModernTextBoxStyle}"
+                             Margin="0,0,0,12"
+                             ToolTip="IP or hostname — becomes https://HOST:6969/mod-pack. Or host:port."/>
+
+                    <TextBlock Text="Custom pack URL (optional)"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextSecondaryColor}"
+                               Margin="0,0,0,4"/>
+                    <TextBox Name="RequiredModsPackUrlTextBox"
+                             Style="{StaticResource ModernTextBoxStyle}"
+                             Margin="0,0,0,12"
+                             ToolTip="Overrides host. Example: https://SERVER:6969/mod-pack or LAN http://SERVER:17865/mod-pack"/>
+
+                    <DockPanel Margin="0,0,0,0" LastChildFill="True">
+                        <CheckBox Name="AutoCheckRequiredModsCheckBox"
+                                  DockPanel.Dock="Left"
+                                  VerticalAlignment="Top"
+                                  Margin="0,2,12,0"
+                                  Padding="0">
+                            <CheckBox.Style>
+                                <Style TargetType="CheckBox">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="CheckBox">
+                                                <Grid>
+                                                    <Border x:Name="CheckBoxBorder" Width="20" Height="20"
+                                                            CornerRadius="4" BorderBrush="{DynamicResource BorderColor}"
+                                                            BorderThickness="2" Background="{DynamicResource CardBackgroundColor}"/>
+                                                    <Path x:Name="CheckMark" Data="M 2 6 L 6 10 L 14 2"
+                                                          Stroke="White" StrokeThickness="2"
+                                                          Visibility="Collapsed" Margin="3,3,3,3"/>
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="CheckBoxBorder" Property="Background" Value="{DynamicResource PrimaryColor}"/>
+                                                        <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource PrimaryColor}"/>
+                                                        <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="{DynamicResource TextSecondaryColor}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </CheckBox.Style>
+                        </CheckBox>
+                        <StackPanel>
+                            <TextBlock Text="Check required mods before launch"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimaryColor}"
+                                       FontSize="14"/>
+                            <TextBlock Text="When a host or pack URL is set, prompt to sync missing or wrong-version client mods."
+                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                       FontSize="12"
+                                       Margin="0,2,0,0"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
             <Border Style="{StaticResource ModernCardStyle}" Padding="20" Margin="0,0,0,8">
                 <StackPanel>
                     <TextBlock Text="Preferences"

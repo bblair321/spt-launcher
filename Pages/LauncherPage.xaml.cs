@@ -97,6 +97,12 @@ namespace SptLauncherWpf.Pages
         // Fika Update tracking
         private FikaUpdateInfo? _currentFikaUpdateInfo = null;
 
+        // Required client mods pack
+        private RequiredModsPack? _sessionRequiredModsPack;
+        private RequiredModsDiffResult? _requiredModsDiff;
+        private CancellationTokenSource? _requiredModsCts;
+        private bool _requiredModsBusy;
+
         // Post-update verify panel
         private CancellationTokenSource? _updateVerifyCts;
 
@@ -195,11 +201,14 @@ namespace SptLauncherWpf.Pages
 
             RefreshSptRecoveryPanel();
             RefreshFirstRunWizard();
+            LoadRequiredModsHostField();
+            _ = RefreshRequiredModsStatusAsync(silent: true);
         }
 
         private void LauncherPage_Unloaded(object sender, RoutedEventArgs e)
         {
             _sptUpdateCts?.Cancel();
+            _requiredModsCts?.Cancel();
 
             // Stop the timer when the page is unloaded
             if (_uiUpdateTimer != null)
@@ -449,7 +458,7 @@ namespace SptLauncherWpf.Pages
             }
         }
 
-        private void LaunchButton_Click(object sender, RoutedEventArgs e)
+        private async void LaunchButton_Click(object sender, RoutedEventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("[LaunchButton_Click] ========== BUTTON CLICKED ==========");
             System.Diagnostics.Debug.WriteLine($"[LaunchButton_Click] Sender: {sender?.GetType().Name}");
@@ -520,6 +529,11 @@ namespace SptLauncherWpf.Pages
                     "Already running",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
+                return;
+            }
+
+            if (!await EnsureRequiredModsAllowLaunchAsync())
+            {
                 return;
             }
 
@@ -3554,6 +3568,577 @@ namespace SptLauncherWpf.Pages
             RefreshReadinessSummary();
         }
 
+        private async void RequiredModsCheckButton_Click(object sender, RoutedEventArgs e)
+        {
+            PersistRequiredModsHostFromUi();
+            await RefreshRequiredModsStatusAsync(silent: false);
+        }
+
+        private void RequiredModsHostTextBox_LostFocus(object sender, RoutedEventArgs e)
+        {
+            PersistRequiredModsHostFromUi();
+        }
+
+        private void LoadRequiredModsHostField()
+        {
+            if (RequiredModsHostTextBox == null)
+            {
+                return;
+            }
+
+            var host = SettingsService.Instance.RequiredModsServerHost?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                var url = SettingsService.Instance.RequiredModsPackUrl?.Trim() ?? "";
+                if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                {
+                    host = uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+                }
+            }
+
+            RequiredModsHostTextBox.Text = host;
+        }
+
+        private void PersistRequiredModsHostFromUi()
+        {
+            if (RequiredModsHostTextBox == null)
+            {
+                return;
+            }
+
+            var value = RequiredModsHostTextBox.Text?.Trim() ?? "";
+            // If the user pasted a full URL into the host box, store as pack URL override.
+            if (value.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                value.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                var normalized = RequiredModsPackService.NormalizePackUrl(value) ?? value;
+                SettingsService.Instance.RequiredModsPackUrl = normalized;
+                if (Uri.TryCreate(normalized, UriKind.Absolute, out var uri))
+                {
+                    SettingsService.Instance.RequiredModsServerHost =
+                        uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+                    RequiredModsHostTextBox.Text = SettingsService.Instance.RequiredModsServerHost;
+                }
+            }
+            else
+            {
+                SettingsService.Instance.RequiredModsServerHost = value;
+                // Host is the primary join UX — clear a stale custom URL so Check uses https://host:6969/mod-pack
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    SettingsService.Instance.RequiredModsPackUrl = "";
+                }
+            }
+
+            SettingsService.Instance.SaveSettings();
+        }
+
+        private async void RequiredModsSyncButton_Click(object sender, RoutedEventArgs e)
+        {
+            PersistRequiredModsHostFromUi();
+            await SyncRequiredModsAsync(confirm: true);
+        }
+
+        private async void RequiredModsImportButton_Click(object sender, RoutedEventArgs e)
+        {
+            var json = PromptRequiredModsJsonImport();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return;
+            }
+
+            try
+            {
+                _sessionRequiredModsPack = RequiredModsPackService.Instance.Parse(json);
+                await DiffAndShowRequiredModsAsync(_sessionRequiredModsPack, silent: false);
+            }
+            catch (Exception ex)
+            {
+                System.Windows.MessageBox.Show(
+                    $"Could not import pack JSON:\n\n{ex.Message}",
+                    "Import failed",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
+        private async Task RefreshRequiredModsStatusAsync(bool silent)
+        {
+            if (_requiredModsBusy)
+            {
+                return;
+            }
+
+            var url = RequiredModsPackService.GetConfiguredPackUrl();
+            if (string.IsNullOrWhiteSpace(url) && _sessionRequiredModsPack == null)
+            {
+                ApplyRequiredModsUi(
+                    title: "Required mods",
+                    detail: "Enter game server host — Check fetches https://host:6969/mod-pack",
+                    color: "#9CA3AF",
+                    issues: null);
+                _requiredModsDiff = null;
+                return;
+            }
+
+            _requiredModsBusy = true;
+            SetRequiredModsButtonsEnabled(false);
+            ApplyRequiredModsUi(
+                title: "Required mods",
+                detail: string.IsNullOrWhiteSpace(url) ? "Checking imported pack…" : $"Fetching {url}…",
+                color: "#9CA3AF",
+                issues: null);
+
+            _requiredModsCts?.Cancel();
+            _requiredModsCts = new CancellationTokenSource();
+            var ct = _requiredModsCts.Token;
+
+            try
+            {
+                RequiredModsPack pack;
+                if (!string.IsNullOrWhiteSpace(url))
+                {
+                    pack = await RequiredModsPackService.Instance.FetchAsync(
+                        url,
+                        SettingsService.Instance.RequiredModsAgentToken,
+                        ct);
+                    _sessionRequiredModsPack = pack;
+                }
+                else
+                {
+                    pack = _sessionRequiredModsPack!;
+                }
+
+                await DiffAndShowRequiredModsAsync(pack, silent);
+            }
+            catch (OperationCanceledException)
+            {
+                // ignored
+            }
+            catch (Exception ex)
+            {
+                ApplyRequiredModsUi(
+                    title: "Required mods",
+                    detail: $"Check failed: {ex.Message}",
+                    color: "#EF4444",
+                    issues: null);
+                if (!silent)
+                {
+                    System.Windows.MessageBox.Show(
+                        $"Could not check required mods:\n\n{ex.Message}",
+                        "Required mods",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+            }
+            finally
+            {
+                _requiredModsBusy = false;
+                SetRequiredModsButtonsEnabled(true);
+            }
+        }
+
+        private async Task DiffAndShowRequiredModsAsync(RequiredModsPack pack, bool silent)
+        {
+            if (!TryResolveSptRootForMods(out var sptRoot, out var error))
+            {
+                ApplyRequiredModsUi(
+                    title: "Required mods",
+                    detail: error,
+                    color: "#F59E0B",
+                    issues: null);
+                if (!silent)
+                {
+                    System.Windows.MessageBox.Show(error, "Required mods", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+
+                return;
+            }
+
+            var installed = await Task.Run(() => InstalledModsService.ScanInstalledMods(sptRoot));
+            var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+            _requiredModsDiff = diff;
+            ApplyRequiredModsDiffUi(diff);
+        }
+
+        private void ApplyRequiredModsDiffUi(RequiredModsDiffResult diff)
+        {
+            var packCount = diff.Pack.Mods?.Count ?? 0;
+            string title;
+            string detail;
+            string color;
+            if (diff.NeedsSync)
+            {
+                title = "Need sync";
+                detail =
+                    $"{diff.MissingCount} missing, {diff.WrongVersionCount} wrong version" +
+                    (diff.ManualFixCount > 0 ? $", {diff.ManualFixCount} manual" : "");
+                color = "#F59E0B";
+            }
+            else if (diff.ManualFixCount > 0)
+            {
+                title = "Almost ready";
+                detail = $"{diff.OkCount}/{packCount} OK · {diff.ManualFixCount} need manual install";
+                color = "#F59E0B";
+            }
+            else
+            {
+                title = "Ready";
+                detail = packCount == 0 ? "Pack has no mods" : $"Ready ({packCount} mods)";
+                color = "#22C55E";
+            }
+
+            var issues = diff.Items
+                .Where(i => i.Status is RequiredModDiffStatus.Missing
+                    or RequiredModDiffStatus.WrongVersion
+                    or RequiredModDiffStatus.ManualFix)
+                .Take(6)
+                .Select(i => "• " + i.Message)
+                .ToList();
+            if (diff.Items.Count(i => i.Status is RequiredModDiffStatus.Missing
+                    or RequiredModDiffStatus.WrongVersion
+                    or RequiredModDiffStatus.ManualFix) > 6)
+            {
+                issues.Add("• …");
+            }
+
+            ApplyRequiredModsUi(title, detail, color, issues.Count > 0 ? string.Join("\n", issues) : null);
+        }
+
+        private void ApplyRequiredModsUi(string title, string detail, string color, string? issues)
+        {
+            if (RequiredModsStatusTitle != null)
+            {
+                RequiredModsStatusTitle.Text = title;
+            }
+
+            if (RequiredModsStatusDetail != null)
+            {
+                RequiredModsStatusDetail.Text = detail;
+            }
+
+            if (RequiredModsStatusDot != null)
+            {
+                RequiredModsStatusDot.Background = (SolidColorBrush)new BrushConverter().ConvertFromString(color)!;
+            }
+
+            if (RequiredModsIssuesText != null)
+            {
+                if (string.IsNullOrWhiteSpace(issues))
+                {
+                    RequiredModsIssuesText.Text = "";
+                    RequiredModsIssuesText.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    RequiredModsIssuesText.Text = issues;
+                    RequiredModsIssuesText.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
+        private void SetRequiredModsButtonsEnabled(bool enabled)
+        {
+            if (RequiredModsCheckButton != null)
+            {
+                RequiredModsCheckButton.IsEnabled = enabled;
+            }
+
+            if (RequiredModsSyncButton != null)
+            {
+                RequiredModsSyncButton.IsEnabled = enabled;
+            }
+
+            if (RequiredModsImportButton != null)
+            {
+                RequiredModsImportButton.IsEnabled = enabled;
+            }
+        }
+
+        private bool TryResolveSptRootForMods(out string sptRoot, out string error)
+        {
+            var launcherPath = LauncherPathTextBox?.Text?.Trim() ?? SettingsService.Instance.LauncherPath;
+            return SptInstallPathHelper.TryResolveFromLauncherPath(launcherPath, out sptRoot, out _, out error);
+        }
+
+        private async Task SyncRequiredModsAsync(bool confirm)
+        {
+            if (_requiredModsBusy)
+            {
+                return;
+            }
+
+            if (_sessionRequiredModsPack == null)
+            {
+                await RefreshRequiredModsStatusAsync(silent: false);
+                if (_sessionRequiredModsPack == null)
+                {
+                    System.Windows.MessageBox.Show(
+                        "Enter the game server host (or a pack URL in Settings), then Check — or import JSON.",
+                        "Required mods",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+            }
+
+            if (!TryResolveSptRootForMods(out var sptRoot, out var error))
+            {
+                System.Windows.MessageBox.Show(error, "Required mods", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (confirm)
+            {
+                var preview = _requiredModsDiff;
+                var missing = preview?.MissingCount ?? 0;
+                var wrong = preview?.WrongVersionCount ?? 0;
+                var msg =
+                    "Install missing / wrong-version client mods from the pack into BepInEx?\n\n" +
+                    $"Missing: {missing}\nWrong version: {wrong}\n\n" +
+                    "Server-only packages are skipped. Extra local mods are left alone.";
+                var result = System.Windows.MessageBox.Show(
+                    msg,
+                    "Sync server mods",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+                if (result != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+            }
+
+            _requiredModsBusy = true;
+            SetRequiredModsButtonsEnabled(false);
+            ApplyRequiredModsUi("Syncing…", "Downloading client mods…", "#3B82F6", null);
+
+            _requiredModsCts?.Cancel();
+            _requiredModsCts = new CancellationTokenSource();
+            var ct = _requiredModsCts.Token;
+            var progress = new Progress<RequiredModsSyncProgress>(p =>
+            {
+                ApplyRequiredModsUi(
+                    "Syncing…",
+                    string.IsNullOrWhiteSpace(p.Message) ? "Working…" : p.Message,
+                    "#3B82F6",
+                    null);
+            });
+
+            try
+            {
+                var report = await RequiredModsPackService.Instance.SyncMissingAsync(
+                    _sessionRequiredModsPack,
+                    sptRoot,
+                    progress,
+                    ct);
+
+                if (report.DiffAfter != null)
+                {
+                    _requiredModsDiff = report.DiffAfter;
+                    ApplyRequiredModsDiffUi(report.DiffAfter);
+                }
+
+                var body = report.Message;
+                if (report.Errors.Count > 0)
+                {
+                    body += "\n\n" + string.Join("\n", report.Errors.Take(8));
+                }
+
+                System.Windows.MessageBox.Show(
+                    body,
+                    report.Success ? "Sync complete" : "Sync finished with issues",
+                    MessageBoxButton.OK,
+                    report.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            }
+            catch (OperationCanceledException)
+            {
+                ApplyRequiredModsUi("Required mods", "Sync cancelled", "#9CA3AF", null);
+            }
+            catch (Exception ex)
+            {
+                ApplyRequiredModsUi("Required mods", $"Sync failed: {ex.Message}", "#EF4444", null);
+                System.Windows.MessageBox.Show(
+                    $"Sync failed:\n\n{ex.Message}",
+                    "Required mods",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                _requiredModsBusy = false;
+                SetRequiredModsButtonsEnabled(true);
+            }
+        }
+
+        /// <returns>true if launch should proceed</returns>
+        private async Task<bool> EnsureRequiredModsAllowLaunchAsync()
+        {
+            if (!SettingsService.Instance.AutoCheckRequiredModsOnLaunch)
+            {
+                return true;
+            }
+
+            var url = RequiredModsPackService.GetConfiguredPackUrl();
+            if (string.IsNullOrWhiteSpace(url) && _sessionRequiredModsPack == null)
+            {
+                return true;
+            }
+
+            await RefreshRequiredModsStatusAsync(silent: true);
+            var diff = _requiredModsDiff;
+            if (diff == null)
+            {
+                return true;
+            }
+
+            if (diff.NeedsSync)
+            {
+                var choice = System.Windows.MessageBox.Show(
+                    "Required client mods are missing or the wrong version.\n\n" +
+                    $"{diff.MissingCount} missing · {diff.WrongVersionCount} wrong version\n\n" +
+                    "Yes = Sync now\nNo = Launch anyway\nCancel = stay here",
+                    "Required mods",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Warning);
+
+                if (choice == MessageBoxResult.Cancel)
+                {
+                    return false;
+                }
+
+                if (choice == MessageBoxResult.Yes)
+                {
+                    await SyncRequiredModsAsync(confirm: false);
+                    if (_requiredModsDiff?.NeedsSync == true)
+                    {
+                        var again = System.Windows.MessageBox.Show(
+                            "Some required mods are still missing after sync.\n\nLaunch anyway?",
+                            "Required mods",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning);
+                        return again == MessageBoxResult.Yes;
+                    }
+                }
+
+                return true;
+            }
+
+            if (diff.ManualFixCount > 0)
+            {
+                var warn = System.Windows.MessageBox.Show(
+                    $"{diff.ManualFixCount} required mod(s) need a manual install (no Forge id/slug).\n\nLaunch anyway?",
+                    "Required mods",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+                return warn == MessageBoxResult.Yes;
+            }
+
+            return true;
+        }
+
+        private static string? PromptRequiredModsJsonImport()
+        {
+            var app = System.Windows.Application.Current;
+            var dialog = new Window
+            {
+                Title = "Import required mods JSON",
+                Width = 560,
+                Height = 420,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = app?.MainWindow,
+                Background = app?.FindResource("CardBackgroundColor") as System.Windows.Media.Brush
+            };
+
+            var root = new DockPanel { Margin = new Thickness(16) };
+            var buttons = new StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            DockPanel.SetDock(buttons, Dock.Bottom);
+
+            var browse = new System.Windows.Controls.Button
+            {
+                Content = "Browse…",
+                Style = app?.TryFindResource("ModernButtonStyle") as Style,
+                Padding = new Thickness(14, 8, 14, 8),
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            var ok = new System.Windows.Controls.Button
+            {
+                Content = "Import",
+                Style = app?.TryFindResource("ModernButtonStyle") as Style,
+                Background = app?.FindResource("PrimaryColor") as System.Windows.Media.Brush,
+                Padding = new Thickness(14, 8, 14, 8),
+                Margin = new Thickness(0, 0, 8, 0),
+                IsDefault = true
+            };
+            var cancel = new System.Windows.Controls.Button
+            {
+                Content = "Cancel",
+                Style = app?.TryFindResource("ModernButtonStyle") as Style,
+                Padding = new Thickness(14, 8, 14, 8),
+                IsCancel = true
+            };
+
+            var textBox = new System.Windows.Controls.TextBox
+            {
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                FontSize = 12,
+                Padding = new Thickness(8)
+            };
+
+            string? result = null;
+            browse.Click += (_, _) =>
+            {
+                var ofd = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Select required mods pack JSON",
+                    Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+                };
+                if (ofd.ShowDialog() == true)
+                {
+                    try
+                    {
+                        textBox.Text = File.ReadAllText(ofd.FileName);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Windows.MessageBox.Show(ex.Message, "Read failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            };
+            ok.Click += (_, _) =>
+            {
+                result = textBox.Text;
+                dialog.DialogResult = true;
+            };
+            cancel.Click += (_, _) => dialog.DialogResult = false;
+
+            buttons.Children.Add(browse);
+            buttons.Children.Add(ok);
+            buttons.Children.Add(cancel);
+
+            var hint = new TextBlock
+            {
+                Text = "Paste pack JSON or browse to a .json file.",
+                Margin = new Thickness(0, 0, 0, 8),
+                Foreground = app?.FindResource("TextSecondaryColor") as System.Windows.Media.Brush
+            };
+            DockPanel.SetDock(hint, Dock.Top);
+
+            root.Children.Add(buttons);
+            root.Children.Add(hint);
+            root.Children.Add(textBox);
+            dialog.Content = root;
+
+            return dialog.ShowDialog() == true ? result : null;
+        }
+
         private void RefreshEftStatusButton_Click(object sender, RoutedEventArgs e)
         {
             RefreshAllReadiness(forceSptRescan: true);
@@ -3577,6 +4162,7 @@ namespace SptLauncherWpf.Pages
             RefreshReadinessSummary();
             RefreshFirstRunWizard();
             RefreshPlayHero();
+            _ = RefreshRequiredModsStatusAsync(silent: true);
         }
 
         /// <summary>

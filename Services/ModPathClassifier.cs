@@ -116,6 +116,18 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
+        /// Keeps only paths that install under BepInEx (for required-client pack sync).
+        /// </summary>
+        public static IReadOnlyList<string> FilterClientInstallPaths(IEnumerable<string> installRelativePaths)
+        {
+            return installRelativePaths
+                .Select(NormalizeArchivePath)
+                .Where(p => !string.IsNullOrWhiteSpace(p) && StartsWithSegment(p, "BepInEx"))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        /// <summary>
         /// Maps a single archive path to a destination relative to the SPT install root.
         /// </summary>
         public static bool TryMapToInstallRelative(

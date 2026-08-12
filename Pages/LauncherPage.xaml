@@ -282,6 +282,77 @@
                                 </StackPanel>
                             </DockPanel>
                         </Border>
+
+                        <!-- Required client mods pack strip -->
+                        <Border Name="RequiredModsStrip"
+                                Background="{DynamicResource HoverColor}"
+                                CornerRadius="8"
+                                Padding="12,10"
+                                Margin="0,8,0,0">
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,8" LastChildFill="True">
+                                    <TextBlock Text="Server"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextSecondaryColor}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,10,0"
+                                               DockPanel.Dock="Left"/>
+                                    <TextBox Name="RequiredModsHostTextBox"
+                                             Style="{StaticResource ModernTextBoxStyle}"
+                                             Padding="8,6"
+                                             FontSize="12"
+                                             ToolTip="Same host as the game server → https://host:6969/mod-pack"
+                                             LostFocus="RequiredModsHostTextBox_LostFocus"/>
+                                </DockPanel>
+                                <DockPanel LastChildFill="True">
+                                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                                        <Button Name="RequiredModsCheckButton"
+                                                Content="Check"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Click="RequiredModsCheckButton_Click"
+                                                Margin="0,0,6,0"/>
+                                        <Button Name="RequiredModsSyncButton"
+                                                Content="Sync server mods"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Click="RequiredModsSyncButton_Click"
+                                                Margin="0,0,6,0"/>
+                                        <Button Name="RequiredModsImportButton"
+                                                Content="Import JSON…"
+                                                Style="{StaticResource QuietButtonStyle}"
+                                                Click="RequiredModsImportButton_Click"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <Border Name="RequiredModsStatusDot"
+                                                Width="10" Height="10"
+                                                CornerRadius="5"
+                                                Background="#9CA3AF"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,10,0"/>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Name="RequiredModsStatusTitle"
+                                                       Text="Required mods"
+                                                       FontSize="13"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimaryColor}"/>
+                                            <TextBlock Name="RequiredModsStatusDetail"
+                                                       Text="Enter game server host — Check fetches https://host:6969/mod-pack"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource TextSecondaryColor}"
+                                                       Margin="0,2,0,0"
+                                                       TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DockPanel>
+                                <TextBlock Name="RequiredModsIssuesText"
+                                           Text=""
+                                           FontSize="11"
+                                           Foreground="{DynamicResource TextSecondaryColor}"
+                                           Margin="20,6,0,0"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed"/>
+                            </StackPanel>
+                        </Border>
                         </StackPanel>
                     </Grid>
                 </Border>

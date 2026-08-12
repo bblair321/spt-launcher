@@ -22,6 +22,15 @@ namespace SptLauncherWpf.Services
         public string? ForgeSlug { get; init; }
         public string? ForgeName { get; init; }
         public ForgeRecommendedVersion? AvailableUpdate { get; set; }
+
+        /// <summary>
+        /// All plugin files in this install unit (multi-DLL Forge packages).
+        /// Empty means only <see cref="Path"/> applies.
+        /// </summary>
+        public IReadOnlyList<string> RelatedPaths { get; init; } = Array.Empty<string>();
+
+        public IReadOnlyList<string> AllPaths =>
+            RelatedPaths.Count > 0 ? RelatedPaths : new[] { Path };
     }
 
     /// <summary>
@@ -169,11 +178,112 @@ namespace SptLauncherWpf.Services
                 }
             }
 
-            return results
+            return CollapseLinkedClientPlugins(results)
                 .OrderBy(m => m.Kind)
                 .ThenBy(m => m.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
+
+        /// <summary>
+        /// Multi-DLL Forge installs write the same marker beside each loose plugin
+        /// (e.g. Tyfon.UIFixes.dll + Tyfon.UIFixes.Net.dll). Collapse those into one row.
+        /// </summary>
+        internal static List<InstalledModInfo> CollapseLinkedClientPlugins(List<InstalledModInfo> mods)
+        {
+            var keep = new List<InstalledModInfo>();
+            var loose = new List<InstalledModInfo>();
+
+            foreach (var mod in mods)
+            {
+                if (mod.Kind == InstalledModKind.Client && !mod.IsDirectory)
+                {
+                    loose.Add(mod);
+                }
+                else
+                {
+                    keep.Add(mod);
+                }
+            }
+
+            var groups = new Dictionary<string, List<InstalledModInfo>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var mod in loose)
+            {
+                var key = ClientPluginGroupKey(mod);
+                if (key == null)
+                {
+                    keep.Add(WithRelatedPaths(mod, new[] { mod.Path }));
+                    continue;
+                }
+
+                if (!groups.TryGetValue(key, out var list))
+                {
+                    list = new List<InstalledModInfo>();
+                    groups[key] = list;
+                }
+
+                list.Add(mod);
+            }
+
+            foreach (var group in groups.Values)
+            {
+                var ordered = group
+                    .OrderBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var primary = ordered[0];
+                var paths = ordered.Select(m => m.Path).ToList();
+                keep.Add(new InstalledModInfo
+                {
+                    DisplayName = primary.DisplayName,
+                    Path = primary.Path,
+                    Kind = InstalledModKind.Client,
+                    // Mixed enable state is rare; show enabled if any member is enabled.
+                    IsEnabled = ordered.Any(m => m.IsEnabled),
+                    IsDirectory = false,
+                    VersionHint = ordered.Select(m => m.VersionHint).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))
+                                  ?? primary.VersionHint,
+                    ForgeModId = primary.ForgeModId,
+                    ForgeGuid = primary.ForgeGuid,
+                    ForgeSlug = primary.ForgeSlug,
+                    ForgeName = primary.ForgeName,
+                    AvailableUpdate = primary.AvailableUpdate,
+                    RelatedPaths = paths
+                });
+            }
+
+            return keep;
+        }
+
+        private static string? ClientPluginGroupKey(InstalledModInfo mod)
+        {
+            if (mod.ForgeModId is int id and > 0)
+            {
+                return "id:" + id;
+            }
+
+            if (!string.IsNullOrWhiteSpace(mod.ForgeGuid))
+            {
+                return "guid:" + mod.ForgeGuid.Trim();
+            }
+
+            return null;
+        }
+
+        private static InstalledModInfo WithRelatedPaths(InstalledModInfo mod, IReadOnlyList<string> paths) =>
+            new()
+            {
+                DisplayName = mod.DisplayName,
+                Path = mod.Path,
+                Kind = mod.Kind,
+                IsEnabled = mod.IsEnabled,
+                IsDirectory = mod.IsDirectory,
+                VersionHint = mod.VersionHint,
+                ForgeModId = mod.ForgeModId,
+                ForgeGuid = mod.ForgeGuid,
+                ForgeSlug = mod.ForgeSlug,
+                ForgeName = mod.ForgeName,
+                AvailableUpdate = mod.AvailableUpdate,
+                RelatedPaths = paths
+            };
 
         public static bool IsInstalledMatch(InstalledModInfo installed, ForgeModSummary forge)
         {
@@ -287,33 +397,88 @@ namespace SptLauncherWpf.Services
                 return mod;
             }
 
-            var source = mod.Path;
-            var destination = enabled ? GetEnabledPath(source) : GetDisabledPath(source);
+            if (mod.IsDirectory || mod.AllPaths.Count <= 1)
+            {
+                var source = mod.Path;
+                var destination = enabled ? GetEnabledPath(source) : GetDisabledPath(source);
+                MoveInstalledPath(mod.IsDirectory, source, destination, mod.DisplayName, enabled);
+                return CloneWithPath(mod, destination, enabled, new[] { destination });
+            }
 
+            // Multi-DLL package: enable/disable every related loose plugin together.
+            var moved = new List<string>();
+            foreach (var source in mod.AllPaths)
+            {
+                var destination = enabled ? GetEnabledPath(source) : GetDisabledPath(source);
+                MoveInstalledPath(isDirectory: false, source, destination, mod.DisplayName, enabled);
+                moved.Add(destination);
+            }
+
+            moved.Sort(StringComparer.OrdinalIgnoreCase);
+            return CloneWithPath(mod, moved[0], enabled, moved);
+        }
+
+        private static void MoveInstalledPath(
+            bool isDirectory,
+            string source,
+            string destination,
+            string displayName,
+            bool enabled)
+        {
             if (string.Equals(source, destination, StringComparison.OrdinalIgnoreCase))
             {
-                return mod;
+                return;
             }
 
             if (File.Exists(destination) || Directory.Exists(destination))
             {
                 throw new IOException(
-                    $"Cannot {(enabled ? "enable" : "disable")} \"{mod.DisplayName}\" because \"{Path.GetFileName(destination)}\" already exists.");
+                    $"Cannot {(enabled ? "enable" : "disable")} \"{displayName}\" because \"{Path.GetFileName(destination)}\" already exists.");
             }
 
-            if (mod.IsDirectory)
+            if (isDirectory)
             {
                 Directory.Move(source, destination);
-            }
-            else
-            {
-                File.Move(source, destination);
+                return;
             }
 
-            return new InstalledModInfo
+            File.Move(source, destination);
+            MoveLoosePluginMarker(source, destination);
+        }
+
+        private static void MoveLoosePluginMarker(string sourceFile, string destinationFile)
+        {
+            var srcMarker = ForgeModMarker.GetMarkerPathForFile(sourceFile);
+            if (!File.Exists(srcMarker))
+            {
+                return;
+            }
+
+            var dstMarker = ForgeModMarker.GetMarkerPathForFile(destinationFile);
+            try
+            {
+                if (File.Exists(dstMarker))
+                {
+                    File.Delete(dstMarker);
+                }
+
+                File.Move(srcMarker, dstMarker);
+            }
+            catch
+            {
+                // Best-effort; plugin rename already succeeded.
+            }
+        }
+
+        private static InstalledModInfo CloneWithPath(
+            InstalledModInfo mod,
+            string path,
+            bool enabled,
+            IReadOnlyList<string> relatedPaths) =>
+            new()
             {
                 DisplayName = mod.DisplayName,
-                Path = destination,
+                Path = path,
                 Kind = mod.Kind,
                 IsEnabled = enabled,
                 IsDirectory = mod.IsDirectory,
@@ -322,9 +487,9 @@ namespace SptLauncherWpf.Services
                 ForgeGuid = mod.ForgeGuid,
                 ForgeSlug = mod.ForgeSlug,
                 ForgeName = mod.ForgeName,
-                AvailableUpdate = mod.AvailableUpdate
+                AvailableUpdate = mod.AvailableUpdate,
+                RelatedPaths = relatedPaths
             };
-        }
 
         public static void Uninstall(InstalledModInfo mod)
         {
@@ -334,15 +499,54 @@ namespace SptLauncherWpf.Services
                 {
                     Directory.Delete(mod.Path, recursive: true);
                 }
+
+                return;
             }
-            else if (File.Exists(mod.Path))
+
+            foreach (var path in mod.AllPaths)
             {
-                File.Delete(mod.Path);
+                TryDeleteLoosePlugin(path);
+            }
+        }
+
+        private static void TryDeleteLoosePlugin(string path)
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            var markerPath = ForgeModMarker.GetMarkerPathForFile(path);
+            if (File.Exists(markerPath))
+            {
+                try
+                {
+                    File.Delete(markerPath);
+                }
+                catch
+                {
+                    // Best-effort; the plugin itself is already gone.
+                }
             }
         }
 
         public static void OpenInExplorer(InstalledModInfo mod)
         {
+            if (!mod.IsDirectory && mod.AllPaths.Count > 1)
+            {
+                var dir = Path.GetDirectoryName(mod.Path);
+                if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"\"{dir}\"",
+                        UseShellExecute = true
+                    });
+                    return;
+                }
+            }
+
             var target = mod.Path;
             if (mod.IsDirectory)
             {

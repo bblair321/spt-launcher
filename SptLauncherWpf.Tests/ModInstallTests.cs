@@ -202,6 +202,55 @@ public class ModInstallSafetyTests
         Assert.Contains(path, message);
         Assert.Contains("File:", message);
     }
+
+    [Theory]
+    [InlineData("spt-server-manager")]
+    [InlineData("spt-server-manager.exe")]
+    [InlineData("SPT-Server-Manager")]
+    [InlineData("spt-server-manager-agent")]
+    public void Server_manager_processes_are_not_install_blockers(string name)
+    {
+        Assert.True(ModInstallService.IsServerManagerProcess(name, null));
+        Assert.False(ModInstallService.ShouldBlockInstallForProcess(name, exeUnderSptRoot: true));
+        Assert.False(ModInstallService.ShouldBlockInstallForProcess(name, exeUnderSptRoot: false));
+    }
+
+    [Fact]
+    public void Server_manager_exe_path_is_ignored_even_under_spt_root()
+    {
+        Assert.True(ModInstallService.IsServerManagerProcess(
+            "dotnet",
+            @"D:\SPT\tools\spt-server-manager.exe"));
+    }
+
+    [Theory]
+    [InlineData("EscapeFromTarkov", false, true)]
+    [InlineData("EscapeFromTarkov_BE", false, true)]
+    [InlineData("SPT.Launcher", false, true)]
+    [InlineData("Aki.Launcher", true, true)]
+    [InlineData("Greed", false, true)]
+    public void Game_and_launcher_processes_always_block_install(
+        string name,
+        bool underRoot,
+        bool expected)
+    {
+        Assert.Equal(expected, ModInstallService.ShouldBlockInstallForProcess(name, underRoot));
+    }
+
+    [Fact]
+    public void Spt_server_blocks_only_when_running_from_same_install()
+    {
+        Assert.False(ModInstallService.ShouldBlockInstallForProcess("SPT.Server", exeUnderSptRoot: false));
+        Assert.True(ModInstallService.ShouldBlockInstallForProcess("SPT.Server", exeUnderSptRoot: true));
+        Assert.True(ModInstallService.ShouldBlockInstallForProcess("Aki.Server", exeUnderSptRoot: true));
+    }
+
+    [Fact]
+    public void Broad_spt_name_match_no_longer_blocks_unrelated_tools()
+    {
+        Assert.False(ModInstallService.ShouldBlockInstallForProcess("SPTLauncher", exeUnderSptRoot: false));
+        Assert.False(ModInstallService.ShouldBlockInstallForProcess("MySPTTool", exeUnderSptRoot: true));
+    }
 }
 
 public class ForgeApiHelperTests

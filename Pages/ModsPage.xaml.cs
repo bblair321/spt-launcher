@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -1313,11 +1314,16 @@ namespace SptLauncherWpf.Pages
                 TextWrapping = TextWrapping.Wrap
             });
 
+            var fileSummary = !mod.IsDirectory && mod.AllPaths.Count > 1
+                ? $" · {mod.AllPaths.Count} files (" +
+                  string.Join(", ", mod.AllPaths.Select(Path.GetFileName)) + ")"
+                : $" · {mod.Path}";
+
             var meta =
                 (mod.IsEnabled ? "Enabled" : "Disabled") +
                 (string.IsNullOrWhiteSpace(mod.VersionHint) ? "" : $" · v{mod.VersionHint}") +
                 (mod.AvailableUpdate != null ? $" · update {mod.AvailableUpdate.Version}" : "") +
-                $" · {mod.Path}";
+                fileSummary;
 
             info.Children.Add(new TextBlock
             {
@@ -1337,9 +1343,15 @@ namespace SptLauncherWpf.Pages
 
             var actions = new StackPanel
             {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Orientation = System.Windows.Controls.Orientation.Vertical,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(12, 0, 0, 0)
+            };
+
+            var actionRow = new WrapPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right
             };
 
             if (mod.AvailableUpdate != null)
@@ -1348,18 +1360,15 @@ namespace SptLauncherWpf.Pages
                     $"Update {mod.AvailableUpdate.Version}",
                     () => _ = UpdateInstalledModAsync(mod));
                 updateBtn.Background = (Brush)FindResource("PrimaryColor");
-                actions.Children.Add(updateBtn);
+                actionRow.Children.Add(updateBtn);
             }
 
-            var toggle = CreateInstalledActionButton(
+            actionRow.Children.Add(CreateInstalledActionButton(
                 mod.IsEnabled ? "Disable" : "Enable",
-                () => ToggleInstalledMod(mod));
-            var open = CreateInstalledActionButton("Open", () => OpenInstalledMod(mod));
-            var remove = CreateInstalledActionButton("Remove", () => RemoveInstalledMod(mod));
-
-            actions.Children.Add(toggle);
-            actions.Children.Add(open);
-            actions.Children.Add(remove);
+                () => ToggleInstalledMod(mod)));
+            actionRow.Children.Add(CreateInstalledActionButton("Open", () => OpenInstalledMod(mod)));
+            actionRow.Children.Add(CreateInstalledActionButton("Remove", () => RemoveInstalledMod(mod)));
+            actions.Children.Add(actionRow);
 
             Grid.SetColumn(actions, 1);
             grid.Children.Add(actions);
@@ -1378,9 +1387,18 @@ namespace SptLauncherWpf.Pages
                 Padding = new Thickness(12, 6, 12, 6),
                 FontSize = 12,
                 Margin = new Thickness(0, 0, 6, 0),
-                IsEnabled = !_busy
+                // Always enabled at create time — list rows are built while _busy is true during scan.
+                IsEnabled = true
             };
-            button.Click += (_, _) => action();
+            button.Click += (_, _) =>
+            {
+                if (_busy)
+                {
+                    return;
+                }
+
+                action();
+            };
             return button;
         }
 
@@ -1422,8 +1440,15 @@ namespace SptLauncherWpf.Pages
 
         private void RemoveInstalledMod(InstalledModInfo mod)
         {
+            if (_busy)
+            {
+                return;
+            }
+
             var confirm = System.Windows.MessageBox.Show(
-                $"Remove \"{mod.DisplayName}\" from disk?\n\n{mod.Path}\n\nThis cannot be undone.",
+                $"Remove \"{mod.DisplayName}\" from disk?\n\n" +
+                string.Join("\n", mod.AllPaths) +
+                "\n\nThis cannot be undone.",
                 "Remove mod",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
@@ -1441,8 +1466,14 @@ namespace SptLauncherWpf.Pages
             }
             catch (Exception ex)
             {
+                var detail = ex.Message;
+                if (ModInstallService.IsFileLockException(ex) && !string.IsNullOrWhiteSpace(_sptRoot))
+                {
+                    detail = ModInstallService.BuildPublicFileLockMessage(_sptRoot, ex);
+                }
+
                 System.Windows.MessageBox.Show(
-                    $"Could not remove \"{mod.DisplayName}\".\n\n{ex.Message}",
+                    $"Could not remove \"{mod.DisplayName}\".\n\n{detail}",
                     "Remove failed",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);

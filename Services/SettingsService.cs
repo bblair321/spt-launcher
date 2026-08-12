@@ -126,6 +126,33 @@ namespace SptLauncherWpf.Services
             set => SetValue("AutoUpdate", value);
         }
 
+        public string RequiredModsPackUrl
+        {
+            get => GetValue("RequiredModsPackUrl", "");
+            set => SetValue("RequiredModsPackUrl", value);
+        }
+
+        /// <summary>
+        /// Game server host or host:port. Used to derive https://{host}:6969/mod-pack when PackUrl is empty.
+        /// </summary>
+        public string RequiredModsServerHost
+        {
+            get => GetValue("RequiredModsServerHost", "");
+            set => SetValue("RequiredModsServerHost", value);
+        }
+
+        public string RequiredModsAgentToken
+        {
+            get => GetValue("RequiredModsAgentToken", "");
+            set => SetValue("RequiredModsAgentToken", value);
+        }
+
+        public bool AutoCheckRequiredModsOnLaunch
+        {
+            get => GetValue("AutoCheckRequiredModsOnLaunch", true);
+            set => SetValue("AutoCheckRequiredModsOnLaunch", value);
+        }
+
         public string Theme
         {
             get => GetValue("Theme", "dark");

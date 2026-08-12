@@ -81,7 +81,8 @@ namespace SptLauncherWpf.Services
             string sptRoot,
             IReadOnlyList<string>? preferredFileTree,
             IProgress<ModInstallProgress>? progress = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            bool clientPathsOnly = false)
         {
             if (string.IsNullOrWhiteSpace(sptRoot) || !Directory.Exists(sptRoot))
             {
@@ -176,6 +177,38 @@ namespace SptLauncherWpf.Services
                         Message =
                             $"Could not determine where to install \"{mod.Name}\". " +
                             "Open it on Forge and follow the author's instructions."
+                    };
+                }
+
+                if (clientPathsOnly)
+                {
+                    if (classification.Kind == ModInstallKind.ServerOnly)
+                    {
+                        return Fail(
+                            $"\"{mod.Name}\" is server-only (user/mods) and was skipped for client pack sync.");
+                    }
+
+                    var clientPaths = ModPathClassifier.FilterClientInstallPaths(
+                        classification.InstallableRelativePaths);
+                    if (clientPaths.Count == 0)
+                    {
+                        return Fail(
+                            $"\"{mod.Name}\" has no BepInEx client files to install for pack sync.");
+                    }
+
+                    classification = new ModPathClassification
+                    {
+                        Kind = ModInstallKind.ClientOnly,
+                        HasServerPaths = false,
+                        HasClientPaths = true,
+                        HasExtraRootFiles = false,
+                        InstallableRelativePaths = clientPaths,
+                        SkippedPaths = classification.SkippedPaths
+                            .Concat(classification.InstallableRelativePaths.Except(
+                                clientPaths, StringComparer.OrdinalIgnoreCase))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList(),
+                        Summary = "Client mod (BepInEx) — pack sync"
                     };
                 }
 
@@ -842,10 +875,11 @@ namespace SptLauncherWpf.Services
                 lines.Add("");
                 lines.Add("No locking process was identified. Try:");
                 lines.Add("• Stop SPT on the Launcher tab");
-                lines.Add("• Close EscapeFromTarkov, SPT.Server, Greed, or any mod tools");
+                lines.Add("• Close EscapeFromTarkov / SPT.Launcher (and SPT.Server if it is this install)");
                 lines.Add("• Pause antivirus scanning on your SPT folder / Temp folder");
                 lines.Add("• Close File Explorer windows open inside the SPT folder");
                 lines.Add("• Fully quit this launcher, then reopen and retry");
+                // Note: spt-server-manager does not need to be closed for client mod installs.
             }
 
             lines.Add("");
@@ -944,7 +978,9 @@ namespace SptLauncherWpf.Services
             {
                 try
                 {
-                    results.AddRange(FileLockProbe.GetLockingProcessLabels(lockedFile));
+                    results.AddRange(
+                        FileLockProbe.GetLockingProcessLabels(lockedFile)
+                            .Where(label => !IsServerManagerLabel(label)));
                 }
                 catch
                 {
@@ -956,14 +992,6 @@ namespace SptLauncherWpf.Services
             var rootFull = string.IsNullOrWhiteSpace(sptRoot)
                 ? ""
                 : Path.GetFullPath(sptRoot).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
-
-            var knownNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "SPT.Server", "SPT.Launcher", "SPT.Server.Exe", "SPTLauncher",
-                "Aki.Server", "Aki.Launcher",
-                "EscapeFromTarkov", "EscapeFromTarkov_BE", "BsgLauncher",
-                "Greed", "Fika.Headless", "Fika"
-            };
 
             foreach (var process in Process.GetProcesses())
             {
@@ -985,6 +1013,11 @@ namespace SptLauncherWpf.Services
                     }
 
                     var name = process.ProcessName;
+                    if (IsServerManagerProcess(name, exePath))
+                    {
+                        continue;
+                    }
+
                     var underSpt = !string.IsNullOrEmpty(exePath) &&
                                    !string.IsNullOrEmpty(rootFull) &&
                                    exePath.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase);
@@ -993,13 +1026,8 @@ namespace SptLauncherWpf.Services
                                             !string.IsNullOrEmpty(exePath) &&
                                             string.Equals(exePath, lockedFile, StringComparison.OrdinalIgnoreCase);
 
-                    var nameLooksRelated =
-                        knownNames.Contains(name) ||
-                        name.Contains("SPT", StringComparison.OrdinalIgnoreCase) ||
-                        name.Contains("Fika", StringComparison.OrdinalIgnoreCase) ||
-                        name.Contains("Tarkov", StringComparison.OrdinalIgnoreCase);
-
-                    if (underSpt || matchesLockedFile || nameLooksRelated)
+                    if (matchesLockedFile ||
+                        ShouldBlockInstallForProcess(name, underSpt, hasLockedFileHint: !string.IsNullOrWhiteSpace(lockedFile)))
                     {
                         var label = string.IsNullOrEmpty(exePath)
                             ? $"{name} (PID {process.Id})"
@@ -1021,6 +1049,103 @@ namespace SptLauncherWpf.Services
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        /// <summary>
+        /// True for processes that can lock client/plugin files during install.
+        /// Server manager / agent binaries are never blockers.
+        /// SPT.Server only blocks when it is running from the same SPT install root.
+        /// </summary>
+        public static bool ShouldBlockInstallForProcess(
+            string processName,
+            bool exeUnderSptRoot,
+            bool hasLockedFileHint = false)
+        {
+            if (string.IsNullOrWhiteSpace(processName) || IsServerManagerProcess(processName, exePath: null))
+            {
+                return false;
+            }
+
+            var name = processName.Trim();
+
+            // Game client — always blocks BepInEx / client file writes
+            if (name.Equals("EscapeFromTarkov", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("EscapeFromTarkov_BE", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("BsgLauncher", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Official SPT / AKI game launcher
+            if (name.Equals("SPT.Launcher", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("Aki.Launcher", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Tools that commonly hold mod files open
+            if (name.Equals("Greed", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("Fika.Headless", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // SPT.Server only matters when it is the server for this install folder
+            if (name.Equals("SPT.Server", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("SPT.Server.Exe", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("Aki.Server", StringComparison.OrdinalIgnoreCase))
+            {
+                return exeUnderSptRoot;
+            }
+
+            // When diagnosing a specific locked file, also flag other Tarkov/Fika processes under the install.
+            // Do not use a broad "contains SPT" match — that catches spt-server-manager.
+            if (hasLockedFileHint && exeUnderSptRoot &&
+                (name.Contains("Tarkov", StringComparison.OrdinalIgnoreCase) ||
+                 name.Contains("Fika", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool IsServerManagerProcess(string? processName, string? exePath)
+        {
+            if (LooksLikeServerManager(processName))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(exePath))
+            {
+                return false;
+            }
+
+            try
+            {
+                return LooksLikeServerManager(Path.GetFileNameWithoutExtension(exePath)) ||
+                       LooksLikeServerManager(Path.GetFileName(exePath));
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsServerManagerLabel(string label) =>
+            LooksLikeServerManager(label);
+
+        private static bool LooksLikeServerManager(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            return value.Contains("server-manager", StringComparison.OrdinalIgnoreCase) ||
+                   value.Contains("servermanager", StringComparison.OrdinalIgnoreCase) ||
+                   value.Contains("spt-server-manager", StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool IsFileLockException(Exception ex)

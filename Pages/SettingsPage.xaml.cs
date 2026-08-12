@@ -21,6 +21,9 @@ namespace SptLauncherWpf.Pages
         {
             // Load general settings
             AutoUpdateCheckBox.IsChecked = SettingsService.Instance.AutoUpdate;
+            RequiredModsServerHostTextBox.Text = SettingsService.Instance.RequiredModsServerHost ?? "";
+            RequiredModsPackUrlTextBox.Text = SettingsService.Instance.RequiredModsPackUrl ?? "";
+            AutoCheckRequiredModsCheckBox.IsChecked = SettingsService.Instance.AutoCheckRequiredModsOnLaunch;
         }
 
         private void SaveSettings()
@@ -30,6 +33,13 @@ namespace SptLauncherWpf.Pages
                 // Save general settings
                 var autoUpdateEnabled = AutoUpdateCheckBox.IsChecked ?? false;
                 SettingsService.Instance.AutoUpdate = autoUpdateEnabled;
+
+                SettingsService.Instance.RequiredModsServerHost =
+                    RequiredModsServerHostTextBox.Text?.Trim() ?? "";
+                SettingsService.Instance.RequiredModsPackUrl =
+                    RequiredModsPackUrlTextBox.Text?.Trim() ?? "";
+                SettingsService.Instance.AutoCheckRequiredModsOnLaunch =
+                    AutoCheckRequiredModsCheckBox.IsChecked ?? true;
                 
                 // Start or stop periodic update checking based on setting
                 if (autoUpdateEnabled)

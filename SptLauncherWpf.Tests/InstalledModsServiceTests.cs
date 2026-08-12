@@ -128,4 +128,75 @@ public class InstalledModsServiceTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Fact]
+    public void ScanInstalledMods_collapses_multi_dll_forge_package()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-mods-group-" + Guid.NewGuid().ToString("N"));
+        var plugins = Path.Combine(root, "BepInEx", "plugins");
+        Directory.CreateDirectory(plugins);
+
+        var dllA = Path.Combine(plugins, "Tyfon.UIFixes.dll");
+        var dllB = Path.Combine(plugins, "Tyfon.UIFixes.Net.dll");
+        File.WriteAllText(dllA, "a");
+        File.WriteAllText(dllB, "b");
+
+        var marker = new ForgeModMarker
+        {
+            ForgeModId = 321,
+            Guid = "tyfon.uifixes",
+            Name = "UI Fixes",
+            Version = "6.0.1",
+            Slug = "ui-fixes"
+        };
+        ForgeModMarker.Write(dllA, isDirectory: false, marker);
+        ForgeModMarker.Write(dllB, isDirectory: false, marker);
+
+        try
+        {
+            var mods = InstalledModsService.ScanInstalledMods(root);
+            var uiFixes = Assert.Single(mods, m => m.DisplayName == "UI Fixes");
+            Assert.Equal(2, uiFixes.AllPaths.Count);
+            Assert.Contains(dllA, uiFixes.AllPaths);
+            Assert.Contains(dllB, uiFixes.AllPaths);
+            Assert.Equal("6.0.1", uiFixes.VersionHint);
+            Assert.Equal(321, uiFixes.ForgeModId);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Uninstall_removes_all_related_loose_plugins()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-mods-rm-" + Guid.NewGuid().ToString("N"));
+        var plugins = Path.Combine(root, "BepInEx", "plugins");
+        Directory.CreateDirectory(plugins);
+        var dllA = Path.Combine(plugins, "A.dll");
+        var dllB = Path.Combine(plugins, "B.dll");
+        File.WriteAllText(dllA, "a");
+        File.WriteAllText(dllB, "b");
+        var marker = new ForgeModMarker { ForgeModId = 1, Name = "Pack", Version = "1.0.0" };
+        ForgeModMarker.Write(dllA, isDirectory: false, marker);
+        ForgeModMarker.Write(dllB, isDirectory: false, marker);
+
+        try
+        {
+            var mod = Assert.Single(InstalledModsService.ScanInstalledMods(root));
+            InstalledModsService.Uninstall(mod);
+            Assert.False(File.Exists(dllA));
+            Assert.False(File.Exists(dllB));
+            Assert.False(File.Exists(ForgeModMarker.GetMarkerPathForFile(dllA)));
+            Assert.False(File.Exists(ForgeModMarker.GetMarkerPathForFile(dllB)));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
 }
