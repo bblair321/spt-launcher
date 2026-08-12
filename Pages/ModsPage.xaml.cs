@@ -877,7 +877,18 @@ namespace SptLauncherWpf.Pages
                     ModPageEmbedStatusText.Visibility = Visibility.Visible;
                 }
 
-                await ModPageWebView.EnsureCoreWebView2Async();
+                // Keep WebView2 profile under AppData — default is next to the .exe
+                // (e.g. SPTLauncher.exe.WebView2), which clutter Downloads/Desktop.
+                var userDataFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "SPT-Launcher",
+                    "WebView2");
+                Directory.CreateDirectory(userDataFolder);
+                var environment = await CoreWebView2Environment.CreateAsync(
+                    browserExecutableFolder: null,
+                    userDataFolder: userDataFolder);
+
+                await ModPageWebView.EnsureCoreWebView2Async(environment);
                 ModPageWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
                 ModPageWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 ModPageWebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
