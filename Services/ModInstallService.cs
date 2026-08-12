@@ -89,7 +89,9 @@ namespace SptLauncherWpf.Services
                 return Fail("SPT install folder was not found. Set SPT.Launcher.exe on the Launcher tab first.");
             }
 
-            if (IsToolsCategory(mod))
+            // Browse Mods refuses Tools (often installers/utilities). Required-pack sync
+            // still installs them when the host listed them as client mods.
+            if (!clientPathsOnly && IsToolsCategory(mod))
             {
                 return Fail(
                     $"\"{mod.Name}\" is listed as a Tool on Forge and is not auto-installed. Open it on Forge instead.");
