@@ -281,18 +281,15 @@ namespace SptLauncherWpf.Services
                         "extracted into the SPT folder (archive layout mismatch). Install it manually from Forge.");
                 }
 
-                try
-                {
-                    WriteInstallMarkers(mod, version, extracted);
-                    // Refresh markers on any leftover copies of the same Forge mod so Diff
-                    // doesn't keep reporting the old version from an orphaned sidecar.
-                    RefreshRelatedClientMarkers(sptRoot, mod, version, extracted);
-                }
-                catch (Exception ex) when (IsFileLockException(ex))
-                {
-                    // Files were written; marker is best-effort.
-                    Console.WriteLine($"Marker write skipped (locked): {ex.Message}");
-                }
+            try
+            {
+                WriteInstallMarkers(mod, version, extracted);
+            }
+            catch (Exception ex) when (IsFileLockException(ex))
+            {
+                // Files were written; marker is best-effort.
+                Console.WriteLine($"Marker write skipped (locked): {ex.Message}");
+            }
 
                 var serverTargets = extracted
                     .Where(IsServerPath)
@@ -577,7 +574,6 @@ namespace SptLauncherWpf.Services
             try
             {
                 WriteInstallMarkers(mod, version, new[] { destination });
-                RefreshRelatedClientMarkers(sptRoot, mod, version, new[] { destination });
             }
             catch (Exception ex) when (IsFileLockException(ex))
             {
@@ -1463,75 +1459,6 @@ namespace SptLauncherWpf.Services
                 catch
                 {
                     // ignore marker write failures
-                }
-            }
-        }
-
-        /// <summary>
-        /// Updates .forge-mod.json on other loose plugins that already belong to this Forge mod
-        /// (same id/guid), so pack Diff doesn't keep "have 1.1.0, need 1.6.0" from an old sidecar
-        /// after a successful upgrade that wrote a differently named DLL.
-        /// </summary>
-        private static void RefreshRelatedClientMarkers(
-            string sptRoot,
-            ForgeModSummary mod,
-            ForgeModVersion version,
-            IReadOnlyList<string> extractedFiles)
-        {
-            var extractedSet = new HashSet<string>(extractedFiles, StringComparer.OrdinalIgnoreCase);
-            var marker = new ForgeModMarker
-            {
-                ForgeModId = mod.Id,
-                Guid = mod.Guid,
-                Slug = mod.Slug,
-                Name = mod.Name,
-                Version = version.Version,
-                VersionId = version.Id,
-                InstalledAtUtc = DateTime.UtcNow
-            };
-
-            foreach (var pluginsDir in InstalledModsService.GetClientPluginDirectories(sptRoot))
-            {
-                if (!Directory.Exists(pluginsDir))
-                {
-                    continue;
-                }
-
-                foreach (var file in Directory.EnumerateFiles(pluginsDir, "*.*", SearchOption.TopDirectoryOnly))
-                {
-                    var name = Path.GetFileName(file);
-                    var working = InstalledModsService.IsDisabledName(name)
-                        ? InstalledModsService.StripDisabledSuffix(name)
-                        : name;
-                    if (!working.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
-                        extractedSet.Contains(file))
-                    {
-                        continue;
-                    }
-
-                    var existing = ForgeModMarker.TryRead(file, isDirectory: false);
-                    if (existing == null)
-                    {
-                        continue;
-                    }
-
-                    var sameId = existing.ForgeModId > 0 && existing.ForgeModId == mod.Id;
-                    var sameGuid = !string.IsNullOrWhiteSpace(mod.Guid) &&
-                                   !string.IsNullOrWhiteSpace(existing.Guid) &&
-                                   string.Equals(existing.Guid, mod.Guid, StringComparison.OrdinalIgnoreCase);
-                    if (!sameId && !sameGuid)
-                    {
-                        continue;
-                    }
-
-                    try
-                    {
-                        ForgeModMarker.Write(file, isDirectory: false, marker);
-                    }
-                    catch
-                    {
-                        // ignore
-                    }
                 }
             }
         }

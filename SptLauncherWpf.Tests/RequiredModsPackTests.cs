@@ -235,6 +235,57 @@ public class RequiredModsPackTests
         Assert.StartsWith("BepInEx/", clientOnly[0], StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Diff_does_not_treat_UseLooseLoot_dll_as_LootNET()
+    {
+        var pack = new RequiredModsPack
+        {
+            Mods =
+            [
+                new RequiredModEntry
+                {
+                    Name = "LootNET",
+                    Slug = "lootnet",
+                    ForgeModId = 2679,
+                    Guid = "com.20fpsguy.LootNet",
+                    Version = "1.1.0"
+                }
+            ]
+        };
+
+        var installed = new List<InstalledModInfo>
+        {
+            new()
+            {
+                DisplayName = "LootNET",
+                Kind = InstalledModKind.Client,
+                Path = @"D:\SPT\BepInEx\plugins\Gaylatea-UseLooseLoot.dll",
+                IsDirectory = false,
+                // Contaminated sidecar from a prior bug:
+                ForgeModId = 2679,
+                ForgeGuid = "com.20fpsguy.LootNet",
+                ForgeSlug = "lootnet",
+                VersionHint = "1.6.0"
+            },
+            new()
+            {
+                DisplayName = "LootNET",
+                Kind = InstalledModKind.Client,
+                Path = @"D:\SPT\BepInEx\plugins\LootNet",
+                IsDirectory = true,
+                ForgeModId = 2679,
+                ForgeGuid = "com.20fpsguy.LootNet",
+                ForgeSlug = "lootnet",
+                VersionHint = "1.1.0"
+            }
+        };
+
+        var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry?.Name == "LootNET"));
+        Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+        Assert.Equal(@"D:\SPT\BepInEx\plugins\LootNet", item.Installed?.Path);
+    }
+
     private static RequiredModDiffItem Find(RequiredModsDiffResult diff, string name) =>
         diff.Items.First(i => i.PackEntry?.Name == name);
 }

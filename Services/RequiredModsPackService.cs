@@ -601,8 +601,8 @@ namespace SptLauncherWpf.Services
 
             var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // Only stamp by strong identity (forge id / guid). Never stamp a name-only match —
-            // that previously wrote Use Loose Loot 1.6.0 onto LootNET's sidecar.
+            // Only stamp installs that both claim this Forge identity AND whose path belongs
+            // to this pack entry. Never rewrite Gaylatea-UseLooseLoot.dll when installing LootNET.
             foreach (var local in clientMods)
             {
                 var sameId = marker.ForgeModId > 0 && local.ForgeModId == marker.ForgeModId;
@@ -613,9 +613,17 @@ namespace SptLauncherWpf.Services
                     continue;
                 }
 
+                if (!PathBelongsToPackEntry(local.Path, entry))
+                {
+                    continue;
+                }
+
                 foreach (var path in local.AllPaths)
                 {
-                    targets.Add(path);
+                    if (PathBelongsToPackEntry(path, entry))
+                    {
+                        targets.Add(path);
+                    }
                 }
             }
 
@@ -664,7 +672,8 @@ namespace SptLauncherWpf.Services
                 Consider(FindLocalMatch(entry, clientMods));
                 if (entry.ForgeModId is int id and > 0)
                 {
-                    foreach (var m in clientMods.Where(x => x.ForgeModId == id))
+                    foreach (var m in clientMods.Where(x =>
+                                 x.ForgeModId == id && PathBelongsToPackEntry(x.Path, entry)))
                     {
                         Consider(m);
                     }
@@ -673,7 +682,8 @@ namespace SptLauncherWpf.Services
                 if (!string.IsNullOrWhiteSpace(entry.Guid))
                 {
                     foreach (var m in clientMods.Where(x =>
-                                 string.Equals(x.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase)))
+                                 string.Equals(x.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase) &&
+                                 PathBelongsToPackEntry(x.Path, entry)))
                     {
                         Consider(m);
                     }
@@ -835,6 +845,9 @@ namespace SptLauncherWpf.Services
                 }));
             }
 
+            // Drop path mismatches (e.g. Gaylatea-UseLooseLoot.dll wrongly tagged as LootNET).
+            candidates = candidates.Where(m => PathBelongsToPackEntry(m.Path, entry)).ToList();
+
             var unique = candidates
                 .GroupBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.First())
@@ -861,6 +874,56 @@ namespace SptLauncherWpf.Services
                 .ThenByDescending(m => m.IsEnabled)
                 .ThenBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
                 .First();
+        }
+
+        /// <summary>
+        /// True when the install path is allowed to represent this pack entry.
+        /// Rejects known cross-tagging (Use Loose Loot DLL stamped as LootNET), but still
+        /// allows generic plugin folder names matched purely by Forge id/guid.
+        /// </summary>
+        internal static bool PathBelongsToPackEntry(string path, RequiredModEntry entry)
+        {
+            var leaf = InstalledModsService.NormalizeModKey(
+                Path.GetFileNameWithoutExtension(
+                    path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+            if (string.IsNullOrWhiteSpace(leaf))
+            {
+                return false;
+            }
+
+            var slugCompact = InstalledModsService.NormalizeModKey(entry.Slug);
+            var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
+
+            if (!string.IsNullOrWhiteSpace(slugCompact) && leaf.Contains(slugCompact))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(nameKey) && leaf.Contains(nameKey))
+            {
+                return true;
+            }
+
+            var entryIsLootNet = (!string.IsNullOrWhiteSpace(slugCompact) && slugCompact.Contains("lootnet"))
+                                 || (!string.IsNullOrWhiteSpace(nameKey) && nameKey.Contains("lootnet"));
+            var entryIsLooseLoot = (!string.IsNullOrWhiteSpace(slugCompact) && slugCompact.Contains("uselooseloot"))
+                                   || (!string.IsNullOrWhiteSpace(nameKey) && nameKey.Contains("uselooseloot"))
+                                   || (!string.IsNullOrWhiteSpace(nameKey) && nameKey.Contains("looseloot"));
+            var pathIsLooseLoot = leaf.Contains("uselooseloot") || leaf.Contains("gaylatea");
+            var pathIsLootNet = leaf.Contains("lootnet") && !pathIsLooseLoot;
+
+            if (entryIsLootNet && pathIsLooseLoot)
+            {
+                return false;
+            }
+
+            if (entryIsLooseLoot && pathIsLootNet)
+            {
+                return false;
+            }
+
+            // Generic path (GuidMod, etc.) — allow Forge id/guid matching.
+            return true;
         }
 
         private static int ParseVersionRank(string? version)
