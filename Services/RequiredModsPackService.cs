@@ -370,23 +370,45 @@ namespace SptLauncherWpf.Services
                     }
                     else if (result.Success)
                     {
-                        // Re-scan this mod immediately — InstallAsync used to report success
-                        // even when 0 files extracted / marker stayed on the old version.
+                        // Re-scan against the full pack — a single-entry Diff can look OK while
+                        // another stale copy of the same mod still wins the final Diff.
+                        StampMatchedClientMarkers(
+                            sptRoot,
+                            entry,
+                            forgeMod: null,
+                            versionLabel: entry.Version);
+
                         var midScan = InstalledModsService.ScanInstalledMods(sptRoot);
-                        var midDiff = Diff(
-                            new RequiredModsPack { Mods = new List<RequiredModEntry> { entry } },
-                            midScan);
+                        var midDiff = Diff(pack, midScan);
                         var stillWrong = midDiff.Items.Any(i =>
+                            ReferenceEquals(i.PackEntry, entry) &&
                             i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+
                         if (stillWrong)
                         {
-                            failed++;
-                            var detail = midDiff.Items.FirstOrDefault(i =>
+                            // Stale duplicate DLL/sidecar (common with Use Loose Loot upgrades).
+                            TryUninstallLocalMatch(sptRoot, entry);
+                            var retry = await InstallPackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                            midScan = InstalledModsService.ScanInstalledMods(sptRoot);
+                            midDiff = Diff(pack, midScan);
+                            stillWrong = midDiff.Items.Any(i =>
+                                ReferenceEquals(i.PackEntry, entry) &&
                                 i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
-                            errors.Add(
-                                $"{entry.DisplayName}: install reported OK but still " +
-                                $"{detail?.Message ?? "not matching pack version"}. " +
-                                "Close EscapeFromTarkov/SPT if running, then sync again — or install 1.6.0 manually from Forge.");
+
+                            if (!retry.Success || stillWrong)
+                            {
+                                failed++;
+                                var detail = midDiff.Items.FirstOrDefault(i =>
+                                    ReferenceEquals(i.PackEntry, entry) &&
+                                    i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+                                errors.Add(
+                                    $"{entry.DisplayName}: {detail?.Message ?? retry.Error ?? "version still mismatch"} after reinstall. " +
+                                    "Delete BepInEx\\plugins\\*Loose* (and *.forge-mod.json), then sync — or install from Forge.");
+                            }
+                            else
+                            {
+                                installedCount++;
+                            }
                         }
                         else
                         {
@@ -429,6 +451,12 @@ namespace SptLauncherWpf.Services
             if (after.NeedsSync)
             {
                 parts.Add($"still missing {after.MissingCount}, wrong version {after.WrongVersionCount}");
+                foreach (var item in after.Items
+                             .Where(i => i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion)
+                             .Take(5))
+                {
+                    errors.Add(item.Message);
+                }
             }
             else if (after.ManualFixCount > 0)
             {
@@ -535,7 +563,7 @@ namespace SptLauncherWpf.Services
             // Pack Diff keys off .forge-mod.json sidecars. Always stamp the matched
             // local plugin(s) to the version we just installed so upgrades can't leave
             // a stale "have 1.1.0, need 1.6.0" marker on an older DLL name.
-            StampMatchedClientMarkers(sptRoot, entry, mod, version);
+            StampMatchedClientMarkers(sptRoot, entry, mod, version.Version, version.Id);
 
             return (true, false, "");
         }
@@ -543,17 +571,28 @@ namespace SptLauncherWpf.Services
         private static void StampMatchedClientMarkers(
             string sptRoot,
             RequiredModEntry entry,
-            ForgeModSummary mod,
-            ForgeModVersion version)
+            ForgeModSummary? forgeMod,
+            string? versionLabel,
+            int? versionId = null)
         {
+            var versionText = !string.IsNullOrWhiteSpace(versionLabel)
+                ? versionLabel!.Trim()
+                : (entry.Version ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(versionText))
+            {
+                return;
+            }
+
             var marker = new ForgeModMarker
             {
-                ForgeModId = mod.Id,
-                Guid = !string.IsNullOrWhiteSpace(entry.Guid) ? entry.Guid : mod.Guid,
-                Slug = !string.IsNullOrWhiteSpace(entry.Slug) ? entry.Slug : mod.Slug,
-                Name = !string.IsNullOrWhiteSpace(entry.Name) ? entry.Name : mod.Name,
-                Version = version.Version,
-                VersionId = version.Id,
+                ForgeModId = forgeMod?.Id > 0
+                    ? forgeMod.Id
+                    : entry.ForgeModId ?? 0,
+                Guid = !string.IsNullOrWhiteSpace(entry.Guid) ? entry.Guid : forgeMod?.Guid,
+                Slug = !string.IsNullOrWhiteSpace(entry.Slug) ? entry.Slug : forgeMod?.Slug,
+                Name = !string.IsNullOrWhiteSpace(entry.Name) ? entry.Name : forgeMod?.Name,
+                Version = versionText,
+                VersionId = versionId,
                 InstalledAtUtc = DateTime.UtcNow
             };
 
@@ -573,14 +612,17 @@ namespace SptLauncherWpf.Services
             // Also stamp any plugin whose existing marker already points at this Forge mod.
             foreach (var local in clientMods)
             {
-                if (local.ForgeModId == mod.Id ||
-                    (!string.IsNullOrWhiteSpace(marker.Guid) &&
-                     string.Equals(local.ForgeGuid, marker.Guid, StringComparison.OrdinalIgnoreCase)))
+                var sameId = marker.ForgeModId > 0 && local.ForgeModId == marker.ForgeModId;
+                var sameGuid = !string.IsNullOrWhiteSpace(marker.Guid) &&
+                               string.Equals(local.ForgeGuid, marker.Guid, StringComparison.OrdinalIgnoreCase);
+                if (!sameId && !sameGuid)
                 {
-                    foreach (var path in local.AllPaths)
-                    {
-                        targets.Add(path);
-                    }
+                    continue;
+                }
+
+                foreach (var path in local.AllPaths)
+                {
+                    targets.Add(path);
                 }
             }
 
@@ -601,6 +643,83 @@ namespace SptLauncherWpf.Services
                 {
                     // best-effort
                 }
+            }
+        }
+
+        private static void TryUninstallLocalMatch(string sptRoot, RequiredModEntry entry)
+        {
+            try
+            {
+                var scanned = InstalledModsService.ScanInstalledMods(sptRoot);
+                var clientMods = scanned.Where(m => m.Kind == InstalledModKind.Client).ToList();
+
+                // Remove every candidate path (stale duplicates), not just the "best" match.
+                var victims = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                void Consider(InstalledModInfo? m)
+                {
+                    if (m == null)
+                    {
+                        return;
+                    }
+
+                    foreach (var p in m.AllPaths)
+                    {
+                        victims.Add(p);
+                    }
+                }
+
+                Consider(FindLocalMatch(entry, clientMods));
+                if (entry.ForgeModId is int id and > 0)
+                {
+                    foreach (var m in clientMods.Where(x => x.ForgeModId == id))
+                    {
+                        Consider(m);
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(entry.Guid))
+                {
+                    foreach (var m in clientMods.Where(x =>
+                                 string.Equals(x.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        Consider(m);
+                    }
+                }
+
+                foreach (var path in victims)
+                {
+                    try
+                    {
+                        if (Directory.Exists(path))
+                        {
+                            InstalledModsService.Uninstall(new InstalledModInfo
+                            {
+                                DisplayName = entry.DisplayName,
+                                Path = path,
+                                Kind = InstalledModKind.Client,
+                                IsDirectory = true
+                            });
+                        }
+                        else if (File.Exists(path))
+                        {
+                            InstalledModsService.Uninstall(new InstalledModInfo
+                            {
+                                DisplayName = entry.DisplayName,
+                                Path = path,
+                                Kind = InstalledModKind.Client,
+                                IsDirectory = false
+                            });
+                        }
+                    }
+                    catch
+                    {
+                        // continue removing other copies
+                    }
+                }
+            }
+            catch
+            {
+                // best-effort cleanup before retry install
             }
         }
 
@@ -686,46 +805,82 @@ namespace SptLauncherWpf.Services
             RequiredModEntry entry,
             IReadOnlyList<InstalledModInfo> clientMods)
         {
-            // Prefer guid, then forgeModId, then slug, then name/folder.
+            var candidates = new List<InstalledModInfo>();
+
             if (!string.IsNullOrWhiteSpace(entry.Guid))
             {
-                var byGuid = clientMods.FirstOrDefault(m =>
-                    string.Equals(m.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase));
-                if (byGuid != null)
-                {
-                    return byGuid;
-                }
+                candidates.AddRange(clientMods.Where(m =>
+                    string.Equals(m.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase)));
             }
 
             if (entry.ForgeModId is int id and > 0)
             {
-                var byId = clientMods.FirstOrDefault(m => m.ForgeModId == id);
-                if (byId != null)
-                {
-                    return byId;
-                }
+                candidates.AddRange(clientMods.Where(m => m.ForgeModId == id));
             }
 
             if (!string.IsNullOrWhiteSpace(entry.Slug))
             {
-                var bySlug = clientMods.FirstOrDefault(m =>
-                    string.Equals(m.ForgeSlug, entry.Slug, StringComparison.OrdinalIgnoreCase));
-                if (bySlug != null)
-                {
-                    return bySlug;
-                }
+                candidates.AddRange(clientMods.Where(m =>
+                    string.Equals(m.ForgeSlug, entry.Slug, StringComparison.OrdinalIgnoreCase)));
             }
 
             var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
             var slugKey = InstalledModsService.NormalizeModKey(entry.Slug?.Replace('-', ' '));
-            return clientMods.FirstOrDefault(m =>
+            candidates.AddRange(clientMods.Where(m =>
             {
                 var displayKey = InstalledModsService.NormalizeModKey(m.DisplayName);
                 var folderKey = InstalledModsService.NormalizeModKey(
                     Path.GetFileName(m.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
                 return (!string.IsNullOrEmpty(nameKey) && (displayKey == nameKey || folderKey == nameKey))
                        || (!string.IsNullOrEmpty(slugKey) && (displayKey == slugKey || folderKey == slugKey));
-            });
+            }));
+
+            // De-dupe by path, then prefer an exact required-version match, else newest version.
+            var unique = candidates
+                .GroupBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+            if (unique.Count == 0)
+            {
+                return null;
+            }
+
+            var required = (entry.Version ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(required))
+            {
+                var exact = unique.FirstOrDefault(m =>
+                    !string.IsNullOrWhiteSpace(m.VersionHint) &&
+                    VersionsEqual(required, m.VersionHint!));
+                if (exact != null)
+                {
+                    return exact;
+                }
+            }
+
+            return unique
+                .OrderByDescending(m => ParseVersionRank(m.VersionHint))
+                .ThenByDescending(m => m.IsEnabled)
+                .ThenBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
+                .First();
+        }
+
+        private static int ParseVersionRank(string? version)
+        {
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return -1;
+            }
+
+            var trimmed = NormalizeVersionLabel(version);
+            var cut = trimmed.IndexOfAny(new[] { '-', '+' });
+            if (cut >= 0)
+            {
+                trimmed = trimmed[..cut];
+            }
+
+            return Version.TryParse(trimmed, out var parsed)
+                ? (parsed.Major * 1_000_000) + (parsed.Minor * 1_000) + Math.Max(parsed.Build, 0)
+                : 0;
         }
 
         public static bool VersionsEqual(string a, string b)
