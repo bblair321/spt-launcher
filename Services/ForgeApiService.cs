@@ -97,7 +97,7 @@ namespace SptLauncherWpf.Services
 
             var url =
                 $"{BaseUrl}/mod/{modId}?include=versions,category" +
-                "&fields=id,guid,name,slug,teaser,thumbnail,downloads,detail_url,fika_compatibility,category_id";
+                "&fields=id,guid,name,slug,teaser,thumbnail,downloads,detail_url,fika_compatibility,category_id,versions";
 
             using var response = await SendGetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
@@ -120,17 +120,8 @@ namespace SptLauncherWpf.Services
             string? sptVersion = null,
             CancellationToken cancellationToken = default)
         {
-            // Prefer versions already loaded with GetModAsync to avoid a second rate-limited call.
-            if (string.IsNullOrWhiteSpace(sptVersion) &&
-                _modCache.TryGetValue(modId, out var cached) &&
-                cached.ExpiresUtc > DateTime.UtcNow &&
-                cached.Mod.Versions is { Count: > 0 })
-            {
-                return cached.Mod.Versions;
-            }
-
             var qs = new StringBuilder();
-            AppendQuery(qs, "per_page", "25");
+            AppendQuery(qs, "per_page", "50");
             AppendQuery(qs, "sort", "-published_at");
             AppendQuery(qs, "fields", "id,version,link,content_length,spt_version_constraint,downloads,fika_compatibility");
 

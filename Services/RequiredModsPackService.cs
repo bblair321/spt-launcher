@@ -498,25 +498,23 @@ namespace SptLauncherWpf.Services
                     $"Could not find Forge mod id {forgeId} on sp-mod.com.");
             }
 
-            // Prefer versions already on the mod detail; only hit /versions if needed.
-            var versions = mod.Versions is { Count: > 0 }
-                ? mod.Versions
-                : await ForgeApiService.Instance.GetModVersionsAsync(
-                    mod.Id,
-                    sptVersion: null,
-                    cancellationToken: cancellationToken);
-
-            var version = PickVersion(versions, entry.Version);
-            if (version == null || string.IsNullOrWhiteSpace(version.Link))
+            // Always load the full versions list for installs. GetModAsync's include=versions
+            // can be incomplete when `fields` omits version columns, which made exact picks
+            // like 1.5.0 / 1.8.0 fail even though Forge has them.
+            var versions = await ForgeApiService.Instance.GetModVersionsAsync(
+                mod.Id,
+                sptVersion: null,
+                cancellationToken: cancellationToken);
+            if (versions.Count == 0 && mod.Versions is { Count: > 0 })
             {
-                // Pack version may be a local FileVersion that Forge never published
-                // (e.g. Search Open Containers 1.5.0 locally vs 1.4.0 on sp-mod.com).
-                versions = await ForgeApiService.Instance.GetModVersionsAsync(
-                    mod.Id,
-                    sptVersion: null,
-                    cancellationToken: cancellationToken);
-                version = PickVersion(versions, entry.Version)
+                versions = mod.Versions;
+            }
+
+            var version = PickVersion(versions, entry.Version)
                           ?? PickNewestVersion(versions);
+            if (version != null)
+            {
+                EnsureVersionDownloadLink(mod, version);
             }
 
             if (version == null || string.IsNullOrWhiteSpace(version.Link))
@@ -524,7 +522,8 @@ namespace SptLauncherWpf.Services
                 return (false, false,
                     string.IsNullOrWhiteSpace(entry.Version)
                         ? "No downloadable version found on Forge."
-                        : $"Version {entry.Version} not found on sp-mod.com for mod id {forgeId}.");
+                        : $"Version {entry.Version} not found on sp-mod.com for mod id {forgeId} " +
+                          $"(Forge returned {versions.Count} version(s)).");
             }
 
             ForgeFileTree? tree = null;
@@ -823,8 +822,26 @@ namespace SptLauncherWpf.Services
             return versions
                 .OrderByDescending(v => ParseVersionRank(v.Version))
                 .ThenByDescending(v => v.Id)
-                .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v.Link))
-                   ?? versions.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v.Link));
+                .FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Some Forge version rows omit `link`; the download route is still predictable.
+        /// </summary>
+        private static void EnsureVersionDownloadLink(ForgeModSummary mod, ForgeModVersion version)
+        {
+            if (!string.IsNullOrWhiteSpace(version.Link))
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(mod.Slug) || string.IsNullOrWhiteSpace(version.Version))
+            {
+                return;
+            }
+
+            version.Link =
+                $"{ForgeApiService.WebsiteBaseUrl}/mod/download/{mod.Id}/{mod.Slug.Trim()}/{version.Version.Trim()}";
         }
 
         internal static InstalledModInfo? FindLocalMatch(
