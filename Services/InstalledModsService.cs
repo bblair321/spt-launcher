@@ -227,7 +227,9 @@ namespace SptLauncherWpf.Services
             foreach (var group in groups.Values)
             {
                 var ordered = group
-                    .OrderBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(BestVersionRank)
+                    .ThenByDescending(m => m.IsEnabled)
+                    .ThenBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
                     .ToList();
                 var primary = ordered[0];
                 var paths = ordered.Select(m => m.Path).ToList();
@@ -239,18 +241,49 @@ namespace SptLauncherWpf.Services
                     // Mixed enable state is rare; show enabled if any member is enabled.
                     IsEnabled = ordered.Any(m => m.IsEnabled),
                     IsDirectory = false,
-                    VersionHint = ordered.Select(m => m.VersionHint).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))
+                    VersionHint = ordered
+                                      .Select(m => m.VersionHint)
+                                      .Where(v => !string.IsNullOrWhiteSpace(v))
+                                      .OrderByDescending(ParseVersionRank)
+                                      .FirstOrDefault()
                                   ?? primary.VersionHint,
-                    ForgeModId = primary.ForgeModId,
-                    ForgeGuid = primary.ForgeGuid,
-                    ForgeSlug = primary.ForgeSlug,
-                    ForgeName = primary.ForgeName,
+                    ForgeModId = primary.ForgeModId ?? ordered.Select(m => m.ForgeModId).FirstOrDefault(id => id is > 0),
+                    ForgeGuid = primary.ForgeGuid ?? ordered.Select(m => m.ForgeGuid).FirstOrDefault(g => !string.IsNullOrWhiteSpace(g)),
+                    ForgeSlug = primary.ForgeSlug ?? ordered.Select(m => m.ForgeSlug).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)),
+                    ForgeName = primary.ForgeName ?? ordered.Select(m => m.ForgeName).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)),
                     AvailableUpdate = primary.AvailableUpdate,
                     RelatedPaths = paths
                 });
             }
 
             return keep;
+        }
+
+        private static int BestVersionRank(InstalledModInfo mod) =>
+            ParseVersionRank(mod.VersionHint);
+
+        private static int ParseVersionRank(string? version)
+        {
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return -1;
+            }
+
+            var trimmed = version.Trim();
+            if (trimmed.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed[1..].Trim();
+            }
+
+            var cut = trimmed.IndexOfAny(new[] { '-', '+' });
+            if (cut >= 0)
+            {
+                trimmed = trimmed[..cut];
+            }
+
+            return Version.TryParse(trimmed, out var parsed)
+                ? (parsed.Major * 1_000_000) + (parsed.Minor * 1_000) + Math.Max(parsed.Build, 0)
+                : 0;
         }
 
         private static string? ClientPluginGroupKey(InstalledModInfo mod)

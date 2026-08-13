@@ -370,7 +370,28 @@ namespace SptLauncherWpf.Services
                     }
                     else if (result.Success)
                     {
-                        installedCount++;
+                        // Re-scan this mod immediately — InstallAsync used to report success
+                        // even when 0 files extracted / marker stayed on the old version.
+                        var midScan = InstalledModsService.ScanInstalledMods(sptRoot);
+                        var midDiff = Diff(
+                            new RequiredModsPack { Mods = new List<RequiredModEntry> { entry } },
+                            midScan);
+                        var stillWrong = midDiff.Items.Any(i =>
+                            i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+                        if (stillWrong)
+                        {
+                            failed++;
+                            var detail = midDiff.Items.FirstOrDefault(i =>
+                                i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+                            errors.Add(
+                                $"{entry.DisplayName}: install reported OK but still " +
+                                $"{detail?.Message ?? "not matching pack version"}. " +
+                                "Close EscapeFromTarkov/SPT if running, then sync again — or install 1.6.0 manually from Forge.");
+                        }
+                        else
+                        {
+                            installedCount++;
+                        }
                     }
                     else
                     {
