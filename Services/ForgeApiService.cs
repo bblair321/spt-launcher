@@ -97,7 +97,7 @@ namespace SptLauncherWpf.Services
 
             var url =
                 $"{BaseUrl}/mod/{modId}?include=versions,category" +
-                "&fields=id,guid,name,slug,teaser,thumbnail,downloads,detail_url,fika_compatibility,category_id,versions";
+                "&fields=id,guid,name,slug,teaser,thumbnail,downloads,detail_url,fika_compatibility,category_id";
 
             using var response = await SendGetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
