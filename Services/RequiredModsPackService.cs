@@ -498,15 +498,13 @@ namespace SptLauncherWpf.Services
                     $"Could not find Forge mod id {forgeId} on sp-mod.com.");
             }
 
-            var versions = await ForgeApiService.Instance.GetModVersionsAsync(
-                mod.Id,
-                sptVersion: null,
-                cancellationToken: cancellationToken);
-
-            if (versions.Count == 0)
-            {
-                versions = mod.Versions ?? new List<ForgeModVersion>();
-            }
+            // GetModAsync already requests versions — avoid a second rate-limited call.
+            var versions = mod.Versions is { Count: > 0 }
+                ? mod.Versions
+                : await ForgeApiService.Instance.GetModVersionsAsync(
+                    mod.Id,
+                    sptVersion: null,
+                    cancellationToken: cancellationToken);
 
             var version = PickVersion(versions, entry.Version);
             if (version == null || string.IsNullOrWhiteSpace(version.Link))

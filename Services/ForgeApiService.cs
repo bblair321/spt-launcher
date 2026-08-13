@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -17,6 +19,9 @@ namespace SptLauncherWpf.Services
         };
 
         private readonly HttpClient _http;
+        private readonly ConcurrentDictionary<int, (DateTime ExpiresUtc, ForgeModSummary Mod)> _modCache = new();
+        private readonly SemaphoreSlim _gate = new(1, 1);
+        private DateTime _nextAllowedUtc = DateTime.MinValue;
 
         private ForgeApiService()
         {
@@ -24,7 +29,8 @@ namespace SptLauncherWpf.Services
             {
                 Timeout = TimeSpan.FromSeconds(60)
             };
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd("SPTLauncher/3.0 (+https://github.com/bblair321/spt-launcher)");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "SPTLauncher/4.2 (+https://github.com/bblair321/spt-launcher)");
             _http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         }
 
@@ -58,7 +64,7 @@ namespace SptLauncherWpf.Services
             }
 
             var url = $"{BaseUrl}/mods?{qs}";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await SendGetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -84,11 +90,16 @@ namespace SptLauncherWpf.Services
             int modId,
             CancellationToken cancellationToken = default)
         {
+            if (_modCache.TryGetValue(modId, out var cached) && cached.ExpiresUtc > DateTime.UtcNow)
+            {
+                return cached.Mod;
+            }
+
             var url =
                 $"{BaseUrl}/mod/{modId}?include=versions,category" +
                 "&fields=id,guid,name,slug,teaser,thumbnail,downloads,detail_url,fika_compatibility,category_id";
 
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await SendGetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -100,6 +111,7 @@ namespace SptLauncherWpf.Services
                 throw new InvalidOperationException($"Forge returned no details for mod {modId}.");
             }
 
+            _modCache[modId] = (DateTime.UtcNow.AddMinutes(10), parsed.Data);
             return parsed.Data;
         }
 
@@ -108,6 +120,15 @@ namespace SptLauncherWpf.Services
             string? sptVersion = null,
             CancellationToken cancellationToken = default)
         {
+            // Prefer versions already loaded with GetModAsync to avoid a second rate-limited call.
+            if (string.IsNullOrWhiteSpace(sptVersion) &&
+                _modCache.TryGetValue(modId, out var cached) &&
+                cached.ExpiresUtc > DateTime.UtcNow &&
+                cached.Mod.Versions is { Count: > 0 })
+            {
+                return cached.Mod.Versions;
+            }
+
             var qs = new StringBuilder();
             AppendQuery(qs, "per_page", "25");
             AppendQuery(qs, "sort", "-published_at");
@@ -123,7 +144,7 @@ namespace SptLauncherWpf.Services
             }
 
             var url = $"{BaseUrl}/mod/{modId}/versions?{qs}";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await SendGetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -151,11 +172,11 @@ namespace SptLauncherWpf.Services
             CancellationToken cancellationToken = default)
         {
             var url = $"{BaseUrl}/mod/{modId}/versions/{versionId}/file-tree";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await SendGetAsync(url, cancellationToken);
             // Some versions return 403/404 even when the download itself works (e.g. LootNET 1.1.0).
-            if (response.StatusCode is System.Net.HttpStatusCode.NotFound
-                or System.Net.HttpStatusCode.Forbidden
-                or System.Net.HttpStatusCode.Unauthorized)
+            if (response.StatusCode is HttpStatusCode.NotFound
+                or HttpStatusCode.Forbidden
+                or HttpStatusCode.Unauthorized)
             {
                 return null;
             }
@@ -189,7 +210,7 @@ namespace SptLauncherWpf.Services
             AppendQuery(qs, "spt_version", VersionStringHelper.Normalize(sptVersion));
 
             var url = $"{BaseUrl}/mods/updates?{qs}";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await SendGetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -215,7 +236,7 @@ namespace SptLauncherWpf.Services
             AppendQuery(qs, "spt_version", VersionStringHelper.Normalize(sptVersion));
 
             var url = $"{BaseUrl}/mods/dependencies?{qs}";
-            using var response = await _http.GetAsync(url, cancellationToken);
+            using var response = await SendGetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -246,6 +267,79 @@ namespace SptLauncherWpf.Services
             }
 
             return Array.Empty<ForgeDependencyNode>();
+        }
+
+        /// <summary>
+        /// GET with spacing + retries on HTTP 429 (sp-mod.com rate limits burst sync traffic).
+        /// </summary>
+        private async Task<HttpResponseMessage> SendGetAsync(string url, CancellationToken cancellationToken)
+        {
+            const int maxAttempts = 5;
+            HttpResponseMessage? last = null;
+
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                await _gate.WaitAsync(cancellationToken);
+                try
+                {
+                    var delay = _nextAllowedUtc - DateTime.UtcNow;
+                    if (delay > TimeSpan.Zero)
+                    {
+                        await Task.Delay(delay, cancellationToken);
+                    }
+
+                    last?.Dispose();
+                    last = await _http.GetAsync(url, cancellationToken);
+
+                    // Small spacing between successful calls so pack sync doesn't burst.
+                    _nextAllowedUtc = DateTime.UtcNow.AddMilliseconds(350);
+
+                    if (last.StatusCode != (HttpStatusCode)429)
+                    {
+                        return last;
+                    }
+
+                    var retryAfter = ReadRetryAfter(last) ??
+                                     TimeSpan.FromSeconds(Math.Min(30, 2 * attempt));
+                    _nextAllowedUtc = DateTime.UtcNow.Add(retryAfter);
+                    last.Dispose();
+                    last = null;
+
+                    if (attempt == maxAttempts)
+                    {
+                        throw new HttpRequestException(
+                            $"HTTP status client error (429 Too Many Requests) for url ({url}). " +
+                            "sp-mod.com rate-limited the launcher — wait a minute and sync again.");
+                    }
+
+                    await Task.Delay(retryAfter, cancellationToken);
+                }
+                finally
+                {
+                    _gate.Release();
+                }
+            }
+
+            throw new HttpRequestException($"Forge request failed for url ({url}).");
+        }
+
+        private static TimeSpan? ReadRetryAfter(HttpResponseMessage response)
+        {
+            if (response.Headers.RetryAfter?.Delta is TimeSpan delta && delta > TimeSpan.Zero)
+            {
+                return delta;
+            }
+
+            if (response.Headers.RetryAfter?.Date is DateTimeOffset date)
+            {
+                var wait = date - DateTimeOffset.UtcNow;
+                if (wait > TimeSpan.Zero)
+                {
+                    return wait;
+                }
+            }
+
+            return null;
         }
 
         public static string BuildModPageUrl(int modId, string? slug)
