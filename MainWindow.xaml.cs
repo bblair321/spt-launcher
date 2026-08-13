@@ -398,11 +398,8 @@ namespace SptLauncherWpf
         {
             try
             {
-                var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-                if (version != null)
-                {
-                    VersionText.Text = $"v{version.Major}.{version.Minor}.{version.Build}";
-                }
+                var version = UpdateService.Instance.GetCurrentVersion();
+                VersionText.Text = UpdateApplyHelper.FormatDisplayVersion(version);
             }
             catch
             {

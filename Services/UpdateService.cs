@@ -61,15 +61,37 @@ namespace SptLauncherWpf.Services
         public event EventHandler<UpdateInfo>? UpdateAvailable;
         public event EventHandler? UpdateCheckCompleted;
 
+        /// <summary>Last update-check failure message, or null when the check completed cleanly.</summary>
+        public string? LastCheckError { get; private set; }
+
         private UpdateService()
         {
             _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "SPT-Launcher-WPF");
-            _httpClient.Timeout = TimeSpan.FromSeconds(10);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SPT-Launcher-WPF");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+            _httpClient.Timeout = TimeSpan.FromSeconds(15);
         }
 
         public Version GetCurrentVersion()
         {
+            try
+            {
+                var path = Environment.ProcessPath;
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                {
+                    var info = FileVersionInfo.GetVersionInfo(path);
+                    if (!string.IsNullOrWhiteSpace(info.FileVersion) &&
+                        Version.TryParse(info.FileVersion, out var fileVersion))
+                    {
+                        return fileVersion;
+                    }
+                }
+            }
+            catch
+            {
+                // fall through to assembly version
+            }
+
             var assembly = System.Reflection.Assembly.GetExecutingAssembly();
             var version = assembly.GetName().Version;
             return version ?? new Version(3, 0, 0, 0);
@@ -77,6 +99,7 @@ namespace SptLauncherWpf.Services
 
         public async Task<UpdateInfo?> CheckForUpdatesAsync(bool forceCheck = false)
         {
+            LastCheckError = null;
             try
             {
                 // Only skip if auto-update is disabled AND this is not a forced check
@@ -86,16 +109,27 @@ namespace SptLauncherWpf.Services
                 }
 
                 Console.WriteLine("Checking for updates from GitHub...");
-                
-                var response = await _httpClient!.GetStringAsync(UpdateCheckUrl);
-                var release = JsonSerializer.Deserialize<GitHubRelease>(response, new JsonSerializerOptions
+
+                using var response = await _httpClient!.GetAsync(UpdateCheckUrl);
+                var body = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
                 {
-                    PropertyNameCaseInsensitive = false
+                    LastCheckError =
+                        $"GitHub update check failed ({(int)response.StatusCode} {response.ReasonPhrase}).";
+                    Console.WriteLine(LastCheckError);
+                    UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
+                    return null;
+                }
+
+                var release = JsonSerializer.Deserialize<GitHubRelease>(body, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
                 });
 
-                if (release == null)
+                if (release == null || string.IsNullOrWhiteSpace(release.TagName))
                 {
-                    Console.WriteLine("Failed to parse release information");
+                    LastCheckError = "Failed to parse GitHub release information.";
+                    Console.WriteLine(LastCheckError);
                     UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
                     return null;
                 }
@@ -107,7 +141,6 @@ namespace SptLauncherWpf.Services
                 Console.WriteLine($"Current version: {currentVersion}, Remote version: {remoteVersion}");
 
                 // Check if remote version is newer
-                // Version comparison works correctly between 3-part (3.0.0) and 4-part (3.0.0.0) versions
                 if (!IsNewerVersion(remoteVersion, currentVersion))
                 {
                     Console.WriteLine("Already on latest version");
@@ -116,7 +149,7 @@ namespace SptLauncherWpf.Services
                 }
 
                 // Find the installer/exe asset
-                var installerAsset = release.Assets.FirstOrDefault(a => 
+                var installerAsset = release.Assets.FirstOrDefault(a =>
                     a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
                     a.Name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
                     a.Name.Contains("setup", StringComparison.OrdinalIgnoreCase));
@@ -127,9 +160,10 @@ namespace SptLauncherWpf.Services
                     installerAsset = release.Assets.FirstOrDefault();
                 }
 
-                if (installerAsset == null)
+                if (installerAsset == null || string.IsNullOrWhiteSpace(installerAsset.BrowserDownloadUrl))
                 {
-                    Console.WriteLine("No download asset found in release");
+                    LastCheckError = "No downloadable .exe asset found on the latest GitHub release.";
+                    Console.WriteLine(LastCheckError);
                     UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
                     return null;
                 }
@@ -143,22 +177,31 @@ namespace SptLauncherWpf.Services
                 };
 
                 Console.WriteLine($"Update available: {updateInfo.Version}");
-                
+
                 // Notify listeners about the update
                 UpdateAvailable?.Invoke(this, updateInfo);
-                
+
                 UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
                 return updateInfo;
             }
             catch (HttpRequestException ex)
             {
-                Console.WriteLine($"Network error checking for updates: {ex.Message}");
+                LastCheckError = $"Network error checking for updates: {ex.Message}";
+                Console.WriteLine(LastCheckError);
+                UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
+                return null;
+            }
+            catch (TaskCanceledException ex)
+            {
+                LastCheckError = $"Timed out checking for updates: {ex.Message}";
+                Console.WriteLine(LastCheckError);
                 UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
                 return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to check for updates: {ex.Message}");
+                LastCheckError = $"Failed to check for updates: {ex.Message}";
+                Console.WriteLine(LastCheckError);
                 UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
                 return null;
             }
@@ -168,15 +211,23 @@ namespace SptLauncherWpf.Services
         {
             try
             {
-                // Normalize versions - handle both 3-part (3.0.0) and 4-part (3.0.0.0) versions
-                // GitHub typically uses 3-part versions, but .NET Version can handle both
-                if (Version.TryParse(remoteVersion, out var remoteVer))
+                var remoteText = (remoteVersion ?? "").Trim().TrimStart('v', 'V');
+                if (!Version.TryParse(remoteText, out var remoteVer))
                 {
-                    // Compare versions - Version comparison works correctly between 3-part and 4-part
-                    // e.g., Version("3.0.1") > Version("3.0.0.0") returns true
-                    return remoteVer > currentVersion;
+                    return false;
                 }
-                return false;
+
+                // Compare major.minor.build only. .NET treats Version("4.2.7") as earlier than
+                // Version(4,2,7,0) because the undefined revision counts as -1.
+                var remoteNorm = new Version(
+                    remoteVer.Major,
+                    remoteVer.Minor,
+                    Math.Max(remoteVer.Build, 0));
+                var currentNorm = new Version(
+                    currentVersion.Major,
+                    currentVersion.Minor,
+                    Math.Max(currentVersion.Build, 0));
+                return remoteNorm > currentNorm;
             }
             catch
             {
@@ -194,10 +245,10 @@ namespace SptLauncherWpf.Services
             // Stop existing timer if any
             StopPeriodicCheck();
 
-            // Check immediately on startup (after a short delay)
+            // Check shortly after startup
             System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(async () =>
             {
-                await Task.Delay(5000); // Wait 5 seconds after startup
+                await Task.Delay(2000);
                 await CheckForUpdatesAsync();
             }), System.Windows.Threading.DispatcherPriority.Background);
 

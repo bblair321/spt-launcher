@@ -196,6 +196,9 @@ public class UpdateApplyHelperTests
         Assert.True(service.IsNewerVersion("3.0.4", new Version(3, 0, 3, 0)));
         Assert.False(service.IsNewerVersion("3.0.3", new Version(3, 0, 3, 0)));
         Assert.False(service.IsNewerVersion("not-a-version", new Version(3, 0, 3, 0)));
+        Assert.True(service.IsNewerVersion("4.2.7", new Version(4, 2, 6, 0)));
+        Assert.False(service.IsNewerVersion("4.2.7", new Version(4, 2, 7, 0)));
+        Assert.False(service.IsNewerVersion("v4.2.6", new Version(4, 2, 6, 0)));
     }
 
     [Fact]

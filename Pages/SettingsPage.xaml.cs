@@ -77,16 +77,28 @@ namespace SptLauncherWpf.Pages
                     // Update is available - the banner will be shown automatically via the event
                     System.Windows.MessageBox.Show(
                         $"A new version ({updateInfo.Version}) is available!\n\n" +
-                        $"Current version: {UpdateService.Instance.GetCurrentVersion()}\n\n" +
+                        $"Current version: {UpdateApplyHelper.FormatDisplayVersion(UpdateService.Instance.GetCurrentVersion())}\n\n" +
                         $"The update notification banner has been displayed at the top of the window.",
                         "Update Available",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
                 }
+                else if (!string.IsNullOrWhiteSpace(UpdateService.Instance.LastCheckError))
+                {
+                    System.Windows.MessageBox.Show(
+                        $"Could not check for updates.\n\n{UpdateService.Instance.LastCheckError}\n\n" +
+                        "You can download the latest release manually from GitHub.",
+                        "Update Check Failed",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
                 else
                 {
-                    System.Windows.MessageBox.Show("You are running the latest version.", 
-                        "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                    System.Windows.MessageBox.Show(
+                        $"You are running the latest version ({UpdateApplyHelper.FormatDisplayVersion(UpdateService.Instance.GetCurrentVersion())}).",
+                        "No Updates",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
                 }
             }
             catch (Exception ex)
