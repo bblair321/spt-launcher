@@ -598,18 +598,11 @@ namespace SptLauncherWpf.Services
 
             var scanned = InstalledModsService.ScanInstalledMods(sptRoot);
             var clientMods = scanned.Where(m => m.Kind == InstalledModKind.Client).ToList();
-            var match = FindLocalMatch(entry, clientMods);
 
             var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (match != null)
-            {
-                foreach (var path in match.AllPaths)
-                {
-                    targets.Add(path);
-                }
-            }
 
-            // Also stamp any plugin whose existing marker already points at this Forge mod.
+            // Only stamp by strong identity (forge id / guid). Never stamp a name-only match —
+            // that previously wrote Use Loose Loot 1.6.0 onto LootNET's sidecar.
             foreach (var local in clientMods)
             {
                 var sameId = marker.ForgeModId > 0 && local.ForgeModId == marker.ForgeModId;
@@ -824,18 +817,24 @@ namespace SptLauncherWpf.Services
                     string.Equals(m.ForgeSlug, entry.Slug, StringComparison.OrdinalIgnoreCase)));
             }
 
-            var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
-            var slugKey = InstalledModsService.NormalizeModKey(entry.Slug?.Replace('-', ' '));
-            candidates.AddRange(clientMods.Where(m =>
+            // Name matching is a last resort only when the pack entry has no id/guid/slug.
+            // Otherwise "LootNET" / "Use Loose Loot" style collisions can pick the wrong mod
+            // and stamp the wrong version onto its sidecar.
+            var hasStrongId = entry.ForgeModId is > 0 ||
+                              !string.IsNullOrWhiteSpace(entry.Guid) ||
+                              !string.IsNullOrWhiteSpace(entry.Slug);
+            if (!hasStrongId)
             {
-                var displayKey = InstalledModsService.NormalizeModKey(m.DisplayName);
-                var folderKey = InstalledModsService.NormalizeModKey(
-                    Path.GetFileName(m.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
-                return (!string.IsNullOrEmpty(nameKey) && (displayKey == nameKey || folderKey == nameKey))
-                       || (!string.IsNullOrEmpty(slugKey) && (displayKey == slugKey || folderKey == slugKey));
-            }));
+                var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
+                candidates.AddRange(clientMods.Where(m =>
+                {
+                    var displayKey = InstalledModsService.NormalizeModKey(m.DisplayName);
+                    var folderKey = InstalledModsService.NormalizeModKey(
+                        Path.GetFileName(m.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+                    return !string.IsNullOrEmpty(nameKey) && (displayKey == nameKey || folderKey == nameKey);
+                }));
+            }
 
-            // De-dupe by path, then prefer an exact required-version match, else newest version.
             var unique = candidates
                 .GroupBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.First())
