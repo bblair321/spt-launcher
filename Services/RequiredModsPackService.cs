@@ -498,7 +498,7 @@ namespace SptLauncherWpf.Services
                     $"Could not find Forge mod id {forgeId} on sp-mod.com.");
             }
 
-            // GetModAsync already requests versions — avoid a second rate-limited call.
+            // Prefer versions already on the mod detail; only hit /versions if needed.
             var versions = mod.Versions is { Count: > 0 }
                 ? mod.Versions
                 : await ForgeApiService.Instance.GetModVersionsAsync(
@@ -507,6 +507,18 @@ namespace SptLauncherWpf.Services
                     cancellationToken: cancellationToken);
 
             var version = PickVersion(versions, entry.Version);
+            if (version == null || string.IsNullOrWhiteSpace(version.Link))
+            {
+                // Pack version may be a local FileVersion that Forge never published
+                // (e.g. Search Open Containers 1.5.0 locally vs 1.4.0 on sp-mod.com).
+                versions = await ForgeApiService.Instance.GetModVersionsAsync(
+                    mod.Id,
+                    sptVersion: null,
+                    cancellationToken: cancellationToken);
+                version = PickVersion(versions, entry.Version)
+                          ?? PickNewestVersion(versions);
+            }
+
             if (version == null || string.IsNullOrWhiteSpace(version.Link))
             {
                 return (false, false,
@@ -786,7 +798,7 @@ namespace SptLauncherWpf.Services
 
             if (string.IsNullOrWhiteSpace(required))
             {
-                return versions[0];
+                return PickNewestVersion(versions);
             }
 
             var exact = versions.FirstOrDefault(v =>
@@ -798,8 +810,21 @@ namespace SptLauncherWpf.Services
 
             var normalizedRequired = NormalizeVersionLabel(required);
             return versions.FirstOrDefault(v =>
-                       NormalizeVersionLabel(v.Version) == normalizedRequired)
-                   ?? null;
+                       NormalizeVersionLabel(v.Version) == normalizedRequired);
+        }
+
+        private static ForgeModVersion? PickNewestVersion(IReadOnlyList<ForgeModVersion> versions)
+        {
+            if (versions.Count == 0)
+            {
+                return null;
+            }
+
+            return versions
+                .OrderByDescending(v => ParseVersionRank(v.Version))
+                .ThenByDescending(v => v.Id)
+                .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v.Link))
+                   ?? versions.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v.Link));
         }
 
         internal static InstalledModInfo? FindLocalMatch(
