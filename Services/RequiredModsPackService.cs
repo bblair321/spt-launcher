@@ -500,17 +500,13 @@ namespace SptLauncherWpf.Services
             }
 
             var hasRuntime = Directory.Exists(Path.Combine(sptRoot, "SPT_Runtime"));
+            // Don't reject on Forge file-tree alone — the real zip/DLL layout is authoritative.
             if (tree?.Files is { Count: > 0 })
             {
                 var classification = ModPathClassifier.Classify(tree.Files, hasRuntime);
                 if (classification.Kind == ModInstallKind.ServerOnly)
                 {
                     return (false, true, "Server-only package");
-                }
-
-                if (classification.Kind == ModInstallKind.Unknown)
-                {
-                    return (false, false, "Unknown archive layout — install manually from sp-mod.com.");
                 }
             }
 
@@ -536,7 +532,76 @@ namespace SptLauncherWpf.Services
                 return (false, false, report.Message);
             }
 
+            // Pack Diff keys off .forge-mod.json sidecars. Always stamp the matched
+            // local plugin(s) to the version we just installed so upgrades can't leave
+            // a stale "have 1.1.0, need 1.6.0" marker on an older DLL name.
+            StampMatchedClientMarkers(sptRoot, entry, mod, version);
+
             return (true, false, "");
+        }
+
+        private static void StampMatchedClientMarkers(
+            string sptRoot,
+            RequiredModEntry entry,
+            ForgeModSummary mod,
+            ForgeModVersion version)
+        {
+            var marker = new ForgeModMarker
+            {
+                ForgeModId = mod.Id,
+                Guid = !string.IsNullOrWhiteSpace(entry.Guid) ? entry.Guid : mod.Guid,
+                Slug = !string.IsNullOrWhiteSpace(entry.Slug) ? entry.Slug : mod.Slug,
+                Name = !string.IsNullOrWhiteSpace(entry.Name) ? entry.Name : mod.Name,
+                Version = version.Version,
+                VersionId = version.Id,
+                InstalledAtUtc = DateTime.UtcNow
+            };
+
+            var scanned = InstalledModsService.ScanInstalledMods(sptRoot);
+            var clientMods = scanned.Where(m => m.Kind == InstalledModKind.Client).ToList();
+            var match = FindLocalMatch(entry, clientMods);
+
+            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (match != null)
+            {
+                foreach (var path in match.AllPaths)
+                {
+                    targets.Add(path);
+                }
+            }
+
+            // Also stamp any plugin whose existing marker already points at this Forge mod.
+            foreach (var local in clientMods)
+            {
+                if (local.ForgeModId == mod.Id ||
+                    (!string.IsNullOrWhiteSpace(marker.Guid) &&
+                     string.Equals(local.ForgeGuid, marker.Guid, StringComparison.OrdinalIgnoreCase)))
+                {
+                    foreach (var path in local.AllPaths)
+                    {
+                        targets.Add(path);
+                    }
+                }
+            }
+
+            foreach (var path in targets)
+            {
+                try
+                {
+                    if (Directory.Exists(path))
+                    {
+                        ForgeModMarker.Write(path, isDirectory: true, marker);
+                    }
+                    else if (File.Exists(path))
+                    {
+                        ForgeModMarker.Write(path, isDirectory: false, marker);
+                    }
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
         }
 
         private static async Task<ForgeModSummary?> ResolveModAsync(

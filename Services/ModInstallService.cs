@@ -134,6 +134,17 @@ namespace SptLauncherWpf.Services
                 var format = DetectArchiveFormat(downloadPath);
                 if (format == ArchiveFormat.Unknown)
                 {
+                    // Tiny Forge uploads are sometimes a bare plugin DLL (externally hosted).
+                    if (IsPeDll(downloadPath))
+                    {
+                        return InstallBarePluginDll(
+                            downloadPath,
+                            mod,
+                            version,
+                            sptRoot,
+                            clientPathsOnly);
+                    }
+
                     return Fail(
                         "This download isn't a supported .zip/.7z archive. Open the mod on Forge to install it manually.");
                 }
@@ -504,6 +515,134 @@ namespace SptLauncherWpf.Services
             }
 
             return ArchiveFormat.Unknown;
+        }
+
+        private static bool IsPeDll(string path)
+        {
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    return false;
+                }
+
+                Span<byte> header = stackalloc byte[2];
+                using var fs = File.OpenRead(path);
+                if (fs.Read(header) < 2)
+                {
+                    return false;
+                }
+
+                // MZ
+                return header[0] == (byte)'M' && header[1] == (byte)'Z';
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static ModInstallReport InstallBarePluginDll(
+            string dllPath,
+            ForgeModSummary mod,
+            ForgeModVersion version,
+            string sptRoot,
+            bool clientPathsOnly)
+        {
+            _ = clientPathsOnly;
+
+            var plugins = Path.Combine(sptRoot, "BepInEx", "plugins");
+            Directory.CreateDirectory(plugins);
+
+            // Prefer overwriting an already-installed copy of this Forge mod so Diff
+            // keeps matching the same path (avoids orphan 1.1.0 DLL + new 1.6.0 DLL).
+            var destination = FindExistingClientPluginPath(sptRoot, mod)
+                              ?? Path.Combine(plugins, BuildBarePluginFileName(mod));
+
+            try
+            {
+                AwaitFileReadable(dllPath);
+                // Copy then delete: ReplaceFileWithRetry removes the temp download.
+                ReplaceFileWithRetry(dllPath, destination);
+            }
+            catch (Exception ex) when (IsFileLockException(ex))
+            {
+                return Fail(BuildFileLockMessage(
+                    sptRoot,
+                    ex,
+                    fallbackPath: destination,
+                    stage: "Replacing plugin DLL"));
+            }
+
+            try
+            {
+                WriteInstallMarkers(mod, version, new[] { destination });
+                RefreshRelatedClientMarkers(sptRoot, mod, version, new[] { destination });
+            }
+            catch (Exception ex) when (IsFileLockException(ex))
+            {
+                Console.WriteLine($"Marker write skipped (locked): {ex.Message}");
+            }
+
+            return new ModInstallReport
+            {
+                Success = true,
+                Kind = ModInstallKind.ClientOnly,
+                SptRoot = sptRoot,
+                ExtractedFiles = new List<string> { destination },
+                ClientTargets = new List<string> { plugins },
+                Message = $"Installed {mod.Name} {version.Version} (bare plugin DLL → BepInEx/plugins)."
+            };
+        }
+
+        private static string BuildBarePluginFileName(ForgeModSummary mod)
+        {
+            var fileName = !string.IsNullOrWhiteSpace(mod.Slug)
+                ? $"{SanitizeFileName(mod.Slug)}.dll"
+                : SanitizeFileName(Path.GetFileNameWithoutExtension(mod.Name)) + ".dll";
+            if (string.IsNullOrWhiteSpace(fileName) || fileName == ".dll")
+            {
+                fileName = $"forge-mod-{mod.Id}.dll";
+            }
+
+            return fileName;
+        }
+
+        private static string? FindExistingClientPluginPath(string sptRoot, ForgeModSummary mod)
+        {
+            foreach (var local in InstalledModsService.ScanInstalledMods(sptRoot)
+                         .Where(m => m.Kind == InstalledModKind.Client && !m.IsDirectory))
+            {
+                var sameId = local.ForgeModId == mod.Id;
+                var sameGuid = !string.IsNullOrWhiteSpace(mod.Guid) &&
+                               string.Equals(local.ForgeGuid, mod.Guid, StringComparison.OrdinalIgnoreCase);
+                if (!sameId && !sameGuid)
+                {
+                    continue;
+                }
+
+                foreach (var path in local.AllPaths)
+                {
+                    if (File.Exists(path))
+                    {
+                        return path;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static string SanitizeFileName(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "mod";
+            }
+
+            var invalid = Path.GetInvalidFileNameChars();
+            var chars = value.Trim().Select(c => invalid.Contains(c) ? '-' : c).ToArray();
+            return new string(chars).Trim('-', ' ', '.');
         }
 
         private static bool IsZipArchive(string path)
