@@ -737,27 +737,37 @@ namespace SptLauncherWpf.Services
 
             // Only stamp installs that both claim this Forge identity AND whose path belongs
             // to this pack entry. Never rewrite Gaylatea-UseLooseLoot.dll when installing LootNET.
+            // Hosted mods (no Forge id) must match by GUID or a *strict* path/name — never the
+            // loose PathBelongsToPackEntry fallback that returns true for every plugin DLL.
             foreach (var local in clientMods)
             {
                 var sameId = marker.ForgeModId > 0 && local.ForgeModId == marker.ForgeModId;
                 var sameGuid = !string.IsNullOrWhiteSpace(marker.Guid) &&
                                string.Equals(local.ForgeGuid, marker.Guid, StringComparison.OrdinalIgnoreCase);
-                // Hosted installs often have no Forge id — stamp by pack client path / name.
-                var sameHostedPath = marker.ForgeModId <= 0 && PathBelongsToPackEntry(local.Path, entry);
-                if (!sameId && !sameGuid && !sameHostedPath)
+                var strictPath = PathStrictlyMatchesPackEntry(local.Path, entry);
+                if (!sameId && !sameGuid && !strictPath)
                 {
                     continue;
                 }
 
-                if (!PathBelongsToPackEntry(local.Path, entry) && !sameGuid && !sameId)
+                // Identity matched via Forge id/guid still requires the path not be a known
+                // cross-tag (LootNET ↔ Use Loose Loot). Strict path matches are already OK.
+                if (!strictPath && !PathBelongsToPackEntry(local.Path, entry))
                 {
                     continue;
                 }
 
                 foreach (var path in local.AllPaths)
                 {
-                    if (PathBelongsToPackEntry(path, entry) || sameGuid || sameId)
+                    if (strictPath || PathBelongsToPackEntry(path, entry) || sameGuid || sameId)
                     {
+                        // When matching only by hosted GUID that was just written, still require
+                        // a strict path so one GUID stamp cannot retarget every plugin.
+                        if (sameGuid && marker.ForgeModId <= 0 && !PathStrictlyMatchesPackEntry(path, entry))
+                        {
+                            continue;
+                        }
+
                         targets.Add(path);
                     }
                 }
@@ -1032,7 +1042,11 @@ namespace SptLauncherWpf.Services
             }
 
             // Drop path mismatches (e.g. Gaylatea-UseLooseLoot.dll wrongly tagged as LootNET).
-            candidates = candidates.Where(m => PathBelongsToPackEntry(m.Path, entry)).ToList();
+            // Hosted pack entries (no Forge id) must match strictly — otherwise a bad sidecar
+            // GUID on every DLL would make one hosted mod "match" the whole plugins folder.
+            candidates = entry.ForgeModId is > 0
+                ? candidates.Where(m => PathBelongsToPackEntry(m.Path, entry)).ToList()
+                : candidates.Where(m => PathStrictlyMatchesPackEntry(m.Path, entry)).ToList();
 
             var unique = candidates
                 .GroupBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
@@ -1110,6 +1124,63 @@ namespace SptLauncherWpf.Services
 
             // Generic path (GuidMod, etc.) — allow Forge id/guid matching.
             return true;
+        }
+
+        /// <summary>
+        /// Hosted / no-Forge-id installs must only touch paths that clearly match the entry
+        /// name, slug, or listed clientFiles — never every DLL under BepInEx/plugins.
+        /// </summary>
+        internal static bool PathStrictlyMatchesPackEntry(string path, RequiredModEntry entry)
+        {
+            var normalizedPath = path.Replace('\\', '/');
+            var leaf = InstalledModsService.NormalizeModKey(
+                Path.GetFileNameWithoutExtension(
+                    path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+            if (string.IsNullOrWhiteSpace(leaf))
+            {
+                return false;
+            }
+
+            var slugCompact = InstalledModsService.NormalizeModKey(entry.Slug);
+            var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
+            if (!string.IsNullOrWhiteSpace(slugCompact) &&
+                (leaf == slugCompact || leaf.Contains(slugCompact) || slugCompact.Contains(leaf)))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(nameKey) &&
+                (leaf == nameKey || leaf.Contains(nameKey) || nameKey.Contains(leaf)))
+            {
+                return true;
+            }
+
+            if (entry.ClientFiles is { Count: > 0 })
+            {
+                foreach (var rel in entry.ClientFiles)
+                {
+                    if (string.IsNullOrWhiteSpace(rel))
+                    {
+                        continue;
+                    }
+
+                    var normRel = rel.Replace('\\', '/');
+                    if (normalizedPath.EndsWith(normRel, StringComparison.OrdinalIgnoreCase) ||
+                        normalizedPath.Contains("/" + normRel.TrimStart('/'), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    var relLeaf = InstalledModsService.NormalizeModKey(
+                        Path.GetFileNameWithoutExtension(normRel));
+                    if (!string.IsNullOrWhiteSpace(relLeaf) && leaf == relLeaf)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static int ParseVersionRank(string? version)

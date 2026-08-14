@@ -288,14 +288,12 @@ namespace SptLauncherWpf.Services
 
         private static string? ClientPluginGroupKey(InstalledModInfo mod)
         {
+            // Only collapse multi-DLL Forge installs that share a real Forge id.
+            // Never group by GUID alone — a bad/hosted stamp (e.g. FOVFix guid written onto
+            // every plugin) would merge unrelated DLLs into one Mods-page row.
             if (mod.ForgeModId is int id and > 0)
             {
                 return "id:" + id;
-            }
-
-            if (!string.IsNullOrWhiteSpace(mod.ForgeGuid))
-            {
-                return "guid:" + mod.ForgeGuid.Trim();
             }
 
             return null;
