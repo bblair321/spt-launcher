@@ -61,6 +61,16 @@ namespace SptLauncherWpf.Services
         [JsonPropertyName("clientFiles")]
         public List<string>? ClientFiles { get; set; }
 
+        [JsonPropertyName("downloadUrl")]
+        public string? DownloadUrl { get; set; }
+
+        [JsonPropertyName("pageUrl")]
+        public string? PageUrl { get; set; }
+
+        /// <summary>direct | blairsWorkshopJson</summary>
+        [JsonPropertyName("downloadKind")]
+        public string? DownloadKind { get; set; }
+
         public string DisplayName =>
             !string.IsNullOrWhiteSpace(Name) ? Name! :
             !string.IsNullOrWhiteSpace(Slug) ? Slug! :
@@ -68,8 +78,10 @@ namespace SptLauncherWpf.Services
             !string.IsNullOrWhiteSpace(Guid) ? Guid! :
             "Unknown mod";
 
-        /// <summary>Auto-sync needs a Forge mod id to download the correct archive.</summary>
-        public bool CanAutoInstall => ForgeModId is > 0;
+        /// <summary>Auto-sync needs Forge id or a hosted downloadUrl.</summary>
+        public bool CanAutoInstall =>
+            ForgeModId is > 0 ||
+            !string.IsNullOrWhiteSpace(DownloadUrl);
     }
 
     public enum RequiredModDiffStatus

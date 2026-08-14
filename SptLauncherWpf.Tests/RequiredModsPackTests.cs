@@ -43,6 +43,35 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Parse_hosted_download_url_enables_auto_install()
+    {
+        const string json = """
+            {
+              "mods": [
+                {
+                  "name": "FOVFix",
+                  "slug": "fovfix",
+                  "version": "4.1.0",
+                  "guid": "com.fontaine.fovfix",
+                  "clientFiles": ["BepInEx/plugins/FOVFix.dll"],
+                  "downloadUrl": "https://blairsworkshop.com/api/download/cmstbpaz8000104kyz9ucm9qp",
+                  "downloadKind": "blairsWorkshopJson",
+                  "pageUrl": "https://blairsworkshop.com/mods/fovfix"
+                }
+              ]
+            }
+            """;
+
+        var pack = RequiredModsPackService.Instance.Parse(json);
+        Assert.Single(pack.Mods);
+        Assert.True(pack.Mods[0].CanAutoInstall);
+        Assert.Equal(
+            "https://blairsworkshop.com/api/download/cmstbpaz8000104kyz9ucm9qp",
+            pack.Mods[0].DownloadUrl);
+        Assert.Equal("blairsWorkshopJson", pack.Mods[0].DownloadKind);
+    }
+
+    [Fact]
     public void TryResolvePackUrl_derives_https_6969_and_lan_http_17865()
     {
         Assert.Equal(

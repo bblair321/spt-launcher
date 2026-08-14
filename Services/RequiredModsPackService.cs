@@ -255,7 +255,7 @@ namespace SptLauncherWpf.Services
                         Status = RequiredModDiffStatus.ManualFix,
                         PackEntry = entry,
                         Message =
-                            $"{entry.DisplayName}: missing forgeModId — cannot auto-download from Forge" +
+                            $"{entry.DisplayName}: missing forgeModId and downloadUrl — cannot auto-download" +
                             (string.IsNullOrWhiteSpace(entry.Guid) ? "." : $" (guid {entry.Guid}).")
                     });
                     continue;
@@ -485,6 +485,11 @@ namespace SptLauncherWpf.Services
             IProgress<RequiredModsSyncProgress>? progress,
             CancellationToken cancellationToken)
         {
+            if (!string.IsNullOrWhiteSpace(entry.DownloadUrl))
+            {
+                return await InstallHostedPackEntryAsync(entry, sptRoot, progress, cancellationToken);
+            }
+
             if (entry.ForgeModId is not int forgeId || forgeId <= 0)
             {
                 return (false, false,
@@ -577,6 +582,126 @@ namespace SptLauncherWpf.Services
             return (true, false, "");
         }
 
+        private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallHostedPackEntryAsync(
+            RequiredModEntry entry,
+            string sptRoot,
+            IProgress<RequiredModsSyncProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            progress?.Report(new RequiredModsSyncProgress
+            {
+                Message = $"{entry.DisplayName}: resolving hosted download…"
+            });
+
+            string zipUrl;
+            try
+            {
+                zipUrl = await ResolveHostedDownloadUrlAsync(entry, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                return (false, false,
+                    $"Hosted download failed for {entry.DisplayName}: {ex.Message}");
+            }
+
+            if (string.IsNullOrWhiteSpace(zipUrl))
+            {
+                return (false, false, $"Hosted download URL resolved empty for {entry.DisplayName}.");
+            }
+
+            var mod = new ForgeModSummary
+            {
+                Id = entry.ForgeModId is > 0 ? entry.ForgeModId.Value : 0,
+                Name = entry.DisplayName,
+                Slug = entry.Slug ?? "",
+                Guid = entry.Guid
+            };
+            var version = new ForgeModVersion
+            {
+                Id = 0,
+                Version = string.IsNullOrWhiteSpace(entry.Version) ? "0" : entry.Version!.Trim(),
+                Link = zipUrl
+            };
+
+            var installProgress = new Progress<ModInstallProgress>(p =>
+            {
+                progress?.Report(new RequiredModsSyncProgress
+                {
+                    Message = $"{entry.DisplayName}: {p.Message}"
+                });
+            });
+
+            var report = await ModInstallService.Instance.InstallAsync(
+                mod,
+                version,
+                sptRoot,
+                preferredFileTree: entry.ClientFiles,
+                installProgress,
+                cancellationToken,
+                clientPathsOnly: true);
+
+            if (!report.Success)
+            {
+                return (false, false, report.Message);
+            }
+
+            StampMatchedClientMarkers(sptRoot, entry, mod, version.Version, versionId: null);
+            return (true, false, "");
+        }
+
+        private async Task<string> ResolveHostedDownloadUrlAsync(
+            RequiredModEntry entry,
+            CancellationToken cancellationToken)
+        {
+            var url = entry.DownloadUrl?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                throw new InvalidOperationException("downloadUrl is empty.");
+            }
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+            {
+                throw new InvalidOperationException("downloadUrl must be an absolute http(s) URL.");
+            }
+
+            var kind = (entry.DownloadKind ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(kind))
+            {
+                kind = url.Contains("/api/download/", StringComparison.OrdinalIgnoreCase)
+                    ? "blairsWorkshopJson"
+                    : "direct";
+            }
+
+            if (kind.Equals("direct", StringComparison.OrdinalIgnoreCase) ||
+                kind.Equals("zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return url;
+            }
+
+            // blairsWorkshopJson (and unknown kinds that look like the API): GET JSON → .url
+            using var response = await _http.GetAsync(url, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var payload = await JsonSerializer.DeserializeAsync<BlairWorkshopDownloadResponse>(
+                stream,
+                JsonOptions,
+                cancellationToken);
+            if (string.IsNullOrWhiteSpace(payload?.Url))
+            {
+                throw new InvalidOperationException(
+                    "Download API did not return a zip url field.");
+            }
+
+            return payload.Url.Trim();
+        }
+
+        private sealed class BlairWorkshopDownloadResponse
+        {
+            public string? Url { get; set; }
+            public int? ExpiresIn { get; set; }
+        }
+
         private static void StampMatchedClientMarkers(
             string sptRoot,
             RequiredModEntry entry,
@@ -617,21 +742,42 @@ namespace SptLauncherWpf.Services
                 var sameId = marker.ForgeModId > 0 && local.ForgeModId == marker.ForgeModId;
                 var sameGuid = !string.IsNullOrWhiteSpace(marker.Guid) &&
                                string.Equals(local.ForgeGuid, marker.Guid, StringComparison.OrdinalIgnoreCase);
-                if (!sameId && !sameGuid)
+                // Hosted installs often have no Forge id — stamp by pack client path / name.
+                var sameHostedPath = marker.ForgeModId <= 0 && PathBelongsToPackEntry(local.Path, entry);
+                if (!sameId && !sameGuid && !sameHostedPath)
                 {
                     continue;
                 }
 
-                if (!PathBelongsToPackEntry(local.Path, entry))
+                if (!PathBelongsToPackEntry(local.Path, entry) && !sameGuid && !sameId)
                 {
                     continue;
                 }
 
                 foreach (var path in local.AllPaths)
                 {
-                    if (PathBelongsToPackEntry(path, entry))
+                    if (PathBelongsToPackEntry(path, entry) || sameGuid || sameId)
                     {
                         targets.Add(path);
+                    }
+                }
+            }
+
+            if (targets.Count == 0 && entry.ClientFiles is { Count: > 0 })
+            {
+                foreach (var rel in entry.ClientFiles)
+                {
+                    if (string.IsNullOrWhiteSpace(rel))
+                    {
+                        continue;
+                    }
+
+                    var full = Path.GetFullPath(Path.Combine(
+                        sptRoot,
+                        rel.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar)));
+                    if (File.Exists(full) || Directory.Exists(full))
+                    {
+                        targets.Add(full);
                     }
                 }
             }
