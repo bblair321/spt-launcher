@@ -231,7 +231,7 @@ namespace SptLauncherWpf.Services
                     if (clientPaths.Count == 0)
                     {
                         return Fail(
-                            $"\"{mod.Name}\" has no BepInEx client files to install for pack sync.");
+                            $"\"{mod.Name}\" has no BepInEx/Managed client files to install for pack sync.");
                     }
 
                     classification = new ModPathClassification
@@ -246,7 +246,7 @@ namespace SptLauncherWpf.Services
                                 clientPaths, StringComparer.OrdinalIgnoreCase))
                             .Distinct(StringComparer.OrdinalIgnoreCase)
                             .ToList(),
-                        Summary = "Client mod (BepInEx) — pack sync"
+                        Summary = "Client mod (BepInEx / Managed) — pack sync"
                     };
                 }
 
@@ -313,7 +313,7 @@ namespace SptLauncherWpf.Services
 
                 if (classification.HasClientPaths)
                 {
-                    parts.Add("Client files → BepInEx");
+                    parts.Add("Client files → BepInEx / Managed");
                 }
 
                 return new ModInstallReport
@@ -1502,7 +1502,11 @@ namespace SptLauncherWpf.Services
 
         private static bool IsClientPath(string path) =>
             path.Contains($"{Path.DirectorySeparatorChar}BepInEx{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
-            || path.Contains("/BepInEx/", StringComparison.OrdinalIgnoreCase);
+            || path.Contains("/BepInEx/", StringComparison.OrdinalIgnoreCase)
+            || path.Contains(
+                $"{Path.DirectorySeparatorChar}EscapeFromTarkov_Data{Path.DirectorySeparatorChar}Managed{Path.DirectorySeparatorChar}",
+                StringComparison.OrdinalIgnoreCase)
+            || path.Contains("/EscapeFromTarkov_Data/Managed/", StringComparison.OrdinalIgnoreCase);
 
         public static bool IsSafeExtractPath(string rootDirectory, string destinationPath)
         {

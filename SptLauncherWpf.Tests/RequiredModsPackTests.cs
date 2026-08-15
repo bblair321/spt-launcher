@@ -247,12 +247,13 @@ public class RequiredModsPackTests
     }
 
     [Fact]
-    public void FilterClientInstallPaths_keeps_only_bepinex()
+    public void FilterClientInstallPaths_keeps_bepinex_and_managed()
     {
         var mixed = ModPathClassifier.Classify(
             new[]
             {
                 "BepInEx/plugins/Client.dll",
+                "EscapeFromTarkov_Data/Managed/Unity.VectorGraphics.dll",
                 "user/mods/Server/package.json",
                 "readme.txt"
             },
@@ -260,8 +261,12 @@ public class RequiredModsPackTests
 
         var clientOnly = ModPathClassifier.FilterClientInstallPaths(mixed.InstallableRelativePaths);
 
-        Assert.Single(clientOnly);
-        Assert.StartsWith("BepInEx/", clientOnly[0], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, clientOnly.Count);
+        Assert.Contains(clientOnly, p => p.StartsWith("BepInEx/", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            clientOnly,
+            p => p.StartsWith("EscapeFromTarkov_Data/Managed/", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(clientOnly, p => p.Contains("user/mods", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -125,6 +125,58 @@ public class ModPathClassifierTests
     }
 
     [Fact]
+    public void Classify_client_includes_managed_vectorgraphics_deps()
+    {
+        var files = new[]
+        {
+            "BepInEx/plugins/mpstark-dynamicmaps/DynamicMaps.dll",
+            "BepInEx/plugins/mpstark-dynamicmaps/Maps/Customs_TarkovDev/Customs_TarkovDev.jsonc",
+            "EscapeFromTarkov_Data/Managed/Unity.VectorGraphics.dll",
+            "EscapeFromTarkov_Data/Managed/Unity.InternalAPIEngineBridge.003.dll"
+        };
+
+        var result = ModPathClassifier.Classify(files, installHasSptRuntime: true);
+
+        Assert.Equal(ModInstallKind.ClientOnly, result.Kind);
+        Assert.True(result.CanAutoInstall);
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals(
+                "EscapeFromTarkov_Data/Managed/Unity.VectorGraphics.dll",
+                StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals(
+                "EscapeFromTarkov_Data/Managed/Unity.InternalAPIEngineBridge.003.dll",
+                StringComparison.OrdinalIgnoreCase));
+
+        var clientOnly = ModPathClassifier.FilterClientInstallPaths(result.InstallableRelativePaths);
+        Assert.Equal(result.InstallableRelativePaths.Count, clientOnly.Count);
+        Assert.Contains(
+            clientOnly,
+            p => p.Contains("Unity.VectorGraphics.dll", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Classify_unwraps_prefix_for_managed_deps()
+    {
+        var files = new[]
+        {
+            "DynamicMaps-1.2.1/BepInEx/plugins/mpstark-dynamicmaps/DynamicMaps.dll",
+            "DynamicMaps-1.2.1/EscapeFromTarkov_Data/Managed/Unity.VectorGraphics.dll"
+        };
+
+        var result = ModPathClassifier.Classify(files, installHasSptRuntime: false);
+
+        Assert.Equal(ModInstallKind.ClientOnly, result.Kind);
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals(
+                "EscapeFromTarkov_Data/Managed/Unity.VectorGraphics.dll",
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Classify_lootnet_style_spt_prefixed_mixed_package()
     {
         var files = new[]

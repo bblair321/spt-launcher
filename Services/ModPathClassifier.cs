@@ -21,10 +21,16 @@ namespace SptLauncherWpf.Services
     }
 
     /// <summary>
-    /// Classifies Forge archive paths into server (user/mods) vs client (BepInEx) targets.
+    /// Classifies Forge archive paths into server (user/mods) vs client
+    /// (BepInEx + EscapeFromTarkov_Data/Managed) targets.
     /// </summary>
     public static class ModPathClassifier
     {
+        /// <summary>
+        /// Client dependency DLLs shipped beside the game (e.g. Dynamic Maps SVG support).
+        /// </summary>
+        public const string ClientManagedPrefix = "EscapeFromTarkov_Data/Managed";
+
         public static ModPathClassification Classify(
             IEnumerable<string> archivePaths,
             bool installHasSptRuntime)
@@ -98,7 +104,7 @@ namespace SptLauncherWpf.Services
             var summary = kindResult switch
             {
                 ModInstallKind.ServerOnly => "Server mod (user/mods)",
-                ModInstallKind.ClientOnly => "Client mod (BepInEx)",
+                ModInstallKind.ClientOnly => "Client mod (BepInEx / Managed)",
                 ModInstallKind.Mixed => "Client + server package",
                 _ => "Unknown layout — open on Forge instead of auto-install"
             };
@@ -116,15 +122,29 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
-        /// Keeps only paths that install under BepInEx (for required-client pack sync).
+        /// Keeps client install paths for required-mod pack sync: BepInEx plugins/config
+        /// plus EscapeFromTarkov_Data/Managed deps (e.g. Unity.VectorGraphics for Dynamic Maps).
         /// </summary>
         public static IReadOnlyList<string> FilterClientInstallPaths(IEnumerable<string> installRelativePaths)
         {
             return installRelativePaths
                 .Select(NormalizeArchivePath)
-                .Where(p => !string.IsNullOrWhiteSpace(p) && StartsWithSegment(p, "BepInEx"))
+                .Where(p => !string.IsNullOrWhiteSpace(p) && IsClientInstallPath(p))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        public static bool IsClientInstallPath(string installRelativePath)
+        {
+            var p = NormalizeArchivePath(installRelativePath);
+            return StartsWithSegment(p, "BepInEx") || IsClientManagedPath(p);
+        }
+
+        public static bool IsClientManagedPath(string installRelativePath)
+        {
+            var p = NormalizeArchivePath(installRelativePath);
+            return StartsWithSegment(p, ClientManagedPrefix)
+                   || p.Equals(ClientManagedPrefix, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -155,13 +175,23 @@ namespace SptLauncherWpf.Services
                 if (StartsWithSegment(afterSpt, "BepInEx") ||
                     StartsWithSegment(afterSpt, "user/mods") ||
                     StartsWithSegment(afterSpt, "user\\mods") ||
-                    StartsWithSegment(afterSpt, "SPT_Runtime"))
+                    StartsWithSegment(afterSpt, "SPT_Runtime") ||
+                    IsClientManagedPath(afterSpt) ||
+                    StartsWithSegment(afterSpt, "EscapeFromTarkov_Data"))
                 {
                     path = afterSpt;
                 }
             }
 
             if (StartsWithSegment(path, "BepInEx"))
+            {
+                installRelativePath = path;
+                kind = ModInstallKind.ClientOnly;
+                return true;
+            }
+
+            // Dynamic Maps (and similar) ship Unity.VectorGraphics into Managed.
+            if (IsClientManagedPath(path))
             {
                 installRelativePath = path;
                 kind = ModInstallKind.ClientOnly;
@@ -249,6 +279,7 @@ namespace SptLauncherWpf.Services
             if (StartsWithSegment(path, "BepInEx")
                 || StartsWithSegment(path, "SPT_Runtime")
                 || StartsWithSegment(path, "user")
+                || StartsWithSegment(path, "EscapeFromTarkov_Data")
                 || (StartsWithSegment(path, "SPT") && !StartsWithSegment(path, "SPT_Runtime")))
             {
                 return path;
@@ -264,6 +295,7 @@ namespace SptLauncherWpf.Services
             if (StartsWithSegment(remainder, "BepInEx")
                 || StartsWithSegment(remainder, "SPT_Runtime")
                 || StartsWithSegment(remainder, "user/mods")
+                || StartsWithSegment(remainder, "EscapeFromTarkov_Data")
                 || (StartsWithSegment(remainder, "SPT") && !StartsWithSegment(remainder, "SPT_Runtime")))
             {
                 return remainder;
