@@ -201,6 +201,18 @@ public class UpdateApplyHelperTests
         Assert.False(service.IsNewerVersion("v4.2.6", new Version(4, 2, 6, 0)));
     }
 
+    [Theory]
+    [InlineData("4.1.3", "4.1.2", true)]
+    [InlineData("4.1.3", "4.1.2.0", true)]
+    [InlineData("4.1.3", "4.1.2.40743", true)]
+    [InlineData("4.1.2", "4.1.2.0", false)]
+    [InlineData("4.1.2", "4.1.3", false)]
+    [InlineData("v4.1.3", "4.1.2", true)]
+    public void SptIsNewerVersion_uses_major_minor_build_only(string remote, string current, bool expected)
+    {
+        Assert.Equal(expected, SptDetectionService.Instance.IsNewerVersion(remote, current));
+    }
+
     [Fact]
     public void GetBackupPath_uses_old_exe_suffix()
     {

@@ -70,7 +70,11 @@ namespace SptLauncherWpf.Services
         private static SptDetectionService? _instance;
         public static SptDetectionService Instance => _instance ??= new SptDetectionService();
 
-        private const string SptReleasesApiUrl = "https://api.github.com/repos/sp-tarkov/build/releases/latest";
+        // Active builds moved to SP-Tushonka after the original org archived at 4.1.2.
+        private const string SptReleasesApiUrl =
+            "https://api.github.com/repos/SP-Tushonka/build/releases/latest";
+        private const string SptReleasesApiFallbackUrl =
+            "https://api.github.com/repos/sp-tarkov/build/releases/latest";
         private const string FikaPluginReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Plugin/releases/latest";
         private const string FikaServerReleasesApiUrl = "https://api.github.com/repos/project-fika/Fika-Server/releases/latest";
         private HttpClient? _httpClient;
@@ -79,7 +83,8 @@ namespace SptLauncherWpf.Services
         {
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "SPT-Launcher-WPF");
-            _httpClient.Timeout = TimeSpan.FromSeconds(10);
+            _httpClient.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+            _httpClient.Timeout = TimeSpan.FromSeconds(20);
         }
 
         /// <summary>
@@ -333,12 +338,7 @@ namespace SptLauncherWpf.Services
 
             try
             {
-                var response = await _httpClient!.GetStringAsync(SptReleasesApiUrl);
-                var release = JsonSerializer.Deserialize<SptGitHubRelease>(response, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = false
-                });
-
+                var release = await FetchLatestSptReleaseAsync();
                 if (release == null || string.IsNullOrWhiteSpace(release.TagName))
                 {
                     return null;
@@ -346,13 +346,9 @@ namespace SptLauncherWpf.Services
 
                 // Extract version from tag (remove 'v' prefix if present)
                 var latestVersion = release.TagName.TrimStart('v', 'V');
-                
-                // Normalize both versions for comparison
-                var normalizedLatest = NormalizeVersion(latestVersion);
-                var normalizedCurrent = NormalizeVersion(currentVersion);
 
                 // Compare versions
-                var isUpdateAvailable = IsNewerVersion(normalizedLatest, normalizedCurrent);
+                var isUpdateAvailable = IsNewerVersion(latestVersion, currentVersion);
 
                 // Find installer download URL from release assets (.exe only — not archives)
                 string? installerUrl = TryGetInstallerUrlFromReleaseAssets(release.Assets);
@@ -373,7 +369,8 @@ namespace SptLauncherWpf.Services
                 var requiredTargetEftVersion = EftDetectionService.ParseTargetEftVersionFromReleaseBody(release.Body);
                 var requiredLiveEftVersion = EftDetectionService.ParseLiveEftVersionFromReleaseBody(release.Body);
                 System.Diagnostics.Debug.WriteLine(
-                    $"[SptDetectionService] EFT versions from release: live/source={requiredLiveEftVersion ?? "(unknown)"}, target={requiredTargetEftVersion ?? "(unknown)"}");
+                    $"[SptDetectionService] Latest={latestVersion} current={currentVersion} update={isUpdateAvailable}; " +
+                    $"EFT live/source={requiredLiveEftVersion ?? "(unknown)"}, target={requiredTargetEftVersion ?? "(unknown)"}");
 
                 return new SptUpdateInfo
                 {
@@ -404,12 +401,7 @@ namespace SptLauncherWpf.Services
         {
             try
             {
-                var response = await _httpClient!.GetStringAsync(SptReleasesApiUrl);
-                var release = JsonSerializer.Deserialize<SptGitHubRelease>(response, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = false
-                });
-
+                var release = await FetchLatestSptReleaseAsync();
                 if (release == null || string.IsNullOrWhiteSpace(release.TagName))
                 {
                     return null;
@@ -433,6 +425,41 @@ namespace SptLauncherWpf.Services
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[SptDetectionService] GetLatestReleaseInfoAsync failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        private async Task<SptGitHubRelease?> FetchLatestSptReleaseAsync()
+        {
+            var primary = await TryFetchGitHubReleaseAsync(SptReleasesApiUrl);
+            var fallback = await TryFetchGitHubReleaseAsync(SptReleasesApiFallbackUrl);
+
+            if (primary == null)
+            {
+                return fallback;
+            }
+
+            if (fallback == null || string.IsNullOrWhiteSpace(fallback.TagName))
+            {
+                return primary;
+            }
+
+            // Prefer whichever tag is newer (Tushonka should win over archived 4.1.2).
+            var primaryTag = primary.TagName.TrimStart('v', 'V');
+            var fallbackTag = fallback.TagName.TrimStart('v', 'V');
+            return IsNewerVersion(fallbackTag, primaryTag) ? fallback : primary;
+        }
+
+        private async Task<SptGitHubRelease?> TryFetchGitHubReleaseAsync(string apiUrl)
+        {
+            try
+            {
+                return await FetchLatestGitHubReleaseAsync(apiUrl);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SptDetectionService] Release fetch failed for {apiUrl}: {ex.Message}");
                 return null;
             }
         }
@@ -553,18 +580,26 @@ namespace SptLauncherWpf.Services
         {
             try
             {
-                // Normalize both versions
                 var normalizedRemote = NormalizeVersion(remoteVersion);
                 var normalizedCurrent = NormalizeVersion(currentVersion);
 
-                // Try to parse as Version objects for reliable comparison
-                if (Version.TryParse(normalizedRemote, out var remoteVer) && 
+                if (Version.TryParse(normalizedRemote, out var remoteVer) &&
                     Version.TryParse(normalizedCurrent, out var currentVer))
                 {
-                    return remoteVer > currentVer;
+                    // Compare major.minor.build only. .NET treats Version("4.1.2") as earlier than
+                    // Version(4,1,2,0), and FileVersion 4th parts (e.g. EFT build 40743) must not
+                    // hide a real SPT patch like 4.1.3.
+                    var remoteNorm = new Version(
+                        remoteVer.Major,
+                        remoteVer.Minor,
+                        Math.Max(remoteVer.Build, 0));
+                    var currentNorm = new Version(
+                        currentVer.Major,
+                        currentVer.Minor,
+                        Math.Max(currentVer.Build, 0));
+                    return remoteNorm > currentNorm;
                 }
 
-                // Fallback to string comparison if parsing fails
                 return string.Compare(normalizedRemote, normalizedCurrent, StringComparison.OrdinalIgnoreCase) > 0;
             }
             catch
