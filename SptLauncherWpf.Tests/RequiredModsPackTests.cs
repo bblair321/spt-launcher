@@ -214,7 +214,7 @@ public class RequiredModsPackTests
     }
 
     [Fact]
-    public void Diff_empty_local_version_is_wrong_when_pack_specifies_version()
+    public void Diff_empty_local_version_is_ok_when_files_are_present()
     {
         var pack = new RequiredModsPack
         {
@@ -236,14 +236,41 @@ public class RequiredModsPackTests
         };
 
         var diff = RequiredModsPackService.Instance.Diff(pack, installed);
-        Assert.Equal(RequiredModDiffStatus.WrongVersion, diff.Items[0].Status);
+        Assert.Equal(RequiredModDiffStatus.Ok, diff.Items[0].Status);
+        Assert.False(diff.NeedsSync);
     }
 
     [Fact]
-    public void VersionsEqual_tolerates_v_prefix()
+    public void Diff_newer_local_fileversion_is_not_wrong_version()
     {
-        Assert.True(RequiredModsPackService.VersionsEqual("v1.2.3", "1.2.3"));
-        Assert.False(RequiredModsPackService.VersionsEqual("1.2.3", "1.2.4"));
+        var pack = new RequiredModsPack
+        {
+            Mods =
+            [
+                new RequiredModEntry { Name = "X", ForgeModId = 1, Version = "2.0.1" }
+            ]
+        };
+        var installed = new List<InstalledModInfo>
+        {
+            new()
+            {
+                DisplayName = "X",
+                Kind = InstalledModKind.Client,
+                Path = @"C:\SPT\BepInEx\plugins\X",
+                ForgeModId = 1,
+                VersionHint = "2.1.0"
+            }
+        };
+
+        var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+        Assert.Equal(RequiredModDiffStatus.Ok, diff.Items[0].Status);
+    }
+
+    [Fact]
+    public void VersionsEqual_ignores_trailing_zeros()
+    {
+        Assert.True(RequiredModsPackService.VersionsEqual("v2.0.1", "2.0.1.0"));
+        Assert.False(RequiredModsPackService.VersionsEqual("2.0.1", "2.1.0"));
     }
 
     [Fact]

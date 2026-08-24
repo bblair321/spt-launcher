@@ -277,8 +277,13 @@ namespace SptLauncherWpf.Services
                 var requiredVersion = (entry.Version ?? "").Trim();
                 var localVersion = (local.VersionHint ?? "").Trim();
 
+                // Re-download only when the install is known to be *older* than the pack.
+                // Missing sidecars and DLL FileVersion ahead of the Forge tag used to
+                // look like WrongVersion forever, so every launcher open re-synced.
                 if (!string.IsNullOrWhiteSpace(requiredVersion) &&
-                    (string.IsNullOrWhiteSpace(localVersion) || !VersionsEqual(requiredVersion, localVersion)))
+                    !string.IsNullOrWhiteSpace(localVersion) &&
+                    !VersionsEqual(requiredVersion, localVersion) &&
+                    CompareVersionRank(localVersion, requiredVersion) < 0)
                 {
                     items.Add(new RequiredModDiffItem
                     {
@@ -657,6 +662,21 @@ namespace SptLauncherWpf.Services
             if (string.IsNullOrWhiteSpace(url))
             {
                 throw new InvalidOperationException("downloadUrl is empty.");
+            }
+
+            // Pack-relative mirrors: "/mod-pack/mirror/lootnet" → same host as pack URL.
+            if (url.StartsWith('/'))
+            {
+                var packUrl = GetConfiguredPackUrl();
+                if (string.IsNullOrWhiteSpace(packUrl) ||
+                    !Uri.TryCreate(packUrl, UriKind.Absolute, out var packUri))
+                {
+                    throw new InvalidOperationException(
+                        "Relative downloadUrl requires a configured pack URL (server host).");
+                }
+
+                var builder = new UriBuilder(packUri.Scheme, packUri.Host, packUri.Port, url);
+                url = builder.Uri.ToString();
             }
 
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
@@ -1216,10 +1236,12 @@ namespace SptLauncherWpf.Services
                 return true;
             }
 
-            return Version.TryParse(StripPrerelease(na), out var va) &&
-                   Version.TryParse(StripPrerelease(nb), out var vb) &&
-                   va == vb;
+            return CompareVersionRank(na, nb) == 0 && ParseVersionRank(na) >= 0;
         }
+
+        /// <summary>Negative if a is older than b. Equal trailing zeros (2.0.1 vs 2.0.1.0).</summary>
+        internal static int CompareVersionRank(string a, string b) =>
+            ParseVersionRank(a).CompareTo(ParseVersionRank(b));
 
         private static string NormalizeVersionLabel(string? value)
         {
@@ -1230,12 +1252,6 @@ namespace SptLauncherWpf.Services
             }
 
             return v;
-        }
-
-        private static string StripPrerelease(string version)
-        {
-            var cut = version.IndexOfAny(new[] { '-', '+' });
-            return cut >= 0 ? version[..cut] : version;
         }
     }
 
