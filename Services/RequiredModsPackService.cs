@@ -1075,15 +1075,47 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
+        /// Last path segment for pack matching. Do not use GetFileNameWithoutExtension on
+        /// plugin folders — <c>com.bblai.battlepass</c> would become <c>com.bblai</c>.
+        /// </summary>
+        internal static string PathMatchLeaf(string path)
+        {
+            var name = Path.GetFileName(
+                path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return "";
+            }
+
+            while (true)
+            {
+                if (name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase))
+                {
+                    name = name[..^".disabled".Length];
+                    continue;
+                }
+
+                if (name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                    name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                {
+                    name = name[..^4];
+                    continue;
+                }
+
+                break;
+            }
+
+            return InstalledModsService.NormalizeModKey(name);
+        }
+
+        /// <summary>
         /// True when the install path is allowed to represent this pack entry.
         /// Rejects known cross-tagging (Use Loose Loot DLL stamped as LootNET), but still
         /// allows generic plugin folder names matched purely by Forge id/guid.
         /// </summary>
         internal static bool PathBelongsToPackEntry(string path, RequiredModEntry entry)
         {
-            var leaf = InstalledModsService.NormalizeModKey(
-                Path.GetFileNameWithoutExtension(
-                    path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+            var leaf = PathMatchLeaf(path);
             if (string.IsNullOrWhiteSpace(leaf))
             {
                 return false;
@@ -1131,9 +1163,7 @@ namespace SptLauncherWpf.Services
         internal static bool PathStrictlyMatchesPackEntry(string path, RequiredModEntry entry)
         {
             var normalizedPath = path.Replace('\\', '/');
-            var leaf = InstalledModsService.NormalizeModKey(
-                Path.GetFileNameWithoutExtension(
-                    path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+            var leaf = PathMatchLeaf(path);
             if (string.IsNullOrWhiteSpace(leaf))
             {
                 return false;
@@ -1141,6 +1171,7 @@ namespace SptLauncherWpf.Services
 
             var slugCompact = InstalledModsService.NormalizeModKey(entry.Slug);
             var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
+            var guidKey = InstalledModsService.NormalizeModKey(entry.Guid);
             if (!string.IsNullOrWhiteSpace(slugCompact) &&
                 (leaf == slugCompact || leaf.Contains(slugCompact) || slugCompact.Contains(leaf)))
             {
@@ -1149,6 +1180,12 @@ namespace SptLauncherWpf.Services
 
             if (!string.IsNullOrWhiteSpace(nameKey) &&
                 (leaf == nameKey || leaf.Contains(nameKey) || nameKey.Contains(leaf)))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(guidKey) &&
+                (leaf == guidKey || leaf.Contains(guidKey) || guidKey.Contains(leaf)))
             {
                 return true;
             }
@@ -1169,8 +1206,7 @@ namespace SptLauncherWpf.Services
                         return true;
                     }
 
-                    var relLeaf = InstalledModsService.NormalizeModKey(
-                        Path.GetFileNameWithoutExtension(normRel));
+                    var relLeaf = PathMatchLeaf(normRel);
                     if (!string.IsNullOrWhiteSpace(relLeaf) && leaf == relLeaf)
                     {
                         return true;

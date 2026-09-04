@@ -389,6 +389,41 @@ public class RequiredModsPackTests
             @"D:\SPT\BepInEx\plugins\SAIN"));
     }
 
+    [Fact]
+    public void Hosted_guid_folder_matches_even_when_slug_differs()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "BattlePass",
+            Slug = "tarkov-battlepass",
+            Guid = "com.bblai.battlepass",
+            Version = "0.2.0",
+            DownloadUrl = "https://blairsworkshop.com/api/download/tarkov-battlepass",
+            ClientFiles = ["BepInEx/plugins/com.bblai.battlepass/SptBattlePass.Client.dll"]
+        };
+
+        Assert.Equal("combblaibattlepass", RequiredModsPackService.PathMatchLeaf(
+            @"D:\SPT\BepInEx\plugins\com.bblai.battlepass"));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\com.bblai.battlepass", entry));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\com.bblai.battlepass\SptBattlePass.Client.dll", entry));
+
+        var local = new InstalledModInfo
+        {
+            DisplayName = "BattlePass",
+            Path = @"D:\SPT\BepInEx\plugins\com.bblai.battlepass",
+            Kind = InstalledModKind.Client,
+            IsDirectory = true,
+            VersionHint = "0.2.0",
+            ForgeGuid = "com.bblai.battlepass",
+            ForgeSlug = "tarkov-battlepass"
+        };
+        var match = RequiredModsPackService.FindLocalMatch(entry, [local]);
+        Assert.NotNull(match);
+        Assert.Equal(local.Path, match!.Path);
+    }
+
     private static RequiredModDiffItem Find(RequiredModsDiffResult diff, string name) =>
         diff.Items.First(i => i.PackEntry?.Name == name);
 }
