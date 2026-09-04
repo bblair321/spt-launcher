@@ -131,6 +131,11 @@ namespace SptLauncherWpf.Services
                     }
 
                     var marker = ForgeModMarker.TryRead(dir, isDirectory: true);
+                    if (marker != null && !MarkerBelongsToInstall(marker, dir))
+                    {
+                        marker = null;
+                    }
+
                     results.Add(new InstalledModInfo
                     {
                         DisplayName = marker?.Name ?? StripDisabledSuffix(name),
@@ -138,7 +143,7 @@ namespace SptLauncherWpf.Services
                         Kind = InstalledModKind.Client,
                         IsEnabled = !IsDisabledName(name),
                         IsDirectory = true,
-                        VersionHint = marker?.Version,
+                        VersionHint = marker?.Version ?? TryReadFolderPluginVersion(dir),
                         ForgeModId = marker is { ForgeModId: > 0 } ? marker.ForgeModId : null,
                         ForgeGuid = marker?.Guid,
                         ForgeSlug = marker?.Slug,
@@ -357,6 +362,97 @@ namespace SptLauncherWpf.Services
                 .Select(char.ToLowerInvariant)
                 .ToArray();
             return new string(chars);
+        }
+
+        internal static bool MarkerBelongsToInstall(ForgeModMarker marker, string installPath)
+        {
+            var leaf = NormalizeModKey(Path.GetFileName(
+                installPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+            if (string.IsNullOrEmpty(leaf))
+            {
+                return false;
+            }
+
+            var slug = NormalizeModKey(marker.Slug);
+            if (!string.IsNullOrEmpty(slug) && (leaf.Contains(slug) || slug.Contains(leaf)))
+            {
+                return true;
+            }
+
+            var name = NormalizeModKey(marker.Name);
+            if (!string.IsNullOrEmpty(name) && (leaf.Contains(name) || name.Contains(leaf)))
+            {
+                return true;
+            }
+
+            var guidLeaf = IdentifyingGuidLeaf(marker.Guid);
+            if (!string.IsNullOrEmpty(guidLeaf) &&
+                guidLeaf.Length >= 3 &&
+                (leaf.Contains(guidLeaf) || guidLeaf.Contains(leaf)))
+            {
+                return true;
+            }
+
+            return string.IsNullOrEmpty(slug) &&
+                   string.IsNullOrEmpty(name) &&
+                   string.IsNullOrEmpty(marker.Guid);
+        }
+
+        private static string IdentifyingGuidLeaf(string? guid)
+        {
+            if (string.IsNullOrWhiteSpace(guid))
+            {
+                return "";
+            }
+
+            string[] generic = ["eft", "spt", "mod", "mods", "plugin", "plugins", "client", "server", "core", "main", "fika"];
+            var parts = guid.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            for (var i = parts.Length - 1; i >= 0; i--)
+            {
+                var l = NormalizeModKey(parts[i]);
+                if (l.Length >= 3 && !generic.Contains(l))
+                {
+                    return l;
+                }
+            }
+
+            return NormalizeModKey(parts.LastOrDefault());
+        }
+
+        private static string? TryReadFolderPluginVersion(string dir)
+        {
+            try
+            {
+                if (!Directory.Exists(dir))
+                {
+                    return null;
+                }
+
+                var folder = NormalizeModKey(Path.GetFileName(dir));
+                var dlls = Directory.GetFiles(dir, "*.dll");
+                var preferred = dlls
+                    .OrderByDescending(p => NormalizeModKey(Path.GetFileNameWithoutExtension(p)) == folder)
+                    .ThenBy(p => Path.GetFileName(p).Length)
+                    .FirstOrDefault();
+                if (preferred == null)
+                {
+                    return null;
+                }
+
+                var info = FileVersionInfo.GetVersionInfo(preferred);
+                var raw = info.ProductVersion ?? info.FileVersion;
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    return null;
+                }
+
+                var plus = raw.IndexOf('+');
+                return plus > 0 ? raw[..plus] : raw.Trim();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public static IEnumerable<string> BuildUpdateQueryPairs(IEnumerable<InstalledModInfo> mods)

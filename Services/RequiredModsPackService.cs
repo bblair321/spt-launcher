@@ -755,39 +755,15 @@ namespace SptLauncherWpf.Services
 
             var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // Only stamp installs that both claim this Forge identity AND whose path belongs
-            // to this pack entry. Never rewrite Gaylatea-UseLooseLoot.dll when installing LootNET.
-            // Hosted mods (no Forge id) must match by GUID or a *strict* path/name — never the
-            // loose PathBelongsToPackEntry fallback that returns true for every plugin DLL.
+            // Only stamp paths that clearly belong to this pack entry (slug/name/clientFiles).
+            // Matching by Forge id/guid alone retagged SAIN as WTT CommonLib when the pack
+            // GUID was wrongly com.fika.core.
             foreach (var local in clientMods)
             {
-                var sameId = marker.ForgeModId > 0 && local.ForgeModId == marker.ForgeModId;
-                var sameGuid = !string.IsNullOrWhiteSpace(marker.Guid) &&
-                               string.Equals(local.ForgeGuid, marker.Guid, StringComparison.OrdinalIgnoreCase);
-                var strictPath = PathStrictlyMatchesPackEntry(local.Path, entry);
-                if (!sameId && !sameGuid && !strictPath)
-                {
-                    continue;
-                }
-
-                // Identity matched via Forge id/guid still requires the path not be a known
-                // cross-tag (LootNET ↔ Use Loose Loot). Strict path matches are already OK.
-                if (!strictPath && !PathBelongsToPackEntry(local.Path, entry))
-                {
-                    continue;
-                }
-
                 foreach (var path in local.AllPaths)
                 {
-                    if (strictPath || PathBelongsToPackEntry(path, entry) || sameGuid || sameId)
+                    if (PathStrictlyMatchesPackEntry(path, entry))
                     {
-                        // When matching only by hosted GUID that was just written, still require
-                        // a strict path so one GUID stamp cannot retarget every plugin.
-                        if (sameGuid && marker.ForgeModId <= 0 && !PathStrictlyMatchesPackEntry(path, entry))
-                        {
-                            continue;
-                        }
-
                         targets.Add(path);
                     }
                 }
@@ -1043,6 +1019,8 @@ namespace SptLauncherWpf.Services
                     string.Equals(m.ForgeSlug, entry.Slug, StringComparison.OrdinalIgnoreCase)));
             }
 
+            candidates.AddRange(clientMods.Where(m => PathStrictlyMatchesPackEntry(m.Path, entry)));
+
             // Name matching is a last resort only when the pack entry has no id/guid/slug.
             // Otherwise "LootNET" / "Use Loose Loot" style collisions can pick the wrong mod
             // and stamp the wrong version onto its sidecar.
@@ -1184,9 +1162,9 @@ namespace SptLauncherWpf.Services
                         continue;
                     }
 
-                    var normRel = rel.Replace('\\', '/');
-                    if (normalizedPath.EndsWith(normRel, StringComparison.OrdinalIgnoreCase) ||
-                        normalizedPath.Contains("/" + normRel.TrimStart('/'), StringComparison.OrdinalIgnoreCase))
+                    var normRel = rel.Replace('\\', '/').Trim('/');
+                    var fullRel = "/" + normRel;
+                    if (normalizedPath.EndsWith(fullRel, StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
@@ -1196,6 +1174,21 @@ namespace SptLauncherWpf.Services
                     if (!string.IsNullOrWhiteSpace(relLeaf) && leaf == relLeaf)
                     {
                         return true;
+                    }
+
+                    // BepInEx/plugins/<folder>/... matches that plugin folder only —
+                    // never a short prefix like BepInEx/plugins.
+                    var parts = normRel.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                    var pluginsIdx = Array.FindIndex(
+                        parts,
+                        p => p.Equals("plugins", StringComparison.OrdinalIgnoreCase));
+                    if (pluginsIdx >= 0 && pluginsIdx + 1 < parts.Length)
+                    {
+                        var pluginFolder = InstalledModsService.NormalizeModKey(parts[pluginsIdx + 1]);
+                        if (!string.IsNullOrWhiteSpace(pluginFolder) && pluginFolder == leaf)
+                        {
+                            return true;
+                        }
                     }
                 }
             }

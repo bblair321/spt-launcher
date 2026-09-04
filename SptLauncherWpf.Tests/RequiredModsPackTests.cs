@@ -347,6 +347,48 @@ public class RequiredModsPackTests
         Assert.Equal(@"D:\SPT\BepInEx\plugins\LootNet", item.Installed?.Path);
     }
 
+    [Fact]
+    public void CommonLib_client_files_do_not_match_SAIN_folder()
+    {
+        var commonLib = new RequiredModEntry
+        {
+            Name = "WTT - CommonLib",
+            Slug = "wtt-commonlib",
+            ForgeModId = 2310,
+            Guid = "com.fika.core",
+            Version = "3.0.6",
+            ClientFiles =
+            [
+                "BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLib.dll",
+                "BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLibFika.dll"
+            ]
+        };
+        var sain = new RequiredModEntry
+        {
+            Name = "SAIN - Solarint's AI Modifications - Full AI Combat System Replacement",
+            Slug = "sain",
+            ForgeModId = 900,
+            Version = "4.5.0",
+            ClientFiles = ["BepInEx/plugins/SAIN/SAIN.dll"]
+        };
+
+        Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\SAIN", commonLib));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\SAIN", sain));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\WTT-ClientCommonLib", commonLib));
+        Assert.False(InstalledModsService.MarkerBelongsToInstall(
+            new ForgeModMarker
+            {
+                Name = "WTT - CommonLib",
+                Slug = "wtt-commonlib",
+                Guid = "com.fika.core",
+                Version = "3.0.6"
+            },
+            @"D:\SPT\BepInEx\plugins\SAIN"));
+    }
+
     private static RequiredModDiffItem Find(RequiredModsDiffResult diff, string name) =>
         diff.Items.First(i => i.PackEntry?.Name == name);
 }
