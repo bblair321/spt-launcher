@@ -112,7 +112,8 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
-        /// Builds a cmd script that waits for the launcher to exit, swaps the exe, and restores on failure.
+        /// Builds a cmd script that waits for this launcher PID to exit, swaps the exe, and restores on failure.
+        /// Uses ping for delay — <c>timeout</c> can hang in a hidden window and never replace the file.
         /// </summary>
         public static string BuildReplaceInPlaceScript(
             string processName,
@@ -120,33 +121,56 @@ namespace SptLauncherWpf.Services
             string downloadedUpdatePath,
             string backupPath,
             string scriptPath,
-            int maxWaitSeconds = 60)
+            int maxWaitSeconds = 90,
+            int processId = 0)
         {
             if (maxWaitSeconds < 1)
             {
                 maxWaitSeconds = 1;
             }
 
+            var pidFilter = processId > 0
+                ? $"""
+                tasklist /FI "PID eq {processId}" /FO CSV /NH 2>NUL | findstr /I /C:",{processId}," >NUL
+                """
+                : $"""
+                tasklist /FI "IMAGENAME eq {processName}" 2>NUL | find /I /N "{processName}" >NUL
+                """;
+
             return $"""
                 @echo off
-                setlocal EnableExtensions
+                setlocal EnableExtensions EnableDelayedExpansion
                 set "MAX_WAIT={maxWaitSeconds}"
                 set "WAITED=0"
                 :wait_for_exit
-                tasklist /FI "IMAGENAME eq {processName}" 2>NUL | find /I /N "{processName}" >NUL
-                if "%ERRORLEVEL%"=="0" (
-                    if %WAITED% GEQ %MAX_WAIT% goto fail
-                    timeout /t 1 /nobreak > nul
+                {pidFilter}
+                if not errorlevel 1 (
+                    if !WAITED! GEQ !MAX_WAIT! goto fail
+                    ping 127.0.0.1 -n 2 >nul
                     set /a WAITED+=1
                     goto wait_for_exit
                 )
+                set "TRIES=0"
+                :retry_backup
                 del /f /q "{backupPath}" 2>nul
                 move /y "{currentExePath}" "{backupPath}" >nul
-                if errorlevel 1 goto fail
+                if errorlevel 1 (
+                    set /a TRIES+=1
+                    if !TRIES! GEQ 20 goto fail
+                    ping 127.0.0.1 -n 2 >nul
+                    goto retry_backup
+                )
+                set "TRIES=0"
+                :retry_replace
                 move /y "{downloadedUpdatePath}" "{currentExePath}" >nul
                 if errorlevel 1 (
-                    move /y "{backupPath}" "{currentExePath}" >nul
-                    goto fail
+                    set /a TRIES+=1
+                    if !TRIES! GEQ 20 (
+                        move /y "{backupPath}" "{currentExePath}" >nul
+                        goto fail
+                    )
+                    ping 127.0.0.1 -n 2 >nul
+                    goto retry_replace
                 )
                 start "" "{currentExePath}"
                 del /f /q "{scriptPath}" 2>nul

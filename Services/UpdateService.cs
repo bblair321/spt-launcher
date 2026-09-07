@@ -59,6 +59,7 @@ namespace SptLauncherWpf.Services
 
         private readonly HttpClient _httpClient;
         private readonly HttpClient _pageClient;
+        private readonly HttpClient _downloadClient;
         private System.Windows.Threading.DispatcherTimer? _checkTimer;
 
         public event EventHandler<UpdateInfo>? UpdateAvailable;
@@ -67,12 +68,19 @@ namespace SptLauncherWpf.Services
         /// <summary>Last update-check failure message, or null when the check completed cleanly.</summary>
         public string? LastCheckError { get; private set; }
 
+        /// <summary>Last self-update download/apply failure, or null when the last attempt succeeded.</summary>
+        public string? LastDownloadError { get; private set; }
+
         private UpdateService()
         {
             _httpClient = new HttpClient();
             _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SPT-Launcher-WPF");
             _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
             _httpClient.Timeout = TimeSpan.FromSeconds(15);
+
+            // Binary downloads must not use the GitHub API Accept header or a 15s timeout.
+            _downloadClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            _downloadClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SPT-Launcher-WPF");
 
             // Website latest-release redirect is not the 60/hour REST API quota.
             _pageClient = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
@@ -364,10 +372,12 @@ namespace SptLauncherWpf.Services
 
         public async Task<bool> DownloadUpdateAsync(UpdateInfo updateInfo, IProgress<double>? progress = null)
         {
+            LastDownloadError = null;
             var currentExePath = Environment.ProcessPath;
             if (string.IsNullOrWhiteSpace(currentExePath) || !File.Exists(currentExePath))
             {
-                Console.WriteLine("Could not determine current executable path for update");
+                LastDownloadError = "Could not determine the running launcher path.";
+                Console.WriteLine(LastDownloadError);
                 return false;
             }
 
@@ -379,6 +389,7 @@ namespace SptLauncherWpf.Services
             {
                 if (string.IsNullOrEmpty(updateInfo.DownloadUrl))
                 {
+                    LastDownloadError = "The update has no download URL.";
                     return false;
                 }
 
@@ -386,14 +397,17 @@ namespace SptLauncherWpf.Services
 
                 if (!File.Exists(updatePath) || new FileInfo(updatePath).Length == 0)
                 {
-                    Console.WriteLine("Downloaded update file is missing or empty");
+                    LastDownloadError = "Downloaded update file is missing or empty.";
+                    Console.WriteLine(LastDownloadError);
                     TryDeleteFile(updatePath);
                     return false;
                 }
 
                 if (!UpdateApplyHelper.LooksLikeWindowsExecutable(updatePath))
                 {
-                    Console.WriteLine("Downloaded update file is not a valid Windows executable");
+                    LastDownloadError =
+                        "Downloaded file is not a Windows executable (GitHub may have returned an error page).";
+                    Console.WriteLine(LastDownloadError);
                     TryDeleteFile(updatePath);
                     return false;
                 }
@@ -403,7 +417,8 @@ namespace SptLauncherWpf.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to download update: {ex.Message}");
+                LastDownloadError = $"Failed to download update: {ex.Message}";
+                Console.WriteLine(LastDownloadError);
                 ClearPendingSelfUpdate();
                 TryDeleteFile(updatePath);
                 return false;
@@ -476,7 +491,7 @@ namespace SptLauncherWpf.Services
             string destinationPath,
             IProgress<double>? progress)
         {
-            using var response = await _httpClient!.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await _downloadClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
 
             var totalBytes = response.Content.Headers.ContentLength ?? 0;
@@ -514,16 +529,23 @@ namespace SptLauncherWpf.Services
                     currentExePath,
                     downloadedUpdatePath,
                     backupPath,
-                    scriptPath);
+                    scriptPath,
+                    processId: Environment.ProcessId);
 
                 File.WriteAllText(scriptPath, script);
 
+                var comspec = Environment.GetEnvironmentVariable("ComSpec");
+                if (string.IsNullOrWhiteSpace(comspec))
+                {
+                    comspec = "cmd.exe";
+                }
+
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = scriptPath,
-                    UseShellExecute = true,
+                    FileName = comspec,
+                    Arguments = $"/c \"{scriptPath}\"",
+                    UseShellExecute = false,
                     CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden,
                     WorkingDirectory = appDir
                 });
 
@@ -532,7 +554,8 @@ namespace SptLauncherWpf.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to apply update: {ex.Message}");
+                LastDownloadError = $"Failed to apply update: {ex.Message}";
+                Console.WriteLine(LastDownloadError);
                 ClearPendingSelfUpdate();
                 TryDeleteFile(downloadedUpdatePath);
                 return false;
@@ -559,6 +582,7 @@ namespace SptLauncherWpf.Services
             StopPeriodicCheck();
             _httpClient.Dispose();
             _pageClient.Dispose();
+            _downloadClient.Dispose();
         }
     }
 }

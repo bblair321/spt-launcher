@@ -528,7 +528,11 @@ namespace SptLauncherWpf
                 }
                 else
                 {
-                    System.Windows.MessageBox.Show("Failed to download the update. Please try again later.", 
+                    var detail = string.IsNullOrWhiteSpace(UpdateService.Instance.LastDownloadError)
+                        ? "Please try again later."
+                        : UpdateService.Instance.LastDownloadError;
+                    System.Windows.MessageBox.Show(
+                        $"Failed to download the update.\n\n{detail}",
                         "Download Failed", MessageBoxButton.OK, MessageBoxImage.Error);
                     UpdateDownloadButton.IsEnabled = true;
                     UpdateDownloadButton.Content = "Download";

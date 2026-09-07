@@ -180,12 +180,17 @@ public class UpdateApplyHelperTests
             downloadedUpdatePath: @"C:\Temp\update.exe",
             backupPath: @"C:\App\SPTLauncher.old.exe",
             scriptPath: @"C:\Temp\update.cmd",
-            maxWaitSeconds: 45);
+            maxWaitSeconds: 45,
+            processId: 4242);
 
         Assert.Contains("MAX_WAIT=45", script);
+        Assert.Contains("ping 127.0.0.1 -n 2 >nul", script);
+        Assert.Contains("PID eq 4242", script);
+        Assert.DoesNotContain("timeout /t", script);
         Assert.Contains("move /y \"C:\\App\\SPTLauncher.exe\" \"C:\\App\\SPTLauncher.old.exe\"", script);
         Assert.Contains("move /y \"C:\\Temp\\update.exe\" \"C:\\App\\SPTLauncher.exe\"", script);
         Assert.Contains("move /y \"C:\\App\\SPTLauncher.old.exe\" \"C:\\App\\SPTLauncher.exe\"", script);
+        Assert.Contains(":retry_replace", script);
         Assert.Contains(":fail", script);
     }
 
