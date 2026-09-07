@@ -583,14 +583,8 @@ namespace SptLauncherWpf.Services
                 versions = mod.Versions;
             }
 
-            var version = PickVersion(versions, entry.Version)
-                          ?? PickNewestVersion(versions);
-            if (version != null)
-            {
-                EnsureVersionDownloadLink(mod, version);
-            }
-
-            if (version == null || string.IsNullOrWhiteSpace(version.Link))
+            var toTry = ForgeVersionsToTry(versions, entry.Version);
+            if (toTry.Count == 0)
             {
                 return (false, false,
                     string.IsNullOrWhiteSpace(entry.Version)
@@ -599,55 +593,79 @@ namespace SptLauncherWpf.Services
                           $"(Forge returned {versions.Count} version(s)).");
             }
 
-            ForgeFileTree? tree = null;
-            try
+            string? lastGone = null;
+            foreach (var version in toTry)
             {
-                tree = await ForgeApiService.Instance.GetFileTreeAsync(mod.Id, version.Id, cancellationToken);
-            }
-            catch
-            {
-                tree = null;
-            }
-
-            var hasRuntime = Directory.Exists(Path.Combine(sptRoot, "SPT_Runtime"));
-            // Don't reject on Forge file-tree alone — the real zip/DLL layout is authoritative.
-            if (tree?.Files is { Count: > 0 })
-            {
-                var classification = ModPathClassifier.Classify(tree.Files, hasRuntime);
-                if (classification.Kind == ModInstallKind.ServerOnly)
+                EnsureVersionDownloadLink(mod, version);
+                if (string.IsNullOrWhiteSpace(version.Link))
                 {
-                    return (false, true, "Server-only package");
+                    continue;
                 }
-            }
 
-            var installProgress = new Progress<ModInstallProgress>(p =>
-            {
-                progress?.Report(new RequiredModsSyncProgress
+                if (lastGone != null)
                 {
-                    Message = $"{entry.DisplayName}: {p.Message}"
+                    progress?.Report(new RequiredModsSyncProgress
+                    {
+                        Message = $"{entry.DisplayName}: {entry.Version} is gone — trying Forge {version.Version}…"
+                    });
+                }
+
+                ForgeFileTree? tree = null;
+                try
+                {
+                    tree = await ForgeApiService.Instance.GetFileTreeAsync(mod.Id, version.Id, cancellationToken);
+                }
+                catch
+                {
+                    tree = null;
+                }
+
+                var hasRuntime = Directory.Exists(Path.Combine(sptRoot, "SPT_Runtime"));
+                // Don't reject on Forge file-tree alone — the real zip/DLL layout is authoritative.
+                if (tree?.Files is { Count: > 0 })
+                {
+                    var classification = ModPathClassifier.Classify(tree.Files, hasRuntime);
+                    if (classification.Kind == ModInstallKind.ServerOnly)
+                    {
+                        return (false, true, "Server-only package");
+                    }
+                }
+
+                var installProgress = new Progress<ModInstallProgress>(p =>
+                {
+                    progress?.Report(new RequiredModsSyncProgress
+                    {
+                        Message = $"{entry.DisplayName}: {p.Message}"
+                    });
                 });
-            });
 
-            var report = await ModInstallService.Instance.InstallAsync(
-                mod,
-                version,
-                sptRoot,
-                tree?.Files,
-                installProgress,
-                cancellationToken,
-                clientPathsOnly: true);
+                var report = await ModInstallService.Instance.InstallAsync(
+                    mod,
+                    version,
+                    sptRoot,
+                    tree?.Files,
+                    installProgress,
+                    cancellationToken,
+                    clientPathsOnly: true);
 
-            if (!report.Success)
-            {
-                return (false, false, report.Message);
+                if (report.Success)
+                {
+                    // Pack Diff keys off .forge-mod.json sidecars. Always stamp the matched
+                    // local plugin(s) to the version we just installed so upgrades can't leave
+                    // a stale "have 1.1.0, need 1.6.0" marker on an older DLL name.
+                    StampMatchedClientMarkers(sptRoot, entry, mod, version.Version, version.Id);
+                    return (true, false, "");
+                }
+
+                if (!DownloadErrorLooksGone(report.Message))
+                {
+                    return (false, false, report.Message);
+                }
+
+                lastGone = report.Message;
             }
 
-            // Pack Diff keys off .forge-mod.json sidecars. Always stamp the matched
-            // local plugin(s) to the version we just installed so upgrades can't leave
-            // a stale "have 1.1.0, need 1.6.0" marker on an older DLL name.
-            StampMatchedClientMarkers(sptRoot, entry, mod, version.Version, version.Id);
-
-            return (true, false, "");
+            return (false, false, lastGone ?? $"Version {entry.Version} not found on sp-mod.com for mod id {forgeId}.");
         }
 
         private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallHostedPackEntryAsync(
@@ -1110,6 +1128,33 @@ namespace SptLauncherWpf.Services
                 .OrderByDescending(v => ParseVersionRank(v.Version))
                 .ThenByDescending(v => v.Id)
                 .FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Pack version first, then newer Forge builds (WTT deleted 2.0.5 from their CDN; 2.1.1+ still hosts).
+        /// </summary>
+        internal static List<ForgeModVersion> ForgeVersionsToTry(
+            IReadOnlyList<ForgeModVersion> versions,
+            string? required)
+        {
+            var result = new List<ForgeModVersion>();
+            var primary = PickVersion(versions, required) ?? PickNewestVersion(versions);
+            if (primary == null)
+            {
+                return result;
+            }
+
+            result.Add(primary);
+            foreach (var newer in versions
+                         .Where(v => v.Id != primary.Id)
+                         .Where(v => CompareVersionRank(v.Version ?? "", primary.Version ?? "") > 0)
+                         .OrderBy(v => ParseVersionRank(v.Version))
+                         .ThenBy(v => v.Id))
+            {
+                result.Add(newer);
+            }
+
+            return result;
         }
 
         /// <summary>

@@ -484,6 +484,23 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void ForgeVersionsToTry_adds_newer_builds_after_pack_version()
+    {
+        var versions = new List<ForgeModVersion>
+        {
+            new() { Id = 1, Version = "2.0.5" },
+            new() { Id = 2, Version = "2.1.0" },
+            new() { Id = 3, Version = "2.1.1" },
+            new() { Id = 4, Version = "3.0.0" },
+            new() { Id = 0, Version = "2.0.4" }
+        };
+        var order = RequiredModsPackService.ForgeVersionsToTry(versions, "2.0.5")
+            .Select(v => v.Version)
+            .ToList();
+        Assert.Equal(new[] { "2.0.5", "2.1.0", "2.1.1", "3.0.0" }, order);
+    }
+
+    [Fact]
     public void Hosted_guid_folder_matches_even_when_slug_differs()
     {
         var entry = new RequiredModEntry
