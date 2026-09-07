@@ -583,7 +583,7 @@ namespace SptLauncherWpf.Services
                 versions = mod.Versions;
             }
 
-            var toTry = ForgeVersionsToTry(versions, entry.Version);
+            var toTry = ForgeVersionsToTry(versions, entry.Version, TryDetectSptVersion(sptRoot));
             if (toTry.Count == 0)
             {
                 return (false, false,
@@ -1131,21 +1131,36 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
-        /// Pack version first, then newer Forge builds (WTT deleted 2.0.5 from their CDN; 2.1.1+ still hosts).
+        /// Pack version first, then newer Forge builds — but when the install's SPT version
+        /// is known, skip builds tagged for a different minor line (Armory 2.1.1 is ~4.0.13;
+        /// SPT 4.1.5 needs 3.0.0 ~4.1.5).
         /// </summary>
         internal static List<ForgeModVersion> ForgeVersionsToTry(
             IReadOnlyList<ForgeModVersion> versions,
-            string? required)
+            string? required,
+            string? installedSpt = null)
         {
+            IReadOnlyList<ForgeModVersion> pool = versions;
+            if (!string.IsNullOrWhiteSpace(installedSpt))
+            {
+                var compatible = versions
+                    .Where(v => SptConstraintAllows(v.SptVersionConstraint, installedSpt))
+                    .ToList();
+                if (compatible.Count > 0)
+                {
+                    pool = compatible;
+                }
+            }
+
             var result = new List<ForgeModVersion>();
-            var primary = PickVersion(versions, required) ?? PickNewestVersion(versions);
+            var primary = PickVersion(pool, required) ?? PickNewestVersion(pool);
             if (primary == null)
             {
                 return result;
             }
 
             result.Add(primary);
-            foreach (var newer in versions
+            foreach (var newer in pool
                          .Where(v => v.Id != primary.Id)
                          .Where(v => CompareVersionRank(v.Version ?? "", primary.Version ?? "") > 0)
                          .OrderBy(v => ParseVersionRank(v.Version))
@@ -1155,6 +1170,137 @@ namespace SptLauncherWpf.Services
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// SPT 4.1.x builds are compatible with each other. A ~4.0.13 / &lt;4.1.0 tag is not.
+        /// </summary>
+        internal static bool SptConstraintAllows(string? constraint, string? installedSpt)
+        {
+            if (string.IsNullOrWhiteSpace(installedSpt) || string.IsNullOrWhiteSpace(constraint))
+            {
+                return true;
+            }
+
+            if (!TryParseSptVersion(installedSpt, out var installed))
+            {
+                return true;
+            }
+
+            foreach (var raw in constraint.Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!SptConstraintTokenAllows(raw.Trim(), installed))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        internal static string? TryDetectSptVersion(string sptRoot)
+        {
+            if (string.IsNullOrWhiteSpace(sptRoot) || !Directory.Exists(sptRoot))
+            {
+                return null;
+            }
+
+            foreach (var relative in new[]
+                     {
+                         Path.Combine("SPT_Runtime", "SPT.Launcher.exe"),
+                         "SPT.Launcher.exe"
+                     })
+            {
+                var path = Path.Combine(sptRoot, relative);
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                var version = SptDetectionService.Instance.GetSptVersion(path);
+                if (!string.IsNullOrWhiteSpace(version) &&
+                    !version.Equals("Not detected", StringComparison.OrdinalIgnoreCase) &&
+                    !version.StartsWith("Error", StringComparison.OrdinalIgnoreCase))
+                {
+                    return version;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool SptConstraintTokenAllows(string token, Version installed)
+        {
+            if (token.StartsWith("~", StringComparison.Ordinal))
+            {
+                if (!TryParseSptVersion(token[1..], out var tilde))
+                {
+                    return true;
+                }
+
+                return installed.Major == tilde.Major && installed.Minor == tilde.Minor;
+            }
+
+            if (token.StartsWith("^", StringComparison.Ordinal))
+            {
+                if (!TryParseSptVersion(token[1..], out var caret))
+                {
+                    return true;
+                }
+
+                return installed.Major == caret.Major;
+            }
+
+            if (token.StartsWith("<=", StringComparison.Ordinal))
+            {
+                return TryParseSptVersion(token[2..], out var max) && CompareSpt3(installed, max) <= 0;
+            }
+
+            if (token.StartsWith(">=", StringComparison.Ordinal))
+            {
+                return TryParseSptVersion(token[2..], out var min) && CompareSpt3(installed, min) >= 0;
+            }
+
+            if (token.StartsWith("<", StringComparison.Ordinal))
+            {
+                return TryParseSptVersion(token[1..], out var max) && CompareSpt3(installed, max) < 0;
+            }
+
+            if (token.StartsWith(">", StringComparison.Ordinal))
+            {
+                return TryParseSptVersion(token[1..], out var min) && CompareSpt3(installed, min) > 0;
+            }
+
+            if (TryParseSptVersion(token, out var exact))
+            {
+                return CompareSpt3(installed, exact) == 0;
+            }
+
+            return true;
+        }
+
+        private static bool TryParseSptVersion(string? value, out Version version)
+        {
+            var normalized = VersionStringHelper.Normalize(value ?? "");
+            if (Version.TryParse(normalized, out version!))
+            {
+                return true;
+            }
+
+            if (Version.TryParse(normalized + ".0", out version!))
+            {
+                return true;
+            }
+
+            version = new Version(0, 0);
+            return false;
+        }
+
+        private static int CompareSpt3(Version a, Version b)
+        {
+            var left = new Version(a.Major, a.Minor, Math.Max(a.Build, 0));
+            var right = new Version(b.Major, b.Minor, Math.Max(b.Build, 0));
+            return left.CompareTo(right);
         }
 
         /// <summary>

@@ -500,6 +500,32 @@ public class RequiredModsPackTests
         Assert.Equal(new[] { "2.0.5", "2.1.0", "2.1.1", "3.0.0" }, order);
     }
 
+    [Theory]
+    [InlineData("~4.1.5", "4.1.5", true)]
+    [InlineData("~4.1.0", "4.1.5", true)]
+    [InlineData("~4.0.13", "4.1.5", false)]
+    [InlineData("~4.0 <4.1.0", "4.1.5", false)]
+    [InlineData("~4.0.13", "4.0.13", true)]
+    public void SptConstraintAllows_treats_4_1_x_as_compatible(string constraint, string installed, bool expected)
+    {
+        Assert.Equal(expected, RequiredModsPackService.SptConstraintAllows(constraint, installed));
+    }
+
+    [Fact]
+    public void ForgeVersionsToTry_skips_4_0_armory_when_spt_is_4_1()
+    {
+        var versions = new List<ForgeModVersion>
+        {
+            new() { Id = 1, Version = "2.0.5", SptVersionConstraint = "~4.0 <4.1.0" },
+            new() { Id = 3, Version = "2.1.1", SptVersionConstraint = "~4.0.13" },
+            new() { Id = 4, Version = "3.0.0", SptVersionConstraint = "~4.1.5" }
+        };
+        var order = RequiredModsPackService.ForgeVersionsToTry(versions, "2.0.5", "4.1.5")
+            .Select(v => v.Version)
+            .ToList();
+        Assert.Equal(new[] { "3.0.0" }, order);
+    }
+
     [Fact]
     public void Hosted_guid_folder_matches_even_when_slug_differs()
     {
