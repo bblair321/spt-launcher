@@ -267,6 +267,41 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Diff_placeholder_pack_version_does_not_downgrade_real_install()
+    {
+        var pack = new RequiredModsPack
+        {
+            Mods =
+            [
+                new RequiredModEntry
+                {
+                    Name = "BattlePass",
+                    ForgeModId = 1,
+                    Version = "1.0.0"
+                }
+            ]
+        };
+        var installed = new List<InstalledModInfo>
+        {
+            new()
+            {
+                DisplayName = "BattlePass",
+                Kind = InstalledModKind.Client,
+                Path = @"C:\SPT\BepInEx\plugins\com.bblai.battlepass",
+                ForgeModId = 1,
+                VersionHint = "0.2.3"
+            }
+        };
+
+        var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+        Assert.Equal(RequiredModDiffStatus.Ok, diff.Items[0].Status);
+        Assert.False(diff.NeedsSync);
+        Assert.True(RequiredModsPackService.LooksLikePlaceholderVersion("1.0.0"));
+        Assert.True(RequiredModsPackService.DownloadErrorLooksGone(
+            "This download isn't a supported .zip/.7z archive. Open the mod on Forge to install it manually."));
+    }
+
+    [Fact]
     public void VersionsEqual_ignores_trailing_zeros()
     {
         Assert.True(RequiredModsPackService.VersionsEqual("v2.0.1", "2.0.1.0"));

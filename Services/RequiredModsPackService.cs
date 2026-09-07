@@ -281,6 +281,7 @@ namespace SptLauncherWpf.Services
                 // Missing sidecars and DLL FileVersion ahead of the Forge tag used to
                 // look like WrongVersion forever, so every launcher open re-synced.
                 if (!string.IsNullOrWhiteSpace(requiredVersion) &&
+                    !LooksLikePlaceholderVersion(requiredVersion) &&
                     !string.IsNullOrWhiteSpace(localVersion) &&
                     !VersionsEqual(requiredVersion, localVersion) &&
                     CompareVersionRank(localVersion, requiredVersion) < 0)
@@ -367,6 +368,9 @@ namespace SptLauncherWpf.Services
 
                 try
                 {
+                    // Replace leftover 4.0.x plugins (WTT-ArmoryClient) before extracting
+                    // a 4.1.x zip that may use a different folder layout.
+                    TryUninstallLocalMatch(sptRoot, entry);
                     var result = await InstallPackEntryAsync(entry, sptRoot, progress, cancellationToken);
                     if (result.SkippedServerOnly)
                     {
@@ -503,7 +507,10 @@ namespace SptLauncherWpf.Services
                    || l.Contains("404 not found")
                    || l.Contains("410 gone")
                    || l.Contains("no published workshop mod")
-                   || l.Contains("could not resolve latest hosted");
+                   || l.Contains("could not resolve latest hosted")
+                   || l.Contains("isn't a supported")
+                   || l.Contains("not a supported")
+                   || l.Contains(".zip/.7z");
         }
 
         internal static bool CanResolveForge(RequiredModEntry entry) =>
@@ -1152,8 +1159,18 @@ namespace SptLauncherWpf.Services
                 }
             }
 
+            var usable = pool
+                .Where(v => !LooksLikePlaceholderVersion(v.Version))
+                .ToList();
+            if (usable.Count > 0)
+            {
+                pool = usable;
+            }
+
+            var packVersion = LooksLikePlaceholderVersion(required) ? null : required;
+
             var result = new List<ForgeModVersion>();
-            var primary = PickVersion(pool, required) ?? PickNewestVersion(pool);
+            var primary = PickVersion(pool, packVersion) ?? PickNewestVersion(pool);
             if (primary == null)
             {
                 return result;
@@ -1540,6 +1557,26 @@ namespace SptLauncherWpf.Services
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// csproj / BepInPlugin template leftover. Semver treats 1.0.0 as newer than 0.2.3.
+        /// </summary>
+        internal static bool LooksLikePlaceholderVersion(string? version)
+        {
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                return false;
+            }
+
+            var n = NormalizeVersionLabel(version);
+            var cut = n.IndexOfAny(new[] { '-', '+' });
+            if (cut >= 0)
+            {
+                n = n[..cut];
+            }
+
+            return n is "1.0.0" or "1.0" or "0.1.0" or "0.0.1";
         }
 
         private static int ParseVersionRank(string? version)
