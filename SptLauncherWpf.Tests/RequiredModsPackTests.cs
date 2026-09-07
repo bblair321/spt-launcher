@@ -447,7 +447,12 @@ public class RequiredModsPackTests
         Assert.True(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
             entry,
             "Response status code does not indicate success: 404 (Not Found)."));
+        Assert.True(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
+            new RequiredModEntry { Name = "WTT- Armory", DownloadUrl = "https://example.invalid/armory" },
+            "Response status code does not indicate success: 404 (Not Found)."));
         entry.ForgeModId = 0;
+        entry.Name = null;
+        entry.Slug = null;
         Assert.False(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
             entry,
             "Response status code does not indicate success: 404 (Not Found)."));

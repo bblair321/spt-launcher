@@ -128,6 +128,10 @@ namespace SptLauncherWpf.Services
                     fallbackPath: null,
                     stage: "Downloading / saving the mod archive"));
             }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return Fail(ex.Message);
+            }
 
             try
             {

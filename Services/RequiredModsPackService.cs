@@ -506,8 +506,13 @@ namespace SptLauncherWpf.Services
                    || l.Contains("could not resolve latest hosted");
         }
 
+        internal static bool CanResolveForge(RequiredModEntry entry) =>
+            entry.ForgeModId is > 0 ||
+            !string.IsNullOrWhiteSpace(entry.Slug) ||
+            !string.IsNullOrWhiteSpace(entry.Name);
+
         internal static bool ShouldFallbackHostedDownloadToForge(RequiredModEntry entry, string? hostedError) =>
-            entry.ForgeModId is > 0 && DownloadErrorLooksGone(hostedError);
+            CanResolveForge(entry) && DownloadErrorLooksGone(hostedError);
 
         private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallPackEntryAsync(
             RequiredModEntry entry,
@@ -517,7 +522,16 @@ namespace SptLauncherWpf.Services
         {
             if (!string.IsNullOrWhiteSpace(entry.DownloadUrl))
             {
-                var hosted = await InstallHostedPackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                (bool Success, bool SkippedServerOnly, string Error) hosted;
+                try
+                {
+                    hosted = await InstallHostedPackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    hosted = (false, false, ex.Message);
+                }
+
                 if (hosted.Success || hosted.SkippedServerOnly ||
                     !ShouldFallbackHostedDownloadToForge(entry, hosted.Error))
                 {
@@ -546,18 +560,16 @@ namespace SptLauncherWpf.Services
             IProgress<RequiredModsSyncProgress>? progress,
             CancellationToken cancellationToken)
         {
-            if (entry.ForgeModId is not int forgeId || forgeId <= 0)
-            {
-                return (false, false,
-                    "Missing forgeModId — cannot download from Forge. Install this client mod manually.");
-            }
-
             var mod = await ResolveModAsync(entry, cancellationToken);
             if (mod == null)
             {
                 return (false, false,
-                    $"Could not find Forge mod id {forgeId} on sp-mod.com.");
+                    entry.ForgeModId is int missingId && missingId > 0
+                        ? $"Could not find Forge mod id {missingId} on sp-mod.com."
+                        : $"Could not find \"{entry.DisplayName}\" on Forge. Install this client mod manually.");
             }
+
+            var forgeId = mod.Id;
 
             // Always load the full versions list for installs. GetModAsync's include=versions
             // can be incomplete when `fields` omits version columns, which made exact picks
