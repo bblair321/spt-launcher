@@ -54,8 +54,11 @@ namespace SptLauncherWpf.Services
         public static UpdateService Instance => _instance ??= new UpdateService();
 
         private const string UpdateCheckUrl = "https://api.github.com/repos/bblair321/spt-launcher/releases/latest";
-        
-        private HttpClient? _httpClient;
+        private const string LatestReleasePageUrl = "https://github.com/bblair321/spt-launcher/releases/latest";
+        private const string ExeAssetName = "SPTLauncher.exe";
+
+        private readonly HttpClient _httpClient;
+        private readonly HttpClient _pageClient;
         private System.Windows.Threading.DispatcherTimer? _checkTimer;
 
         public event EventHandler<UpdateInfo>? UpdateAvailable;
@@ -70,6 +73,12 @@ namespace SptLauncherWpf.Services
             _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SPT-Launcher-WPF");
             _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
             _httpClient.Timeout = TimeSpan.FromSeconds(15);
+
+            // Website latest-release redirect is not the 60/hour REST API quota.
+            _pageClient = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
+            _pageClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SPT-Launcher-WPF");
+            _pageClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html");
+            _pageClient.Timeout = TimeSpan.FromSeconds(15);
         }
 
         public Version GetCurrentVersion()
@@ -110,79 +119,32 @@ namespace SptLauncherWpf.Services
 
                 Console.WriteLine("Checking for updates from GitHub...");
 
-                using var response = await _httpClient!.GetAsync(UpdateCheckUrl);
-                var body = await response.Content.ReadAsStringAsync();
-                if (!response.IsSuccessStatusCode)
+                var (info, upToDate, error) = await TryCheckViaApiAsync();
+                if (error != null)
                 {
-                    LastCheckError =
-                        $"GitHub update check failed ({(int)response.StatusCode} {response.ReasonPhrase}).";
+                    Console.WriteLine($"{error} Falling back to GitHub releases page…");
+                    (info, upToDate, error) = await TryCheckViaReleasePageAsync();
+                }
+
+                if (error != null)
+                {
+                    LastCheckError = error;
                     Console.WriteLine(LastCheckError);
                     UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
                     return null;
                 }
 
-                var release = JsonSerializer.Deserialize<GitHubRelease>(body, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-                if (release == null || string.IsNullOrWhiteSpace(release.TagName))
-                {
-                    LastCheckError = "Failed to parse GitHub release information.";
-                    Console.WriteLine(LastCheckError);
-                    UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
-                    return null;
-                }
-
-                // Extract version from tag (remove 'v' prefix if present)
-                var remoteVersion = release.TagName.TrimStart('v', 'V');
-                var currentVersion = GetCurrentVersion();
-
-                Console.WriteLine($"Current version: {currentVersion}, Remote version: {remoteVersion}");
-
-                // Check if remote version is newer
-                if (!IsNewerVersion(remoteVersion, currentVersion))
+                if (upToDate || info == null)
                 {
                     Console.WriteLine("Already on latest version");
                     UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
                     return null;
                 }
 
-                // Find the installer/exe asset
-                var installerAsset = release.Assets.FirstOrDefault(a =>
-                    a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
-                    a.Name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
-                    a.Name.Contains("setup", StringComparison.OrdinalIgnoreCase));
-
-                if (installerAsset == null)
-                {
-                    // Fallback to first asset if no installer found
-                    installerAsset = release.Assets.FirstOrDefault();
-                }
-
-                if (installerAsset == null || string.IsNullOrWhiteSpace(installerAsset.BrowserDownloadUrl))
-                {
-                    LastCheckError = "No downloadable .exe asset found on the latest GitHub release.";
-                    Console.WriteLine(LastCheckError);
-                    UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
-                    return null;
-                }
-
-                var updateInfo = new UpdateInfo
-                {
-                    Version = remoteVersion,
-                    DownloadUrl = installerAsset.BrowserDownloadUrl,
-                    ReleaseNotes = release.Body,
-                    ReleaseDate = release.PublishedAt
-                };
-
-                Console.WriteLine($"Update available: {updateInfo.Version}");
-
-                // Notify listeners about the update
-                UpdateAvailable?.Invoke(this, updateInfo);
-
+                Console.WriteLine($"Update available: {info.Version}");
+                UpdateAvailable?.Invoke(this, info);
                 UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
-                return updateInfo;
+                return info;
             }
             catch (HttpRequestException ex)
             {
@@ -205,6 +167,135 @@ namespace SptLauncherWpf.Services
                 UpdateCheckCompleted?.Invoke(this, EventArgs.Empty);
                 return null;
             }
+        }
+
+        private async Task<(UpdateInfo? Info, bool UpToDate, string? Error)> TryCheckViaApiAsync()
+        {
+            try
+            {
+                using var response = await _httpClient.GetAsync(UpdateCheckUrl);
+                var body = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (null, false,
+                        $"GitHub update check failed ({(int)response.StatusCode} {response.ReasonPhrase}).");
+                }
+
+                var release = JsonSerializer.Deserialize<GitHubRelease>(body, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                if (release == null || string.IsNullOrWhiteSpace(release.TagName))
+                {
+                    return (null, false, "Failed to parse GitHub release information.");
+                }
+
+                var remoteVersion = release.TagName.TrimStart('v', 'V');
+                Console.WriteLine($"Current version: {GetCurrentVersion()}, Remote version: {remoteVersion}");
+                if (!IsNewerVersion(remoteVersion, GetCurrentVersion()))
+                {
+                    return (null, true, null);
+                }
+
+                var installerAsset = release.Assets.FirstOrDefault(a =>
+                    a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+                    a.Name.Contains("installer", StringComparison.OrdinalIgnoreCase) ||
+                    a.Name.Contains("setup", StringComparison.OrdinalIgnoreCase));
+
+                installerAsset ??= release.Assets.FirstOrDefault();
+                if (installerAsset == null || string.IsNullOrWhiteSpace(installerAsset.BrowserDownloadUrl))
+                {
+                    return (null, false, "No downloadable .exe asset found on the latest GitHub release.");
+                }
+
+                return (new UpdateInfo
+                {
+                    Version = remoteVersion,
+                    DownloadUrl = installerAsset.BrowserDownloadUrl,
+                    ReleaseNotes = release.Body,
+                    ReleaseDate = release.PublishedAt
+                }, false, null);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                return (null, false, ex.Message);
+            }
+        }
+
+        private async Task<(UpdateInfo? Info, bool UpToDate, string? Error)> TryCheckViaReleasePageAsync()
+        {
+            try
+            {
+                using var response = await _pageClient.SendAsync(
+                    new HttpRequestMessage(HttpMethod.Get, LatestReleasePageUrl),
+                    HttpCompletionOption.ResponseHeadersRead);
+
+                Uri? tagUri = null;
+                if (response.Headers.Location != null)
+                {
+                    tagUri = response.Headers.Location.IsAbsoluteUri
+                        ? response.Headers.Location
+                        : new Uri(new Uri(LatestReleasePageUrl), response.Headers.Location);
+                }
+
+                tagUri ??= response.RequestMessage?.RequestUri;
+                var tag = TryParseTagFromLatestReleaseUrl(tagUri);
+                if (string.IsNullOrWhiteSpace(tag) && response.IsSuccessStatusCode)
+                {
+                    return (null, false, "Could not read the latest release tag from GitHub.");
+                }
+
+                if (string.IsNullOrWhiteSpace(tag))
+                {
+                    return (null, false,
+                        $"GitHub releases page failed ({(int)response.StatusCode} {response.ReasonPhrase}).");
+                }
+
+                var remoteVersion = tag.TrimStart('v', 'V');
+                Console.WriteLine($"Current version: {GetCurrentVersion()}, Remote version: {remoteVersion} (releases page)");
+                if (!IsNewerVersion(remoteVersion, GetCurrentVersion()))
+                {
+                    return (null, true, null);
+                }
+
+                return (new UpdateInfo
+                {
+                    Version = remoteVersion,
+                    DownloadUrl = DirectExeDownloadUrl(tag),
+                    ReleaseNotes = "",
+                    ReleaseDate = DateTime.MinValue
+                }, false, null);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                return (null, false, ex.Message);
+            }
+        }
+
+        internal static string? TryParseTagFromLatestReleaseUrl(Uri? uri)
+        {
+            if (uri == null)
+            {
+                return null;
+            }
+
+            const string marker = "/releases/tag/";
+            var path = uri.AbsolutePath.TrimEnd('/');
+            var idx = path.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+            {
+                return null;
+            }
+
+            var tag = Uri.UnescapeDataString(path[(idx + marker.Length)..]);
+            return string.IsNullOrWhiteSpace(tag) ? null : tag;
+        }
+
+        internal static string DirectExeDownloadUrl(string tag)
+        {
+            var t = (tag ?? "").Trim().Trim('/');
+            return $"https://github.com/bblair321/spt-launcher/releases/download/{t}/{ExeAssetName}";
         }
 
         public bool IsNewerVersion(string remoteVersion, Version currentVersion)
@@ -466,7 +557,8 @@ namespace SptLauncherWpf.Services
         public void Dispose()
         {
             StopPeriodicCheck();
-            _httpClient?.Dispose();
+            _httpClient.Dispose();
+            _pageClient.Dispose();
         }
     }
 }

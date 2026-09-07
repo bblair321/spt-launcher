@@ -202,6 +202,27 @@ public class UpdateApplyHelperTests
     }
 
     [Theory]
+    [InlineData("https://github.com/bblair321/spt-launcher/releases/tag/v4.2.21", "v4.2.21")]
+    [InlineData("https://github.com/bblair321/spt-launcher/releases/tag/v4.2.21/", "v4.2.21")]
+    [InlineData("/bblair321/spt-launcher/releases/tag/v4.2.21", "v4.2.21")]
+    [InlineData("https://github.com/bblair321/spt-launcher/releases/latest", null)]
+    public void TryParseTagFromLatestReleaseUrl_reads_tag(string url, string? expected)
+    {
+        var uri = url.StartsWith('/')
+            ? new Uri(new Uri("https://github.com/bblair321/spt-launcher/releases/latest"), url)
+            : new Uri(url);
+        Assert.Equal(expected, UpdateService.TryParseTagFromLatestReleaseUrl(uri));
+    }
+
+    [Fact]
+    public void DirectExeDownloadUrl_uses_release_asset_path()
+    {
+        Assert.Equal(
+            "https://github.com/bblair321/spt-launcher/releases/download/v4.2.21/SPTLauncher.exe",
+            UpdateService.DirectExeDownloadUrl("v4.2.21"));
+    }
+
+    [Theory]
     [InlineData("4.1.3", "4.1.2", true)]
     [InlineData("4.1.3", "4.1.2.0", true)]
     [InlineData("4.1.3", "4.1.2.40743", true)]

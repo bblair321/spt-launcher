@@ -461,6 +461,29 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Parse_forge_mod_id_from_page_url_and_match_armory_name()
+    {
+        Assert.Equal(2246, RequiredModsPackService.TryParseForgeModIdFromPageUrl(
+            "https://sp-mod.com/mod/2246/wtt-armory"));
+        Assert.Equal(2246, RequiredModsPackService.TryParseForgeModIdFromPageUrl(
+            "https://forge.sp-tarkov.com/mod/2246/wtt-armory"));
+        Assert.Null(RequiredModsPackService.TryParseForgeModIdFromPageUrl(
+            "https://blairsworkshop.com/mods/wtt-armory"));
+
+        var entry = new RequiredModEntry { Name = "WTT - Armory" };
+        var hit = RequiredModsPackService.MatchSearchedMod(
+            entry,
+            [new ForgeModSummary { Id = 2246, Name = "WTT- Armory", Slug = "wtt-armory" }]);
+        Assert.NotNull(hit);
+        Assert.Equal(2246, hit!.Id);
+        Assert.Equal(new[] { 2246 }, RequiredModsPackService.ForgeIdsToTry(
+            new RequiredModEntry
+            {
+                PageUrl = "https://sp-mod.com/mod/2246/wtt-armory"
+            }));
+    }
+
+    [Fact]
     public void Hosted_guid_folder_matches_even_when_slug_differs()
     {
         var entry = new RequiredModEntry

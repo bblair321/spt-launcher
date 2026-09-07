@@ -954,53 +954,125 @@ namespace SptLauncherWpf.Services
             RequiredModEntry entry,
             CancellationToken cancellationToken)
         {
-            if (entry.ForgeModId is int id and > 0)
+            foreach (var id in ForgeIdsToTry(entry))
             {
                 try
                 {
                     return await ForgeApiService.Instance.GetModAsync(id, cancellationToken);
                 }
-                catch (Exception ex)
+                catch
                 {
-                    throw new InvalidOperationException(
-                        $"Forge lookup failed for mod id {id}: {ex.Message}", ex);
+                    // try search next
                 }
             }
 
-            if (string.IsNullOrWhiteSpace(entry.Slug) && string.IsNullOrWhiteSpace(entry.Name))
+            var queries = new List<string>();
+            void Offer(string? value)
             {
-                return null;
+                var q = (value ?? "").Trim();
+                if (q.Length == 0)
+                {
+                    return;
+                }
+
+                if (!queries.Exists(existing => string.Equals(existing, q, StringComparison.OrdinalIgnoreCase)))
+                {
+                    queries.Add(q);
+                }
             }
 
-            var query = !string.IsNullOrWhiteSpace(entry.Slug) ? entry.Slug! : entry.Name!;
-            try
-            {
-                var page = await ForgeApiService.Instance.SearchModsAsync(
-                    query: query,
-                    sptVersion: null,
-                    page: 1,
-                    perPage: 25,
-                    cancellationToken: cancellationToken);
+            Offer(entry.Slug);
+            Offer(entry.Name);
 
-                var slug = (entry.Slug ?? "").Trim();
-                if (!string.IsNullOrWhiteSpace(slug))
+            foreach (var query in queries)
+            {
+                try
                 {
-                    var bySlug = page.Mods.FirstOrDefault(m =>
-                        string.Equals(m.Slug, slug, StringComparison.OrdinalIgnoreCase));
-                    if (bySlug != null)
+                    var page = await ForgeApiService.Instance.SearchModsAsync(
+                        query: query,
+                        sptVersion: null,
+                        page: 1,
+                        perPage: 25,
+                        cancellationToken: cancellationToken);
+
+                    var match = MatchSearchedMod(entry, page.Mods);
+                    if (match != null)
                     {
-                        return bySlug;
+                        return match;
                     }
                 }
-
-                var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
-                return page.Mods.FirstOrDefault(m =>
-                    InstalledModsService.NormalizeModKey(m.Name) == nameKey);
+                catch
+                {
+                    // try the next query
+                }
             }
-            catch
+
+            return null;
+        }
+
+        internal static IEnumerable<int> ForgeIdsToTry(RequiredModEntry entry)
+        {
+            if (entry.ForgeModId is int packId and > 0)
+            {
+                yield return packId;
+            }
+
+            var fromPage = TryParseForgeModIdFromPageUrl(entry.PageUrl);
+            if (fromPage is int pageId && pageId > 0 && pageId != entry.ForgeModId)
+            {
+                yield return pageId;
+            }
+        }
+
+        internal static int? TryParseForgeModIdFromPageUrl(string? pageUrl)
+        {
+            if (string.IsNullOrWhiteSpace(pageUrl) ||
+                !Uri.TryCreate(pageUrl.Trim(), UriKind.Absolute, out var uri))
             {
                 return null;
             }
+
+            var parts = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i < parts.Length - 1; i++)
+            {
+                if (parts[i].Equals("mod", StringComparison.OrdinalIgnoreCase) &&
+                    int.TryParse(parts[i + 1], out var id) &&
+                    id > 0)
+                {
+                    return id;
+                }
+            }
+
+            return null;
+        }
+
+        internal static ForgeModSummary? MatchSearchedMod(
+            RequiredModEntry entry,
+            IEnumerable<ForgeModSummary> mods)
+        {
+            var slug = (entry.Slug ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(slug))
+            {
+                var bySlug = mods.FirstOrDefault(m =>
+                    string.Equals(m.Slug, slug, StringComparison.OrdinalIgnoreCase));
+                if (bySlug != null)
+                {
+                    return bySlug;
+                }
+            }
+
+            var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
+            if (!string.IsNullOrWhiteSpace(nameKey))
+            {
+                var byName = mods.FirstOrDefault(m =>
+                    InstalledModsService.NormalizeModKey(m.Name) == nameKey);
+                if (byName != null)
+                {
+                    return byName;
+                }
+            }
+
+            return null;
         }
 
         private static ForgeModVersion? PickVersion(IReadOnlyList<ForgeModVersion> versions, string? required)
