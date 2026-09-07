@@ -373,50 +373,96 @@ namespace SptLauncherWpf.Services
                 return false;
             }
 
-            var slug = NormalizeModKey(marker.Slug);
-            if (!string.IsNullOrEmpty(slug) && (leaf.Contains(slug) || slug.Contains(leaf)))
+            // MoreBotsPlugin vs slug morebotsapi, UNTARGHPlugin vs guid com.untargh.* —
+            // BepInEx folders often add "Plugin" and never contain the Forge slug.
+            if (IdentityOverlapsPath(leaf, marker.Slug, marker.Name, marker.Guid))
             {
                 return true;
             }
 
-            var name = NormalizeModKey(marker.Name);
-            if (!string.IsNullOrEmpty(name) && (leaf.Contains(name) || name.Contains(leaf)))
+            foreach (var part in GuidIdentityParts(marker.Guid))
             {
-                return true;
-            }
-
-            var guidLeaf = IdentifyingGuidLeaf(marker.Guid);
-            if (!string.IsNullOrEmpty(guidLeaf) &&
-                guidLeaf.Length >= 3 &&
-                (leaf.Contains(guidLeaf) || guidLeaf.Contains(leaf)))
-            {
-                return true;
-            }
-
-            return string.IsNullOrEmpty(slug) &&
-                   string.IsNullOrEmpty(name) &&
-                   string.IsNullOrEmpty(marker.Guid);
-        }
-
-        private static string IdentifyingGuidLeaf(string? guid)
-        {
-            if (string.IsNullOrWhiteSpace(guid))
-            {
-                return "";
-            }
-
-            string[] generic = ["eft", "spt", "mod", "mods", "plugin", "plugins", "client", "server", "core", "main", "fika"];
-            var parts = guid.Split('.', StringSplitOptions.RemoveEmptyEntries);
-            for (var i = parts.Length - 1; i >= 0; i--)
-            {
-                var l = NormalizeModKey(parts[i]);
-                if (l.Length >= 3 && !generic.Contains(l))
+                if (IdentityOverlapsPath(leaf, part))
                 {
-                    return l;
+                    return true;
                 }
             }
 
-            return NormalizeModKey(parts.LastOrDefault());
+            return string.IsNullOrEmpty(NormalizeModKey(marker.Slug)) &&
+                   string.IsNullOrEmpty(NormalizeModKey(marker.Name)) &&
+                   string.IsNullOrEmpty(marker.Guid);
+        }
+
+        /// <summary>
+        /// Folder names like MoreBotsPlugin should still match slug/guid tokens
+        /// (morebotsapi, untargh) after stripping a trailing "plugin(s)" suffix.
+        /// </summary>
+        internal static bool IdentityOverlapsPath(string pathLeaf, params string?[] identities)
+        {
+            var cores = FolderIdentityCores(pathLeaf).ToArray();
+            foreach (var raw in identities)
+            {
+                var token = NormalizeModKey(raw);
+                if (token.Length < 4)
+                {
+                    continue;
+                }
+
+                foreach (var core in cores)
+                {
+                    if (core.Length < 4)
+                    {
+                        continue;
+                    }
+
+                    if (core == token || core.Contains(token) || token.Contains(core))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        internal static IEnumerable<string> FolderIdentityCores(string normalizedLeaf)
+        {
+            if (string.IsNullOrEmpty(normalizedLeaf))
+            {
+                yield break;
+            }
+
+            yield return normalizedLeaf;
+            foreach (var suffix in new[] { "plugins", "plugin" })
+            {
+                if (normalizedLeaf.Length > suffix.Length + 3 &&
+                    normalizedLeaf.EndsWith(suffix, StringComparison.Ordinal))
+                {
+                    yield return normalizedLeaf[..^suffix.Length];
+                }
+            }
+        }
+
+        private static IEnumerable<string> GuidIdentityParts(string? guid)
+        {
+            if (string.IsNullOrWhiteSpace(guid))
+            {
+                yield break;
+            }
+
+            string[] generic =
+            [
+                "com", "eft", "spt", "mod", "mods", "plugin", "plugins", "client", "server",
+                "core", "main", "fika"
+            ];
+            foreach (var part in guid.Split('.', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var l = NormalizeModKey(part);
+                if (l.Length >= 4 && !generic.Contains(l))
+                {
+                    yield return l;
+                }
+            }
         }
 
         private static string? TryReadFolderPluginVersion(string dir)

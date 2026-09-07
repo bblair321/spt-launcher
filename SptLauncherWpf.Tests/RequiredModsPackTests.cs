@@ -390,6 +390,72 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Plugin_folder_suffix_still_matches_pack_slug()
+    {
+        var moreBots = new RequiredModEntry
+        {
+            Name = "MoreBotsAPI",
+            Slug = "morebotsapi",
+            ForgeModId = 2426,
+            Guid = "com.morebotsapi.tacticaltoaster",
+            Version = "2.1.1"
+        };
+        var untar = new RequiredModEntry
+        {
+            Name = "UNTAR Go Home!",
+            Slug = "untargohome",
+            ForgeModId = 2342,
+            Guid = "com.untargh.tacticaltoaster",
+            Version = "3.2.1"
+        };
+
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\MoreBotsPlugin", moreBots));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\UNTARGHPlugin", untar));
+        Assert.True(InstalledModsService.MarkerBelongsToInstall(
+            new ForgeModMarker
+            {
+                Name = moreBots.Name,
+                Slug = moreBots.Slug,
+                Guid = moreBots.Guid,
+                Version = moreBots.Version
+            },
+            @"D:\SPT\BepInEx\plugins\MoreBotsPlugin"));
+        Assert.True(InstalledModsService.MarkerBelongsToInstall(
+            new ForgeModMarker
+            {
+                Name = untar.Name,
+                Slug = untar.Slug,
+                Guid = untar.Guid,
+                Version = untar.Version
+            },
+            @"D:\SPT\BepInEx\plugins\UNTARGHPlugin"));
+    }
+
+    [Fact]
+    public void Hosted_404_falls_back_to_forge_when_mod_id_is_set()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "ABPS - Acid's Bot Placement System",
+            ForgeModId = 2100,
+            DownloadUrl = "https://blairsworkshop.com/api/download/abps"
+        };
+        Assert.True(RequiredModsPackService.DownloadErrorLooksGone(
+            "Hosted download failed for ABPS: Response status code does not indicate success: 404 (Not Found)."));
+        Assert.True(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
+            entry,
+            "Response status code does not indicate success: 404 (Not Found)."));
+        entry.ForgeModId = 0;
+        Assert.False(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
+            entry,
+            "Response status code does not indicate success: 404 (Not Found)."));
+        Assert.False(RequiredModsPackService.DownloadErrorLooksGone(
+            "Version 2.1.1 not found on sp-mod.com for mod id 2100"));
+    }
+
+    [Fact]
     public void Hosted_guid_folder_matches_even_when_slug_differs()
     {
         var entry = new RequiredModEntry

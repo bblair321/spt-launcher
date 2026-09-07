@@ -169,6 +169,34 @@ public class InstalledModsServiceTests
     }
 
     [Fact]
+    public void Scan_keeps_sidecar_when_plugin_folder_does_not_contain_slug()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-mods-sidecar-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(root, "BepInEx", "plugins", "MoreBotsPlugin");
+        Directory.CreateDirectory(dir);
+        ForgeModMarker.Write(dir, isDirectory: true, new ForgeModMarker
+        {
+            ForgeModId = 2426,
+            Name = "MoreBotsAPI",
+            Slug = "morebotsapi",
+            Guid = "com.morebotsapi.tacticaltoaster",
+            Version = "2.1.1"
+        });
+
+        try
+        {
+            var mod = Assert.Single(
+                InstalledModsService.ScanInstalledMods(root).Where(m => m.Kind == InstalledModKind.Client));
+            Assert.Equal("2.1.1", mod.VersionHint);
+            Assert.Equal(2426, mod.ForgeModId);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Uninstall_removes_all_related_loose_plugins()
     {
         var root = Path.Combine(Path.GetTempPath(), "spt-mods-rm-" + Guid.NewGuid().ToString("N"));

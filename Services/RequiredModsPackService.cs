@@ -408,7 +408,7 @@ namespace SptLauncherWpf.Services
                                     i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
                                 errors.Add(
                                     $"{entry.DisplayName}: {detail?.Message ?? retry.Error ?? "version still mismatch"} after reinstall. " +
-                                    "Delete BepInEx\\plugins\\*Loose* (and *.forge-mod.json), then sync — or install from Forge.");
+                                    "Remove leftover copies of this mod under BepInEx\\plugins (extra folders and .forge-mod.json), then sync — or install from Forge.");
                             }
                             else
                             {
@@ -484,6 +484,31 @@ namespace SptLauncherWpf.Services
             };
         }
 
+        internal static bool DownloadErrorLooksGone(string? error)
+        {
+            if (string.IsNullOrWhiteSpace(error))
+            {
+                return false;
+            }
+
+            var l = error.ToLowerInvariant();
+            return l.Contains("404 (not found)")
+                   || l.Contains("410 (gone)")
+                   || l.Contains("http 404")
+                   || l.Contains("http 410")
+                   || l.Contains("status: 404")
+                   || l.Contains("status: 410")
+                   || l.Contains("status code does not indicate success: 404")
+                   || l.Contains("status code does not indicate success: 410")
+                   || l.Contains("404 not found")
+                   || l.Contains("410 gone")
+                   || l.Contains("no published workshop mod")
+                   || l.Contains("could not resolve latest hosted");
+        }
+
+        internal static bool ShouldFallbackHostedDownloadToForge(RequiredModEntry entry, string? hostedError) =>
+            entry.ForgeModId is > 0 && DownloadErrorLooksGone(hostedError);
+
         private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallPackEntryAsync(
             RequiredModEntry entry,
             string sptRoot,
@@ -492,9 +517,35 @@ namespace SptLauncherWpf.Services
         {
             if (!string.IsNullOrWhiteSpace(entry.DownloadUrl))
             {
-                return await InstallHostedPackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                var hosted = await InstallHostedPackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                if (hosted.Success || hosted.SkippedServerOnly ||
+                    !ShouldFallbackHostedDownloadToForge(entry, hosted.Error))
+                {
+                    return hosted;
+                }
+
+                progress?.Report(new RequiredModsSyncProgress
+                {
+                    Message = $"{entry.DisplayName}: hosted download is gone — trying Forge…"
+                });
+                var forge = await InstallForgePackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                if (forge.Success || forge.SkippedServerOnly)
+                {
+                    return forge;
+                }
+
+                return (false, false, $"{hosted.Error} Forge fallback: {forge.Error}");
             }
 
+            return await InstallForgePackEntryAsync(entry, sptRoot, progress, cancellationToken);
+        }
+
+        private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallForgePackEntryAsync(
+            RequiredModEntry entry,
+            string sptRoot,
+            IProgress<RequiredModsSyncProgress>? progress,
+            CancellationToken cancellationToken)
+        {
             if (entry.ForgeModId is not int forgeId || forgeId <= 0)
             {
                 return (false, false,
@@ -1169,23 +1220,7 @@ namespace SptLauncherWpf.Services
                 return false;
             }
 
-            var slugCompact = InstalledModsService.NormalizeModKey(entry.Slug);
-            var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
-            var guidKey = InstalledModsService.NormalizeModKey(entry.Guid);
-            if (!string.IsNullOrWhiteSpace(slugCompact) &&
-                (leaf == slugCompact || leaf.Contains(slugCompact) || slugCompact.Contains(leaf)))
-            {
-                return true;
-            }
-
-            if (!string.IsNullOrWhiteSpace(nameKey) &&
-                (leaf == nameKey || leaf.Contains(nameKey) || nameKey.Contains(leaf)))
-            {
-                return true;
-            }
-
-            if (!string.IsNullOrWhiteSpace(guidKey) &&
-                (leaf == guidKey || leaf.Contains(guidKey) || guidKey.Contains(leaf)))
+            if (InstalledModsService.IdentityOverlapsPath(leaf, entry.Slug, entry.Name, entry.Guid))
             {
                 return true;
             }
