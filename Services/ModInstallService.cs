@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Net.Security;
+using System.Security.Authentication;
 using System.IO;
 using System.Threading;
 using SharpCompress.Archives;
@@ -68,11 +70,75 @@ namespace SptLauncherWpf.Services
 
         private ModInstallService()
         {
-            _http = new HttpClient
+            // Pack JSON fetch already trusts SPT's self-signed cert. Zip downloads
+            // from https://host:6969/mod-pack/mirror/… must do the same or Sync
+            // fails with "SSL connection could not be established".
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = static (req, _, _, errors) =>
+                {
+                    if (errors == SslPolicyErrors.None)
+                    {
+                        return true;
+                    }
+
+                    return req?.RequestUri?.Port == RequiredModsPackService.DefaultSptHttpsPort;
+                }
+            };
+            _http = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromMinutes(10)
             };
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("SPTLauncher/3.0 (+https://github.com/bblair321/spt-launcher)");
+        }
+
+        private sealed class JsonDownloadHop
+        {
+            public string? Url { get; set; }
+        }
+
+        /// <summary>
+        /// Workshop APIs often return <c>{"url":"...zip"}</c>. Packs that mark those as
+        /// <c>direct</c> save the JSON, then fail with "isn't a supported archive".
+        /// </summary>
+        private async Task<string?> TryFollowJsonDownloadHopAsync(
+            string downloadedPath,
+            IProgress<ModInstallProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                await using var fs = new FileStream(
+                    downloadedPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite);
+                var buf = new byte[Math.Min(8192, fs.Length > 0 ? (int)Math.Min(fs.Length, 8192) : 8192)];
+                var n = await fs.ReadAsync(buf.AsMemory(0, buf.Length), cancellationToken);
+                var text = System.Text.Encoding.UTF8.GetString(buf, 0, n).TrimStart();
+                if (text.Length == 0 || text[0] != '{')
+                {
+                    return null;
+                }
+
+                var hop = System.Text.Json.JsonSerializer.Deserialize<JsonDownloadHop>(
+                    text,
+                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var next = hop?.Url?.Trim() ?? "";
+                if (!Uri.TryCreate(next, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+                {
+                    return null;
+                }
+
+                progress?.Report(new ModInstallProgress { Stage = "Hosted JSON hop — downloading zip…" });
+                var hopped = new ForgeModVersion { Id = 0, Version = "0", Link = next };
+                return await DownloadArchiveAsync(hopped, progress, cancellationToken);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public async Task<ModInstallReport> InstallAsync(
@@ -130,12 +196,37 @@ namespace SptLauncherWpf.Services
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                return Fail(ex.Message);
+                var msg = ex.Message;
+                if (msg.Contains("SSL", StringComparison.OrdinalIgnoreCase) ||
+                    msg.Contains("certificate", StringComparison.OrdinalIgnoreCase) ||
+                    ex is AuthenticationException)
+                {
+                    return Fail(
+                        "SSL failure talking to the game HTTPS port (self-signed SPT cert). " +
+                        "Sync again after the host pack points at http://SERVER:17865/mod-pack/mirror/… " +
+                        $"Details: {msg}");
+                }
+
+                return Fail(msg);
             }
 
             try
             {
                 var format = DetectArchiveFormat(downloadPath);
+                if (format == ArchiveFormat.Unknown)
+                {
+                    var hopped = await TryFollowJsonDownloadHopAsync(
+                        downloadPath,
+                        progress,
+                        cancellationToken);
+                    if (hopped != null)
+                    {
+                        TryDelete(downloadPath);
+                        downloadPath = hopped;
+                        format = DetectArchiveFormat(downloadPath);
+                    }
+                }
+
                 if (format == ArchiveFormat.Unknown)
                 {
                     // Tiny Forge uploads are sometimes a bare plugin DLL (externally hosted).

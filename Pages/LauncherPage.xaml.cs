@@ -2376,40 +2376,13 @@ namespace SptLauncherWpf.Pages
 
         private static bool IsInstallerProcessRunning()
         {
-            string[] installerHints =
-            [
-                "SPTInstaller",
-                "SPT.Installer",
-                "SPT_Installer",
-                "FikaInstaller",
-                "Fika.Installer",
-                "Fika_Installer",
-                "Fika-Installer"
-            ];
-
             try
             {
                 foreach (var process in Process.GetProcesses())
                 {
                     try
                     {
-                        var name = process.ProcessName;
-                        if (string.IsNullOrWhiteSpace(name))
-                        {
-                            continue;
-                        }
-
-                        foreach (var hint in installerHints)
-                        {
-                            if (name.Contains(hint, StringComparison.OrdinalIgnoreCase))
-                            {
-                                return true;
-                            }
-                        }
-
-                        if (name.Contains("Installer", StringComparison.OrdinalIgnoreCase) &&
-                            !name.Contains("SPTLauncher", StringComparison.OrdinalIgnoreCase) &&
-                            !name.Contains("SPT.Launcher", StringComparison.OrdinalIgnoreCase))
+                        if (SptUpdatePreflight.LooksLikeSptOrFikaInstaller(process.ProcessName))
                         {
                             return true;
                         }
@@ -4142,6 +4115,59 @@ namespace SptLauncherWpf.Pages
         private void RefreshEftStatusButton_Click(object sender, RoutedEventArgs e)
         {
             RefreshAllReadiness(forceSptRescan: true);
+            _ = RecheckStaleSptUpdateVerifyAsync();
+        }
+
+        /// <summary>
+        /// Recheck must clear a leftover "SPT update still pending" banner when this
+        /// folder is already on the latest hotfix. The verify panel stays visible
+        /// otherwise and Readiness keeps copying its title.
+        /// </summary>
+        private async Task RecheckStaleSptUpdateVerifyAsync()
+        {
+            var panelVisible = InvokeOnUi(() => UpdateVerifyPanel?.Visibility == Visibility.Visible);
+            if (!panelVisible)
+            {
+                return;
+            }
+
+            var launcherPath = InvokeOnUi(() =>
+                HasValidLauncherPath(out var path) ? path : string.Empty);
+            if (string.IsNullOrWhiteSpace(launcherPath))
+            {
+                return;
+            }
+
+            var detected = await Task.Run(
+                () => SptDetectionService.Instance.GetSptVersion(launcherPath));
+            var latest = _currentUpdateInfo?.LatestVersion;
+            var onLatest = !string.IsNullOrWhiteSpace(detected) &&
+                           (string.IsNullOrWhiteSpace(latest) ||
+                            VersionsMatch(detected, latest) ||
+                            !SptDetectionService.Instance.IsNewerVersion(latest!, detected));
+
+            if (onLatest)
+            {
+                InvokeOnUi(() =>
+                {
+                    CancelUpdateVerify();
+                    if (UpdateVerifyPanel != null)
+                    {
+                        UpdateVerifyPanel.Visibility = Visibility.Collapsed;
+                    }
+
+                    RefreshReadinessSummary();
+                    RefreshPlayHero();
+                });
+                return;
+            }
+
+            ShowUpdateVerifyResult(
+                passed: false,
+                title: "SPT version mismatch",
+                detail: string.IsNullOrWhiteSpace(detected)
+                    ? "SPT was not detected in this folder. Confirm the launcher path, then Recheck."
+                    : $"Detected {detected}, expected {latest}. Overlay or update this SPT folder, then Recheck.");
         }
 
         /// <summary>

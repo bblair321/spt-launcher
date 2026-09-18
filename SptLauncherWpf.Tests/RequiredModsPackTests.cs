@@ -92,6 +92,12 @@ public class RequiredModsPackTests
         Assert.Equal(
             "https://1.2.3.4:6969/mod-pack",
             RequiredModsPackService.TryResolvePackUrl("https://1.2.3.4:6969/mod-pack"));
+        Assert.Equal(
+            "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass",
+            RequiredModsPackService.AgentMirrorFallbackUrl(
+                "https://192.168.0.20:6969/mod-pack/mirror/tarkov-battlepass"));
+        Assert.Null(RequiredModsPackService.AgentMirrorFallbackUrl(
+            "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass"));
     }
 
     [Fact]

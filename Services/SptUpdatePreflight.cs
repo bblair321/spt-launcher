@@ -188,6 +188,46 @@ namespace SptLauncherWpf.Services
             return result;
         }
 
+        /// <summary>
+        /// True for the SPT/Fika installers this launcher launches. Do not match
+        /// generic names like <c>wslinstaller</c> — that left Recheck stuck on
+        /// "SPT update still pending" after a successful 4.1.x overlay.
+        /// </summary>
+        public static bool LooksLikeSptOrFikaInstaller(string? processName)
+        {
+            if (string.IsNullOrWhiteSpace(processName))
+            {
+                return false;
+            }
+
+            if (processName.Contains("SPTLauncher", StringComparison.OrdinalIgnoreCase) ||
+                processName.Contains("SPT.Launcher", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string[] hints =
+            [
+                "SPTInstaller",
+                "SPT.Installer",
+                "SPT_Installer",
+                "FikaInstaller",
+                "Fika.Installer",
+                "Fika_Installer",
+                "Fika-Installer"
+            ];
+
+            foreach (var hint in hints)
+            {
+                if (processName.Contains(hint, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static string[] GetRunningSptProcessNames()
         {
             var running = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

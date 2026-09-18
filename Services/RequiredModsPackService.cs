@@ -117,6 +117,26 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
+        /// SPT HTTPS (6969) may 404 pack mirrors while the LAN agent still has the zip.
+        /// </summary>
+        internal static string? AgentMirrorFallbackUrl(string zipUrl)
+        {
+            if (!Uri.TryCreate(zipUrl.Trim(), UriKind.Absolute, out var uri) ||
+                !uri.AbsolutePath.StartsWith("/mod-pack/mirror/", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (uri.Port == LanAgentHttpPort)
+            {
+                return null;
+            }
+
+            return new UriBuilder(Uri.UriSchemeHttp, uri.Host, LanAgentHttpPort, uri.AbsolutePath)
+                .Uri.ToString();
+        }
+
+        /// <summary>
         /// Ensures an absolute pack URL has a path (defaults to /mod-pack).
         /// </summary>
         public static string? NormalizePackUrl(string? url)
@@ -521,6 +541,39 @@ namespace SptLauncherWpf.Services
         internal static bool ShouldFallbackHostedDownloadToForge(RequiredModEntry entry, string? hostedError) =>
             CanResolveForge(entry) && DownloadErrorLooksGone(hostedError);
 
+        internal static bool KeepExistingHostedInstall(string sptRoot, RequiredModEntry entry)
+        {
+            try
+            {
+                var scanned = InstalledModsService.ScanInstalledMods(sptRoot);
+                var local = FindLocalMatch(
+                    entry,
+                    scanned.Where(m => m.Kind == InstalledModKind.Client).ToList());
+                if (local == null)
+                {
+                    return false;
+                }
+
+                var required = (entry.Version ?? "").Trim();
+                var have = (local.VersionHint ?? "").Trim();
+                if (LooksLikePlaceholderVersion(required) || string.IsNullOrWhiteSpace(required))
+                {
+                    return true;
+                }
+
+                if (string.IsNullOrWhiteSpace(have) || LooksLikePlaceholderVersion(have))
+                {
+                    return false;
+                }
+
+                return VersionsEqual(required, have) || CompareVersionRank(have, required) >= 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallPackEntryAsync(
             RequiredModEntry entry,
             string sptRoot,
@@ -735,6 +788,33 @@ namespace SptLauncherWpf.Services
 
             if (!report.Success)
             {
+                var agentMirror = AgentMirrorFallbackUrl(zipUrl);
+                if (!string.IsNullOrWhiteSpace(agentMirror))
+                {
+                    progress?.Report(new RequiredModsSyncProgress
+                    {
+                        Message = $"{entry.DisplayName}: SPT HTTPS mirror missing — trying agent…"
+                    });
+                    version.Link = agentMirror;
+                    report = await ModInstallService.Instance.InstallAsync(
+                        mod,
+                        version,
+                        sptRoot,
+                        preferredFileTree: entry.ClientFiles,
+                        installProgress,
+                        cancellationToken,
+                        clientPathsOnly: true);
+                }
+            }
+
+            if (!report.Success)
+            {
+                if (DownloadErrorLooksGone(report.Message) &&
+                    KeepExistingHostedInstall(sptRoot, entry))
+                {
+                    return (true, false, "");
+                }
+
                 return (false, false, report.Message);
             }
 
@@ -752,7 +832,8 @@ namespace SptLauncherWpf.Services
                 throw new InvalidOperationException("downloadUrl is empty.");
             }
 
-            // Pack-relative mirrors: "/mod-pack/mirror/lootnet" → same host as pack URL.
+            // Pack-relative mirrors: use the LAN agent (plain HTTP). SPT HTTPS 6969
+            // is a self-signed cert and older listeners 404 /mod-pack/mirror/….
             if (url.StartsWith('/'))
             {
                 var packUrl = GetConfiguredPackUrl();
@@ -763,8 +844,16 @@ namespace SptLauncherWpf.Services
                         "Relative downloadUrl requires a configured pack URL (server host).");
                 }
 
-                var builder = new UriBuilder(packUri.Scheme, packUri.Host, packUri.Port, url);
-                url = builder.Uri.ToString();
+                if (url.StartsWith("/mod-pack/mirror/", StringComparison.OrdinalIgnoreCase))
+                {
+                    url = new UriBuilder(Uri.UriSchemeHttp, packUri.Host, LanAgentHttpPort, url)
+                        .Uri.ToString();
+                }
+                else
+                {
+                    var builder = new UriBuilder(packUri.Scheme, packUri.Host, packUri.Port, url);
+                    url = builder.Uri.ToString();
+                }
             }
 
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
@@ -774,15 +863,17 @@ namespace SptLauncherWpf.Services
             }
 
             var kind = (entry.DownloadKind ?? "").Trim();
+            var looksLikeWorkshopApi = url.Contains("/api/download/", StringComparison.OrdinalIgnoreCase);
             if (string.IsNullOrWhiteSpace(kind))
             {
-                kind = url.Contains("/api/download/", StringComparison.OrdinalIgnoreCase)
-                    ? "blairsWorkshopJson"
-                    : "direct";
+                kind = looksLikeWorkshopApi ? "blairsWorkshopJson" : "direct";
             }
 
-            if (kind.Equals("direct", StringComparison.OrdinalIgnoreCase) ||
-                kind.Equals("zip", StringComparison.OrdinalIgnoreCase))
+            // Packs have stamped `direct` on Blair's JSON APIs. Treat those as a hop
+            // or clients save `{"url":"..."}` and report "isn't a supported archive".
+            if ((kind.Equals("direct", StringComparison.OrdinalIgnoreCase) ||
+                kind.Equals("zip", StringComparison.OrdinalIgnoreCase)) &&
+                !looksLikeWorkshopApi)
             {
                 return url;
             }

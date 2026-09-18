@@ -132,29 +132,26 @@ namespace SptLauncherWpf.Services
                     sptPath = launcherDir; // Fallback to launcher directory if detection fails
                 }
 
-                // Try SPT.Server.exe first (more likely to have the actual version)
-                // Check both the detected root path and the launcher directory
-                var serverExePath = Path.Combine(sptPath, "SPT.Server.exe");
-                if (File.Exists(serverExePath))
+                // SPT 4.x ships binaries under SPT_Runtime, not the install root.
+                foreach (var candidate in new[]
+                         {
+                             Path.Combine(sptPath, "SPT_Runtime", "SPTarkov.Server.Core.dll"),
+                             Path.Combine(sptPath, "SPT_Runtime", "SPT.Server.exe"),
+                             Path.Combine(sptPath, "SPT_Runtime", "SPT.Launcher.exe"),
+                             Path.Combine(sptPath, "SPT.Server.exe"),
+                             Path.Combine(launcherDir, "SPTarkov.Server.Core.dll"),
+                             Path.Combine(launcherDir, "SPT.Server.exe")
+                         })
                 {
-                    var versionFromServer = ReadVersionFromExe(serverExePath);
-                    if (!string.IsNullOrEmpty(versionFromServer))
+                    if (!File.Exists(candidate))
                     {
-                        return versionFromServer;
+                        continue;
                     }
-                }
 
-                // Also try in the launcher directory (in case it's in a nested structure)
-                if (!string.Equals(sptPath, launcherDir, StringComparison.OrdinalIgnoreCase))
-                {
-                    serverExePath = Path.Combine(launcherDir, "SPT.Server.exe");
-                    if (File.Exists(serverExePath))
+                    var versionFromBinary = ReadVersionFromExe(candidate);
+                    if (!string.IsNullOrEmpty(versionFromBinary))
                     {
-                        var versionFromServer = ReadVersionFromExe(serverExePath);
-                        if (!string.IsNullOrEmpty(versionFromServer))
-                        {
-                            return versionFromServer;
-                        }
+                        return versionFromBinary;
                     }
                 }
 

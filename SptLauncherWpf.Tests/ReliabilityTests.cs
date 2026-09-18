@@ -228,6 +228,19 @@ public class UpdateApplyHelperTests
     }
 
     [Theory]
+    [InlineData("SPTInstaller", true)]
+    [InlineData("SPT.Installer", true)]
+    [InlineData("Fika-Installer", true)]
+    [InlineData("wslinstaller", false)]
+    [InlineData("msiexec", false)]
+    [InlineData("SPTLauncher", false)]
+    [InlineData("SPT.Launcher", false)]
+    public void LooksLikeSptOrFikaInstaller_ignores_unrelated_installer_processes(string name, bool expected)
+    {
+        Assert.Equal(expected, SptUpdatePreflight.LooksLikeSptOrFikaInstaller(name));
+    }
+
+    [Theory]
     [InlineData("4.1.3", "4.1.2", true)]
     [InlineData("4.1.3", "4.1.2.0", true)]
     [InlineData("4.1.3", "4.1.2.40743", true)]
