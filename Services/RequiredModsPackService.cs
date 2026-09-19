@@ -254,7 +254,54 @@ namespace SptLauncherWpf.Services
             }
 
             pack.Mods ??= new List<RequiredModEntry>();
+            foreach (var entry in pack.Mods)
+            {
+                TryFillKnownWorkshopDownload(entry);
+            }
+
             return pack;
+        }
+
+        /// <summary>
+        /// Workshop-only mods (BattlePass, PatchCRC32) are not on Forge. Older host packs
+        /// omit downloadUrl, which made every Check show "cannot auto-download" even when
+        /// the launcher already knows the Workshop API.
+        /// </summary>
+        internal static bool TryFillKnownWorkshopDownload(RequiredModEntry entry)
+        {
+            if (entry.CanAutoInstall)
+            {
+                return false;
+            }
+
+            var guid = (entry.Guid ?? "").Trim();
+            var slug = (entry.Slug ?? "").Trim();
+            var name = (entry.Name ?? "").Trim();
+            var key = $"{guid} {slug} {name}".ToLowerInvariant();
+
+            if (guid.Equals("com.bblai.battlepass", StringComparison.OrdinalIgnoreCase) ||
+                slug.Equals("tarkov-battlepass", StringComparison.OrdinalIgnoreCase) ||
+                key.Contains("battlepass"))
+            {
+                entry.Guid = string.IsNullOrWhiteSpace(entry.Guid) ? "com.bblai.battlepass" : entry.Guid;
+                entry.DownloadUrl = "https://blairsworkshop.com/api/download/tarkov-battlepass";
+                entry.DownloadKind = "blairsWorkshopJson";
+                entry.PageUrl ??= "https://blairsworkshop.com/mods/tarkov-battlepass";
+                return true;
+            }
+
+            if (guid.Equals("com.s8.sptpatchcrc32", StringComparison.OrdinalIgnoreCase) ||
+                key.Contains("patchcrc32") ||
+                key.Contains("crc32-patch"))
+            {
+                entry.Guid = string.IsNullOrWhiteSpace(entry.Guid) ? "com.s8.sptpatchcrc32" : entry.Guid;
+                entry.DownloadUrl = "https://blairsworkshop.com/api/download/crc32-patch";
+                entry.DownloadKind = "blairsWorkshopJson";
+                entry.PageUrl ??= "https://blairsworkshop.com/mods/crc32-patch";
+                return true;
+            }
+
+            return false;
         }
 
         public RequiredModsDiffResult Diff(RequiredModsPack pack, IEnumerable<InstalledModInfo> installedMods)
@@ -268,7 +315,10 @@ namespace SptLauncherWpf.Services
 
             foreach (var entry in pack.Mods ?? Enumerable.Empty<RequiredModEntry>())
             {
-                if (!entry.CanAutoInstall)
+                TryFillKnownWorkshopDownload(entry);
+
+                var local = FindLocalMatch(entry, clientMods);
+                if (local == null && !entry.CanAutoInstall)
                 {
                     items.Add(new RequiredModDiffItem
                     {
@@ -280,8 +330,6 @@ namespace SptLauncherWpf.Services
                     });
                     continue;
                 }
-
-                var local = FindLocalMatch(entry, clientMods);
                 if (local == null)
                 {
                     items.Add(new RequiredModDiffItem

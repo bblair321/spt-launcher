@@ -220,6 +220,46 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Diff_fills_workshop_url_for_battlepass_without_forge_id()
+    {
+        var pack = new RequiredModsPack
+        {
+            Mods =
+            [
+                new RequiredModEntry
+                {
+                    Name = "Tarkov BattlePass",
+                    Slug = "tarkov-battlepass",
+                    Guid = "com.bblai.battlepass",
+                    Version = "0.2.4"
+                }
+            ]
+        };
+
+        var missing = RequiredModsPackService.Instance.Diff(pack, Array.Empty<InstalledModInfo>());
+        Assert.Equal(RequiredModDiffStatus.Missing, missing.Items[0].Status);
+        Assert.True(pack.Mods[0].CanAutoInstall);
+        Assert.Contains("/api/download/tarkov-battlepass", pack.Mods[0].DownloadUrl);
+
+        var installed = new List<InstalledModInfo>
+        {
+            new()
+            {
+                DisplayName = "BattlePass",
+                Kind = InstalledModKind.Client,
+                Path = @"D:\SPT\BepInEx\plugins\com.bblai.battlepass",
+                IsDirectory = true,
+                ForgeGuid = "com.bblai.battlepass",
+                VersionHint = "0.2.4"
+            }
+        };
+        var present = RequiredModsPackService.Instance.Diff(pack, installed);
+        Assert.Equal(RequiredModDiffStatus.Ok, present.Items[0].Status);
+        Assert.False(present.NeedsSync);
+        Assert.Equal(0, present.ManualFixCount);
+    }
+
+    [Fact]
     public void Diff_empty_local_version_is_ok_when_files_are_present()
     {
         var pack = new RequiredModsPack
