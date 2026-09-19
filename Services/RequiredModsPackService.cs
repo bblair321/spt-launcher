@@ -284,9 +284,16 @@ namespace SptLauncherWpf.Services
                 key.Contains("battlepass"))
             {
                 entry.Guid = string.IsNullOrWhiteSpace(entry.Guid) ? "com.bblai.battlepass" : entry.Guid;
-                entry.DownloadUrl = "https://blairsworkshop.com/api/download/tarkov-battlepass";
+                // Version ids under /api/download/{id} go stale. /api/mods/{slug} always
+                // returns the current latestVersion.downloadUrl.
+                entry.DownloadUrl = "https://blairsworkshop.com/api/mods/tarkov-battlepass";
                 entry.DownloadKind = "blairsWorkshopJson";
                 entry.PageUrl ??= "https://blairsworkshop.com/mods/tarkov-battlepass";
+                if (string.IsNullOrWhiteSpace(entry.Slug))
+                {
+                    entry.Slug = "tarkov-battlepass";
+                }
+
                 return true;
             }
 
@@ -295,7 +302,7 @@ namespace SptLauncherWpf.Services
                 key.Contains("crc32-patch"))
             {
                 entry.Guid = string.IsNullOrWhiteSpace(entry.Guid) ? "com.s8.sptpatchcrc32" : entry.Guid;
-                entry.DownloadUrl = "https://blairsworkshop.com/api/download/crc32-patch";
+                entry.DownloadUrl = "https://blairsworkshop.com/api/mods/crc32-patch";
                 entry.DownloadKind = "blairsWorkshopJson";
                 entry.PageUrl ??= "https://blairsworkshop.com/mods/crc32-patch";
                 return true;
@@ -586,8 +593,24 @@ namespace SptLauncherWpf.Services
             !string.IsNullOrWhiteSpace(entry.Slug) ||
             !string.IsNullOrWhiteSpace(entry.Name);
 
+        internal static bool IsKnownWorkshopOnly(RequiredModEntry entry)
+        {
+            var guid = (entry.Guid ?? "").Trim();
+            var slug = (entry.Slug ?? "").Trim();
+            var name = (entry.Name ?? "").Trim();
+            var key = $"{guid} {slug} {name}".ToLowerInvariant();
+            return guid.Equals("com.bblai.battlepass", StringComparison.OrdinalIgnoreCase) ||
+                   guid.Equals("com.s8.sptpatchcrc32", StringComparison.OrdinalIgnoreCase) ||
+                   slug.Equals("tarkov-battlepass", StringComparison.OrdinalIgnoreCase) ||
+                   key.Contains("battlepass") ||
+                   key.Contains("patchcrc32") ||
+                   key.Contains("crc32-patch");
+        }
+
         internal static bool ShouldFallbackHostedDownloadToForge(RequiredModEntry entry, string? hostedError) =>
-            CanResolveForge(entry) && DownloadErrorLooksGone(hostedError);
+            !IsKnownWorkshopOnly(entry) &&
+            CanResolveForge(entry) &&
+            DownloadErrorLooksGone(hostedError);
 
         internal static bool KeepExistingHostedInstall(string sptRoot, RequiredModEntry entry)
         {
@@ -911,7 +934,10 @@ namespace SptLauncherWpf.Services
             }
 
             var kind = (entry.DownloadKind ?? "").Trim();
-            var looksLikeWorkshopApi = url.Contains("/api/download/", StringComparison.OrdinalIgnoreCase);
+            var looksLikeWorkshopApi =
+                url.Contains("/api/download/", StringComparison.OrdinalIgnoreCase) ||
+                url.Contains("/api/mods/", StringComparison.OrdinalIgnoreCase) ||
+                LooksLikeWorkshopModPage(url);
             if (string.IsNullOrWhiteSpace(kind))
             {
                 kind = looksLikeWorkshopApi ? "blairsWorkshopJson" : "direct";
@@ -926,7 +952,122 @@ namespace SptLauncherWpf.Services
                 return url;
             }
 
-            // blairsWorkshopJson (and unknown kinds that look like the API): GET JSON → .url
+            var modsApi = WorkshopModsApiUrl(entry, url);
+            if (!string.IsNullOrWhiteSpace(modsApi))
+            {
+                var latest = await TryHopWorkshopModsApiAsync(modsApi, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(latest))
+                {
+                    return latest;
+                }
+            }
+
+            return await HopWorkshopDownloadApiAsync(url, cancellationToken);
+        }
+
+        internal static bool LooksLikeWorkshopModPage(string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            {
+                return false;
+            }
+
+            var host = uri.Host;
+            if (string.IsNullOrWhiteSpace(host) ||
+                !host.Contains("blairsworkshop.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var path = uri.AbsolutePath.Trim('/');
+            return path.StartsWith("mods/", StringComparison.OrdinalIgnoreCase) ||
+                   path.StartsWith("api/mods/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// `/api/download/{slug}` 404s — slugs are not version ids. Resolve latest via
+        /// `/api/mods/{slug}` instead.
+        /// </summary>
+        internal static string? WorkshopModsApiUrl(RequiredModEntry entry, string downloadUrl)
+        {
+            if (Uri.TryCreate(downloadUrl, UriKind.Absolute, out var uri))
+            {
+                var segs = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+                if (segs.Length >= 2 &&
+                    segs[0].Equals("api", StringComparison.OrdinalIgnoreCase) &&
+                    segs[1].Equals("mods", StringComparison.OrdinalIgnoreCase))
+                {
+                    return downloadUrl;
+                }
+
+                if (segs.Length >= 2 && segs[0].Equals("mods", StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"{uri.GetLeftPart(UriPartial.Authority)}/api/mods/{segs[1]}";
+                }
+
+                if (segs.Length >= 3 &&
+                    segs[0].Equals("api", StringComparison.OrdinalIgnoreCase) &&
+                    segs[1].Equals("download", StringComparison.OrdinalIgnoreCase) &&
+                    segs[2].Contains('-'))
+                {
+                    return $"{uri.GetLeftPart(UriPartial.Authority)}/api/mods/{segs[2]}";
+                }
+            }
+
+            var slug = (entry.Slug ?? "").Trim();
+            if (slug.Equals("tarkov-battlepass", StringComparison.OrdinalIgnoreCase) ||
+                (entry.Guid ?? "").Equals("com.bblai.battlepass", StringComparison.OrdinalIgnoreCase))
+            {
+                slug = "tarkov-battlepass";
+            }
+            else if ((entry.Guid ?? "").Equals("com.s8.sptpatchcrc32", StringComparison.OrdinalIgnoreCase) ||
+                     slug.Contains("crc32", StringComparison.OrdinalIgnoreCase))
+            {
+                slug = string.IsNullOrWhiteSpace(slug) ? "crc32-patch" : slug;
+            }
+
+            if (string.IsNullOrWhiteSpace(slug))
+            {
+                return null;
+            }
+
+            return $"https://blairsworkshop.com/api/mods/{slug}";
+        }
+
+        internal static string? TryLatestDownloadUrlFromWorkshopModJson(string json)
+        {
+            try
+            {
+                var meta = JsonSerializer.Deserialize<BlairWorkshopModMeta>(json, JsonOptions);
+                var hop = meta?.LatestVersion?.DownloadUrl?.Trim();
+                return string.IsNullOrWhiteSpace(hop) ? null : hop;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task<string?> TryHopWorkshopModsApiAsync(string modsApiUrl, CancellationToken cancellationToken)
+        {
+            using var response = await _http.GetAsync(modsApiUrl, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            var versionDownload = TryLatestDownloadUrlFromWorkshopModJson(json);
+            if (string.IsNullOrWhiteSpace(versionDownload))
+            {
+                return null;
+            }
+
+            return await HopWorkshopDownloadApiAsync(versionDownload, cancellationToken);
+        }
+
+        private async Task<string> HopWorkshopDownloadApiAsync(string url, CancellationToken cancellationToken)
+        {
             using var response = await _http.GetAsync(url, cancellationToken);
             response.EnsureSuccessStatusCode();
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -947,6 +1088,20 @@ namespace SptLauncherWpf.Services
         {
             public string? Url { get; set; }
             public int? ExpiresIn { get; set; }
+        }
+
+        private sealed class BlairWorkshopModMeta
+        {
+            public string? Slug { get; set; }
+            public string? Title { get; set; }
+            public BlairWorkshopLatestVersion? LatestVersion { get; set; }
+        }
+
+        private sealed class BlairWorkshopLatestVersion
+        {
+            public string? Id { get; set; }
+            public string? Version { get; set; }
+            public string? DownloadUrl { get; set; }
         }
 
         private static void StampMatchedClientMarkers(

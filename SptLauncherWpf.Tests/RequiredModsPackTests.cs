@@ -239,7 +239,7 @@ public class RequiredModsPackTests
         var missing = RequiredModsPackService.Instance.Diff(pack, Array.Empty<InstalledModInfo>());
         Assert.Equal(RequiredModDiffStatus.Missing, missing.Items[0].Status);
         Assert.True(pack.Mods[0].CanAutoInstall);
-        Assert.Contains("/api/download/tarkov-battlepass", pack.Mods[0].DownloadUrl);
+        Assert.Contains("/api/mods/tarkov-battlepass", pack.Mods[0].DownloadUrl);
 
         var installed = new List<InstalledModInfo>
         {
@@ -537,6 +537,15 @@ public class RequiredModsPackTests
         Assert.False(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
             entry,
             "Response status code does not indicate success: 404 (Not Found)."));
+        Assert.False(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
+            new RequiredModEntry
+            {
+                Name = "Tarkov BattlePass",
+                Slug = "tarkov-battlepass",
+                Guid = "com.bblai.battlepass",
+                DownloadUrl = "https://blairsworkshop.com/api/download/tarkov-battlepass"
+            },
+            "Response status code does not indicate success: 404 (Not Found)."));
         Assert.False(RequiredModsPackService.DownloadErrorLooksGone(
             "Version 2.1.1 not found on sp-mod.com for mod id 2100"));
     }
@@ -640,6 +649,30 @@ public class RequiredModsPackTests
         var match = RequiredModsPackService.FindLocalMatch(entry, [local]);
         Assert.NotNull(match);
         Assert.Equal(local.Path, match!.Path);
+    }
+
+    [Fact]
+    public void WorkshopModsApiUrl_maps_slug_download_to_mods_endpoint()
+    {
+        var entry = new RequiredModEntry
+        {
+            Slug = "tarkov-battlepass",
+            Guid = "com.bblai.battlepass"
+        };
+        Assert.Equal(
+            "https://blairsworkshop.com/api/mods/tarkov-battlepass",
+            RequiredModsPackService.WorkshopModsApiUrl(
+                entry,
+                "https://blairsworkshop.com/api/download/tarkov-battlepass"));
+        Assert.Equal(
+            "https://blairsworkshop.com/api/mods/tarkov-battlepass",
+            RequiredModsPackService.WorkshopModsApiUrl(
+                entry,
+                "https://blairsworkshop.com/mods/tarkov-battlepass"));
+        Assert.Equal(
+            "https://blairsworkshop.com/api/download/cmtxhkhe7000004jyebwpeia6",
+            RequiredModsPackService.TryLatestDownloadUrlFromWorkshopModJson(
+                """{"slug":"tarkov-battlepass","latestVersion":{"id":"cmtxhkhe7000004jyebwpeia6","version":"0.2.4","downloadUrl":"https://blairsworkshop.com/api/download/cmtxhkhe7000004jyebwpeia6"}}"""));
     }
 
     private static RequiredModDiffItem Find(RequiredModsDiffResult diff, string name) =>
