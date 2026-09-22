@@ -52,6 +52,9 @@ namespace SptLauncherWpf.Pages
                 }
                 
                 SettingsService.Instance.SaveSettings();
+                OfficialSptLauncherSync.TryAddGameServer(
+                    SettingsService.Instance.LauncherPath,
+                    SettingsService.Instance.RequiredModsServerHost);
                 System.Windows.MessageBox.Show("Settings saved successfully!", "Success", 
                               MessageBoxButton.OK, MessageBoxImage.Information);
             }

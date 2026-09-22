@@ -302,7 +302,7 @@
                                              Style="{StaticResource ModernTextBoxStyle}"
                                              Padding="8,6"
                                              FontSize="12"
-                                             ToolTip="Same host as the game server → https://host:6969/mod-pack"
+                                             ToolTip="Same host as the game server → https://host:6969/mod-pack. Also added to the official SPT launcher server list."
                                              LostFocus="RequiredModsHostTextBox_LostFocus"/>
                                 </DockPanel>
                                 <DockPanel LastChildFill="True">

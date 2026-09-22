@@ -92,7 +92,7 @@
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimaryColor}"
                                Margin="0,0,0,6"/>
-                    <TextBlock Text="Enter the same host players use to join. The launcher fetches https://host:6969/mod-pack (SPT HTTPS; self-signed cert OK)."
+                    <TextBlock Text="Enter the same host players use to join. The launcher fetches https://host:6969/mod-pack (SPT HTTPS; self-signed cert OK) and adds that server to the official SPT launcher."
                                Foreground="{DynamicResource TextSecondaryColor}"
                                FontSize="12"
                                Margin="0,0,0,14"

@@ -520,6 +520,8 @@ namespace SptLauncherWpf.Pages
                 return;
             }
 
+            PersistRequiredModsHostFromUi();
+
             if (TryAttachToAlreadyRunningLauncher(launcherPath, out var alreadyRunningPid))
             {
                 System.Windows.MessageBox.Show(
@@ -3604,6 +3606,15 @@ namespace SptLauncherWpf.Pages
             }
 
             SettingsService.Instance.SaveSettings();
+            var launcherPath = LauncherPathTextBox.Text;
+            if (string.IsNullOrWhiteSpace(launcherPath))
+            {
+                launcherPath = SettingsService.Instance.LauncherPath;
+            }
+
+            OfficialSptLauncherSync.TryAddGameServer(
+                launcherPath,
+                SettingsService.Instance.RequiredModsServerHost);
         }
 
         private async void RequiredModsSyncButton_Click(object sender, RoutedEventArgs e)
