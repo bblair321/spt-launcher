@@ -358,6 +358,17 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Hosted_zip_fileversion_older_than_pack_is_detected()
+    {
+        Assert.True(RequiredModsPackService.CompareVersionRank("1.1.0", "1.1.2") < 0);
+        Assert.True(RequiredModsPackService.CompareVersionRank("1.0.9", "1.1.2") < 0);
+        Assert.False(RequiredModsPackService.CompareVersionRank("1.1.2", "1.1.2") < 0);
+        Assert.Equal(
+            "1.1.0",
+            InstalledModsService.NormalizeFileVersion("1.1.0+551db3eb560423b3b41c804b6e3117f28c0c4e2a"));
+    }
+
+    [Fact]
     public void FilterClientInstallPaths_keeps_bepinex_and_managed()
     {
         var mixed = ModPathClassifier.Classify(
@@ -599,6 +610,9 @@ public class RequiredModsPackTests
     [InlineData("~4.0.13", "4.1.5", false)]
     [InlineData("~4.0 <4.1.0", "4.1.5", false)]
     [InlineData("~4.0.13", "4.0.13", true)]
+    [InlineData("4.1.5", "4.1.6", true)]
+    [InlineData("4.1.3", "4.1.6", true)]
+    [InlineData("4.0.13", "4.1.6", false)]
     public void SptConstraintAllows_treats_4_1_x_as_compatible(string constraint, string installed, bool expected)
     {
         Assert.Equal(expected, RequiredModsPackService.SptConstraintAllows(constraint, installed));
@@ -617,6 +631,23 @@ public class RequiredModsPackTests
             .Select(v => v.Version)
             .ToList();
         Assert.Equal(new[] { "3.0.0" }, order);
+    }
+
+    [Fact]
+    public void ForgeVersionsToTry_picks_lootnet_1_1_2_on_spt_4_1_6()
+    {
+        var versions = new List<ForgeModVersion>
+        {
+            new() { Id = 15222, Version = "1.1.2", SptVersionConstraint = "4.1.5" },
+            new() { Id = 14954, Version = "1.1.1", SptVersionConstraint = "4.1.3" },
+            new() { Id = 14335, Version = "1.1.0", SptVersionConstraint = "~4.1" },
+            new() { Id = 14079, Version = "1.0.9", SptVersionConstraint = "4.0.13" }
+        };
+        var order = RequiredModsPackService.ForgeVersionsToTry(versions, "1.1.2", "4.1.6")
+            .Select(v => v.Version)
+            .ToList();
+        Assert.Equal("1.1.2", order[0]);
+        Assert.DoesNotContain("1.0.9", order);
     }
 
     [Fact]

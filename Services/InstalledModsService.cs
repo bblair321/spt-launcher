@@ -465,7 +465,7 @@ namespace SptLauncherWpf.Services
             }
         }
 
-        private static string? TryReadFolderPluginVersion(string dir)
+        internal static string? TryReadFolderPluginVersion(string dir)
         {
             try
             {
@@ -486,19 +486,43 @@ namespace SptLauncherWpf.Services
                 }
 
                 var info = FileVersionInfo.GetVersionInfo(preferred);
-                var raw = info.ProductVersion ?? info.FileVersion;
-                if (string.IsNullOrWhiteSpace(raw))
-                {
-                    return null;
-                }
-
-                var plus = raw.IndexOf('+');
-                return plus > 0 ? raw[..plus] : raw.Trim();
+                return NormalizeFileVersion(info.ProductVersion ?? info.FileVersion);
             }
             catch
             {
                 return null;
             }
+        }
+
+        internal static string? TryReadDllVersion(string path)
+        {
+            try
+            {
+                if (!File.Exists(path) ||
+                    !path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                var info = FileVersionInfo.GetVersionInfo(path);
+                return NormalizeFileVersion(info.ProductVersion ?? info.FileVersion);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        internal static string? NormalizeFileVersion(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            var trimmed = raw.Trim();
+            var plus = trimmed.IndexOf('+');
+            return plus > 0 ? trimmed[..plus] : trimmed;
         }
 
         public static IEnumerable<string> BuildUpdateQueryPairs(IEnumerable<InstalledModInfo> mods)

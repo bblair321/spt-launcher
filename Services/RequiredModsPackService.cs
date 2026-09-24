@@ -685,6 +685,53 @@ namespace SptLauncherWpf.Services
             }
         }
 
+        internal static bool HostedInstallIsOlderThanPack(
+            RequiredModEntry entry,
+            IReadOnlyList<string> extractedFiles)
+        {
+            var packVersion = (entry.Version ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(packVersion) || LooksLikePlaceholderVersion(packVersion))
+            {
+                return false;
+            }
+
+            var extractedVersion = ReadExtractedPluginVersion(entry, extractedFiles);
+            if (string.IsNullOrWhiteSpace(extractedVersion) || LooksLikePlaceholderVersion(extractedVersion))
+            {
+                return false;
+            }
+
+            return CompareVersionRank(extractedVersion, packVersion) < 0;
+        }
+
+        internal static string? ReadExtractedPluginVersion(
+            RequiredModEntry entry,
+            IReadOnlyList<string> extractedFiles)
+        {
+            foreach (var path in extractedFiles)
+            {
+                if (string.IsNullOrWhiteSpace(path) ||
+                    !path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!PathStrictlyMatchesPackEntry(path, entry) &&
+                    !PathBelongsToPackEntry(path, entry))
+                {
+                    continue;
+                }
+
+                var version = InstalledModsService.TryReadDllVersion(path);
+                if (!string.IsNullOrWhiteSpace(version))
+                {
+                    return version;
+                }
+            }
+
+            return null;
+        }
+
         private readonly record struct PackInstallResult(
             bool Success,
             bool SkippedServerOnly,
@@ -944,6 +991,23 @@ namespace SptLauncherWpf.Services
                 }
 
                 return PackInstallResult.Fail(report.Message);
+            }
+
+            if (CanResolveForge(entry) &&
+                HostedInstallIsOlderThanPack(entry, report.ExtractedFiles))
+            {
+                progress?.Report(new RequiredModsSyncProgress
+                {
+                    Message = $"{entry.DisplayName}: hosted zip is older than pack {entry.Version} — trying Forge…"
+                });
+                var forge = await InstallForgePackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                if (forge.Success || forge.SkippedServerOnly)
+                {
+                    return forge;
+                }
+
+                return PackInstallResult.Fail(
+                    $"Hosted download is older than pack {entry.Version}. Forge fallback: {forge.Error}");
             }
 
             StampMatchedClientMarkers(sptRoot, entry, mod, version.Version, versionId: null);
@@ -2173,7 +2237,9 @@ namespace SptLauncherWpf.Services
 
             if (TryParseSptVersion(token, out var exact))
             {
-                return CompareSpt3(installed, exact) == 0;
+                // Forge authors often tag "4.1.5" without ~. SPT hotfixes (4.1.6)
+                // still need that 4.1.x build — same rule as ~4.1.5.
+                return installed.Major == exact.Major && installed.Minor == exact.Minor;
             }
 
             return true;
