@@ -902,6 +902,71 @@ public class RequiredModsPackTests
         }
     }
 
+    [Fact]
+    public void LootNet_extra_guid_does_not_match_or_replace_fika_folder()
+    {
+        var entry = LootNetPackEntry();
+        var fikaFolder = new InstalledModInfo
+        {
+            DisplayName = "Fika",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\Fika",
+            IsDirectory = true,
+            ForgeGuid = "com.fika.core"
+        };
+        var fikaCore = new InstalledModInfo
+        {
+            DisplayName = "Fika.Core",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\Fika.Core",
+            IsDirectory = true
+        };
+        var lootNetFika = new InstalledModInfo
+        {
+            DisplayName = "LootNet.fika",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\LootNetFika.dll",
+            IsDirectory = false,
+            ForgeGuid = "com.20fpsguy.LootNet.fika"
+        };
+
+        Assert.Equal("lootnet", RequiredModsPackService.IdentifyingGuidToken("com.20fpsguy.LootNet.fika"));
+        Assert.True(RequiredModsPackService.IsProtectedCorePluginPath(fikaFolder.Path));
+        Assert.True(RequiredModsPackService.IsProtectedCorePluginPath(@"D:\SPT\BepInEx\plugins\Fika.Core.dll"));
+        Assert.False(RequiredModsPackService.IsProtectedCorePluginPath(lootNetFika.Path));
+        Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(fikaFolder.Path, entry));
+        Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(fikaCore.Path, entry));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(lootNetFika.Path, entry));
+        Assert.False(RequiredModsPackService.IsReplaceTarget(fikaFolder, entry));
+        Assert.False(RequiredModsPackService.IsReplaceTarget(fikaCore, entry));
+        Assert.True(RequiredModsPackService.IsReplaceTarget(lootNetFika, entry));
+
+        var matches = RequiredModsPackService.FindAllLocalMatches(entry, [fikaFolder, fikaCore, lootNetFika]);
+        Assert.Single(matches);
+        Assert.Equal(lootNetFika.Path, matches[0].Path);
+    }
+
+    [Fact]
+    public void FikaDetection_ignores_lootnet_fika_dll_and_empty_server_folder()
+    {
+        Assert.False(FikaDetection.IsFikaCoreOrServerDll("LootNetFika.dll"));
+        Assert.True(FikaDetection.IsFikaCoreOrServerDll("Fika.Core.dll"));
+
+        var root = Path.Combine(Path.GetTempPath(), "spt-fika-detect-" + Guid.NewGuid().ToString("N"));
+        var server = Path.Combine(root, "user", "mods", "fika-server");
+        Directory.CreateDirectory(server);
+        File.WriteAllText(Path.Combine(server, "leftover.txt"), "junk");
+        try
+        {
+            Assert.False(FikaDetection.FolderHasCompleteFikaServer(server));
+            Assert.False(FikaDetection.FolderHasFikaClientDll(Path.Combine(root, "BepInEx", "plugins", "Fika")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static RequiredModDiffItem Find(RequiredModsDiffResult diff, string name) =>
         diff.Items.First(i => i.PackEntry?.Name == name);
 }

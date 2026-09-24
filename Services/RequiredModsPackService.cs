@@ -1229,6 +1229,11 @@ namespace SptLauncherWpf.Services
 
             foreach (var path in targets)
             {
+                if (IsProtectedCorePluginPath(path))
+                {
+                    continue;
+                }
+
                 try
                 {
                     if (Directory.Exists(path))
@@ -1395,6 +1400,12 @@ namespace SptLauncherWpf.Services
             RequiredModEntry entry,
             HashSet<string>? guids = null)
         {
+            if (IsProtectedCorePluginPath(mod.Path) ||
+                mod.AllPaths.Any(IsProtectedCorePluginPath))
+            {
+                return false;
+            }
+
             guids ??= new HashSet<string>(EntryGuids(entry), StringComparer.OrdinalIgnoreCase);
 
             bool PathOk(string path) =>
@@ -1477,6 +1488,81 @@ namespace SptLauncherWpf.Services
                 or "com.spt.custom"
                 or "com.spt.singleplayer"
                 or "com.spt.reflection";
+        }
+
+        /// <summary>
+        /// Pack sync must never delete Fika/SPT cores. Companion GUIDs like
+        /// <c>com.20fpsguy.LootNet.fika</c> otherwise match a folder named <c>Fika</c>.
+        /// </summary>
+        internal static bool IsProtectedCorePluginPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var file = Path.GetFileName(
+                path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (IsFikaOrSptCoreFileName(file))
+            {
+                return true;
+            }
+
+            var leaf = PathMatchLeaf(path);
+            return leaf is "fika"
+                or "fikacore"
+                or "fikacoop"
+                or "fikaserver"
+                or "fikadedicated"
+                or "fikaheadless"
+                or "sptcore"
+                or "sptcustom"
+                or "sptsingleplayer"
+                or "sptreflection";
+        }
+
+        internal static bool IsFikaOrSptCoreFileName(string? fileName)
+        {
+            var name = Path.GetFileName(fileName ?? "");
+            if (name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name[..^".disabled".Length];
+            }
+
+            return name.Equals("Fika.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("Fika.Core.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("Fika.Dedicated.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("Fika.Server.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("spt-core.dll", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Last meaningful GUID segment, skipping generic suffixes like fika/kills/core.
+        /// </summary>
+        internal static string? IdentifyingGuidToken(string? guid)
+        {
+            if (string.IsNullOrWhiteSpace(guid))
+            {
+                return null;
+            }
+
+            string[] generic =
+            [
+                "com", "eft", "spt", "mod", "mods", "plugin", "plugins", "client", "server",
+                "core", "main", "fika", "kills", "communitytab", "dedicated", "headless"
+            ];
+
+            var parts = guid.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            for (var i = parts.Length - 1; i >= 0; i--)
+            {
+                var token = InstalledModsService.NormalizeModKey(parts[i]);
+                if (token.Length >= 4 && !generic.Contains(token))
+                {
+                    return token;
+                }
+            }
+
+            return null;
         }
 
         internal static int RemoveLocalCopies(
@@ -1648,6 +1734,11 @@ namespace SptLauncherWpf.Services
                     }
 
                     if (extracted.Contains(full))
+                    {
+                        continue;
+                    }
+
+                    if (IsProtectedCorePluginPath(full))
                     {
                         continue;
                     }
@@ -2321,7 +2412,15 @@ namespace SptLauncherWpf.Services
             {
                 foreach (var extra in entry.ExtraGuids)
                 {
-                    if (InstalledModsService.IdentityOverlapsPath(leaf, extra))
+                    // Use the identifying token (LootNet), not the full GUID.
+                    // "...LootNet.fika" contains "fika" and would delete BepInEx/plugins/Fika.
+                    var extraToken = IdentifyingGuidToken(extra);
+                    if (string.IsNullOrWhiteSpace(extraToken))
+                    {
+                        continue;
+                    }
+
+                    if (InstalledModsService.IdentityOverlapsPath(leaf, extraToken))
                     {
                         return true;
                     }

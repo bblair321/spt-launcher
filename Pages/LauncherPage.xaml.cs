@@ -2222,6 +2222,13 @@ namespace SptLauncherWpf.Pages
                 return true;
             }
 
+            var complete = FikaDetection.FolderHasFikaClientDll(fikaModPath) ||
+                           FikaDetection.FolderHasCompleteFikaServer(fikaModPath);
+            if (!complete)
+            {
+                return true;
+            }
+
             var result = System.Windows.MessageBox.Show(
                 $"Fika mod appears to be already installed at:\n{fikaModPath}\n\n" +
                 "Do you want to reinstall it anyway?",
@@ -3208,8 +3215,8 @@ namespace SptLauncherWpf.Pages
                             System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath]   Fika.Core.dll: {File.Exists(fikaCoreDll)}");
                             System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath]   package.json: {File.Exists(packageJson)}");
                             
-                            if (File.Exists(fikaDll) || File.Exists(fikaCoreDll) || 
-                                (File.Exists(packageJson) && CheckIfFikaPackageJson(packageJson)))
+                            if (FikaDetection.FolderHasFikaClientDll(fikaModPath) ||
+                                FikaDetection.FolderHasCompleteFikaServer(fikaModPath))
                             {
                                 System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Found Fika mod at: {fikaModPath}");
                                 return fikaModPath;
@@ -3231,8 +3238,8 @@ namespace SptLauncherWpf.Pages
                             var fikaCoreDll = Path.Combine(subDir, "Fika.Core.dll");
                             var packageJson = Path.Combine(subDir, "package.json");
                             
-                            if (File.Exists(fikaDll) || File.Exists(fikaCoreDll) || 
-                                (File.Exists(packageJson) && CheckIfFikaPackageJson(packageJson)))
+                            if (FikaDetection.FolderHasFikaClientDll(subDir) ||
+                                FikaDetection.FolderHasCompleteFikaServer(subDir))
                             {
                                 System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Found Fika mod at (recursive search): {subDir}");
                                 return subDir;
@@ -3249,7 +3256,9 @@ namespace SptLauncherWpf.Pages
                 System.Diagnostics.Debug.WriteLine("[AutoDetectFikaModWithPath] Performing broad search for Fika DLLs in SPT directory");
                 try
                 {
-                    var allFikaDlls = Directory.GetFiles(sptPath, "Fika*.dll", SearchOption.AllDirectories);
+                    var allFikaDlls = Directory.GetFiles(sptPath, "*.dll", SearchOption.AllDirectories)
+                        .Where(FikaDetection.IsFikaCoreOrServerDll)
+                        .ToArray();
                     System.Diagnostics.Debug.WriteLine($"[AutoDetectFikaModWithPath] Found {allFikaDlls.Length} Fika DLL files");
                     
                     foreach (var dllPath in allFikaDlls)
@@ -3280,39 +3289,8 @@ namespace SptLauncherWpf.Pages
         /// <summary>
         /// Checks if a package.json file belongs to Fika mod
         /// </summary>
-        private bool CheckIfFikaPackageJson(string packageJsonPath)
-        {
-            try
-            {
-                var jsonContent = File.ReadAllText(packageJsonPath);
-                var json = JsonDocument.Parse(jsonContent);
-                
-                // Check if it's a Fika package by looking for "fika" in name or id
-                if (json.RootElement.TryGetProperty("name", out var nameElement))
-                {
-                    var name = nameElement.GetString() ?? "";
-                    if (name.Contains("fika", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
-                
-                if (json.RootElement.TryGetProperty("id", out var idElement))
-                {
-                    var id = idElement.GetString() ?? "";
-                    if (id.Contains("fika", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
-            }
-            catch
-            {
-                // Ignore errors
-            }
-
-            return false;
-        }
+        private bool CheckIfFikaPackageJson(string packageJsonPath) =>
+            FikaDetection.PackageJsonLooksLikeFika(packageJsonPath);
 
         private void UpdateSptVersionDisplay()
         {
@@ -4325,7 +4303,8 @@ namespace SptLauncherWpf.Pages
                 {
                     var clientModPath = DetectFikaClientModPath(sptPath);
                     var serverModPath = DetectFikaServerModPath(sptPath);
-                    fikaInstalled = !string.IsNullOrEmpty(clientModPath) || !string.IsNullOrEmpty(serverModPath);
+                    fikaInstalled = FikaDetection.FolderHasFikaClientDll(clientModPath ?? "") ||
+                                    FikaDetection.FolderHasCompleteFikaServer(serverModPath ?? "");
 
                     System.Diagnostics.Debug.WriteLine(
                         $"[UpdateFikaVersionDisplayAsync] Fika detected: {fikaInstalled}, clientPath: {clientModPath ?? "(none)"}, serverPath: {serverModPath ?? "(none)"}");
@@ -4422,19 +4401,8 @@ namespace SptLauncherWpf.Pages
                     continue;
                 }
 
-                var packageJsonPath = Path.Combine(serverPath, "package.json");
-                if (File.Exists(packageJsonPath))
+                if (FikaDetection.FolderHasCompleteFikaServer(serverPath))
                 {
-                    // Prefer package.json match, but accept fika-server folder name as fallback.
-                    if (CheckIfFikaPackageJson(packageJsonPath) ||
-                        Path.GetFileName(serverPath).Contains("fika", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return serverPath;
-                    }
-                }
-                else if (Directory.EnumerateFileSystemEntries(serverPath).Any())
-                {
-                    // Installer layouts sometimes omit package.json until first server run.
                     return serverPath;
                 }
             }
@@ -4459,13 +4427,10 @@ namespace SptLauncherWpf.Pages
                     foreach (var dir in Directory.EnumerateDirectories(modsRoot))
                     {
                         var name = Path.GetFileName(dir);
-                        if (name.Contains("fika", StringComparison.OrdinalIgnoreCase))
+                        if (name.Contains("fika", StringComparison.OrdinalIgnoreCase) &&
+                            FikaDetection.FolderHasCompleteFikaServer(dir))
                         {
-                            var packageJsonPath = Path.Combine(dir, "package.json");
-                            if (!File.Exists(packageJsonPath) || CheckIfFikaPackageJson(packageJsonPath))
-                            {
-                                return dir;
-                            }
+                            return dir;
                         }
                     }
                 }
@@ -4509,7 +4474,19 @@ namespace SptLauncherWpf.Pages
 
             if (InstallFikaButton != null)
             {
-                InstallFikaButton.Visibility = fikaInstalled ? Visibility.Collapsed : Visibility.Visible;
+                var incomplete = fikaInstalled &&
+                                 string.IsNullOrEmpty(clientVersion) &&
+                                 string.IsNullOrEmpty(serverVersion);
+                InstallFikaButton.Visibility =
+                    !fikaInstalled || incomplete ? Visibility.Visible : Visibility.Collapsed;
+                if (incomplete)
+                {
+                    InstallFikaButton.Content = "Reinstall Fika";
+                }
+                else if (!fikaInstalled)
+                {
+                    InstallFikaButton.Content = "Install Fika";
+                }
             }
 
             if (FikaUpdateStatusPanel != null)
@@ -4539,7 +4516,7 @@ namespace SptLauncherWpf.Pages
 
             if (string.IsNullOrEmpty(clientVersion) && string.IsNullOrEmpty(serverVersion))
             {
-                FikaVersionText.Text = "Installed (version unknown)";
+                FikaVersionText.Text = "Incomplete — reinstall Fika";
                 FikaVersionText.Foreground = (System.Windows.Media.Brush)FindResource("TextSecondaryColor");
             }
             else
