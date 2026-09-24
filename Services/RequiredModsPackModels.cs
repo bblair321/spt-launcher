@@ -58,6 +58,10 @@ namespace SptLauncherWpf.Services
         [JsonPropertyName("guid")]
         public string? Guid { get; set; }
 
+        /// <summary>Companion BepInPlugin GUIDs in the same zip (LootNet.fika, …).</summary>
+        [JsonPropertyName("extraGuids")]
+        public List<string>? ExtraGuids { get; set; }
+
         [JsonPropertyName("clientFiles")]
         public List<string>? ClientFiles { get; set; }
 

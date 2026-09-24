@@ -324,7 +324,13 @@ namespace SptLauncherWpf.Services
             {
                 TryFillKnownWorkshopDownload(entry);
 
-                var local = FindLocalMatch(entry, clientMods);
+                var copies = FindAllLocalMatches(entry, clientMods);
+                foreach (var copy in copies)
+                {
+                    matchedLocal.Add(copy);
+                }
+
+                var local = FindLocalMatch(entry, clientMods) ?? copies.FirstOrDefault();
                 if (local == null && !entry.CanAutoInstall)
                 {
                     items.Add(new RequiredModDiffItem
@@ -348,26 +354,26 @@ namespace SptLauncherWpf.Services
                     continue;
                 }
 
-                matchedLocal.Add(local);
-                var requiredVersion = (entry.Version ?? "").Trim();
                 var localVersion = (local.VersionHint ?? "").Trim();
-
-                // Re-download only when the install is known to be *older* than the pack.
-                // Missing sidecars and DLL FileVersion ahead of the Forge tag used to
-                // look like WrongVersion forever, so every launcher open re-synced.
-                if (!string.IsNullOrWhiteSpace(requiredVersion) &&
-                    !LooksLikePlaceholderVersion(requiredVersion) &&
-                    !string.IsNullOrWhiteSpace(localVersion) &&
-                    !VersionsEqual(requiredVersion, localVersion) &&
-                    CompareVersionRank(localVersion, requiredVersion) < 0)
+                var staleCopies = StaleLocalCopies(entry, local, copies);
+                var leftover = staleCopies.Count > 0;
+                if (!IsLocalVersionSatisfied(entry, local) || leftover)
                 {
+                    var requiredVersion = (entry.Version ?? "").Trim();
+                    var message = leftover && IsLocalVersionSatisfied(entry, local)
+                        ? $"{entry.DisplayName}: leftover older copy will be removed on sync"
+                        : $"{entry.DisplayName}: have {localVersion.IfEmpty("unknown")}, need {requiredVersion}";
+                    if (leftover && !IsLocalVersionSatisfied(entry, local))
+                    {
+                        message += " (leftover copies will be deleted)";
+                    }
+
                     items.Add(new RequiredModDiffItem
                     {
                         Status = RequiredModDiffStatus.WrongVersion,
                         PackEntry = entry,
                         Installed = local,
-                        Message =
-                            $"{entry.DisplayName}: have {localVersion.IfEmpty("unknown")}, need {requiredVersion}"
+                        Message = message
                     });
                     continue;
                 }
@@ -427,6 +433,7 @@ namespace SptLauncherWpf.Services
 
             var errors = new List<string>();
             var installedCount = 0;
+            var prunedCount = 0;
             var skippedServerOnly = 0;
             var failed = 0;
 
@@ -443,8 +450,33 @@ namespace SptLauncherWpf.Services
 
                 try
                 {
-                    // Replace leftover 4.0.x plugins (WTT-ArmoryClient) before extracting
-                    // a 4.1.x zip that may use a different folder layout.
+                    var clientMods = InstalledModsService.ScanInstalledMods(sptRoot)
+                        .Where(m => m.Kind == InstalledModKind.Client)
+                        .ToList();
+                    var copies = FindAllLocalMatches(entry, clientMods);
+                    var local = FindLocalMatch(entry, clientMods);
+                    if (local != null &&
+                        IsLocalVersionSatisfied(entry, local) &&
+                        StaleLocalCopies(entry, local, copies).Count > 0)
+                    {
+                        var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var copy in copies)
+                        {
+                            if (SameInstallFamily(copy, local) && IsLocalVersionSatisfied(entry, copy))
+                            {
+                                foreach (var path in KeepPaths(copy))
+                                {
+                                    keep.Add(path);
+                                }
+                            }
+                        }
+
+                        prunedCount += RemoveLocalCopies(sptRoot, entry, keep);
+                        installedCount++;
+                        continue;
+                    }
+
+                    // Replace leftover plugins (old folder vs new zip layout) before extract.
                     TryUninstallLocalMatch(sptRoot, entry);
                     var result = await InstallPackEntryAsync(entry, sptRoot, progress, cancellationToken);
                     if (result.SkippedServerOnly)
@@ -454,8 +486,7 @@ namespace SptLauncherWpf.Services
                     }
                     else if (result.Success)
                     {
-                        // Re-scan against the full pack — a single-entry Diff can look OK while
-                        // another stale copy of the same mod still wins the final Diff.
+                        PruneAfterPackInstall(sptRoot, entry, result.ExtractedFiles);
                         StampMatchedClientMarkers(
                             sptRoot,
                             entry,
@@ -464,30 +495,34 @@ namespace SptLauncherWpf.Services
 
                         var midScan = InstalledModsService.ScanInstalledMods(sptRoot);
                         var midDiff = Diff(pack, midScan);
-                        var stillWrong = midDiff.Items.Any(i =>
-                            ReferenceEquals(i.PackEntry, entry) &&
-                            i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+                        var stillWrong = midDiff.Items.Any(item =>
+                            ReferenceEquals(item.PackEntry, entry) &&
+                            item.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
 
                         if (stillWrong)
                         {
-                            // Stale duplicate DLL/sidecar (common with Use Loose Loot upgrades).
                             TryUninstallLocalMatch(sptRoot, entry);
                             var retry = await InstallPackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                            if (retry.Success)
+                            {
+                                PruneAfterPackInstall(sptRoot, entry, retry.ExtractedFiles);
+                            }
+
                             midScan = InstalledModsService.ScanInstalledMods(sptRoot);
                             midDiff = Diff(pack, midScan);
-                            stillWrong = midDiff.Items.Any(i =>
-                                ReferenceEquals(i.PackEntry, entry) &&
-                                i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+                            stillWrong = midDiff.Items.Any(item =>
+                                ReferenceEquals(item.PackEntry, entry) &&
+                                item.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
 
                             if (!retry.Success || stillWrong)
                             {
                                 failed++;
-                                var detail = midDiff.Items.FirstOrDefault(i =>
-                                    ReferenceEquals(i.PackEntry, entry) &&
-                                    i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+                                var detail = midDiff.Items.FirstOrDefault(item =>
+                                    ReferenceEquals(item.PackEntry, entry) &&
+                                    item.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
                                 errors.Add(
                                     $"{entry.DisplayName}: {detail?.Message ?? retry.Error ?? "version still mismatch"} after reinstall. " +
-                                    "Remove leftover copies of this mod under BepInEx\\plugins (extra folders and .forge-mod.json), then sync — or install from Forge.");
+                                    "Close the game if it is running, then sync again so leftover DLLs can be deleted.");
                             }
                             else
                             {
@@ -520,6 +555,11 @@ namespace SptLauncherWpf.Services
             if (installedCount > 0)
             {
                 parts.Add($"Installed/updated {installedCount}");
+            }
+
+            if (prunedCount > 0)
+            {
+                parts.Add($"removed {prunedCount} leftover cop{(prunedCount == 1 ? "y" : "ies")}");
             }
 
             if (skippedServerOnly > 0)
@@ -645,7 +685,23 @@ namespace SptLauncherWpf.Services
             }
         }
 
-        private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallPackEntryAsync(
+        private readonly record struct PackInstallResult(
+            bool Success,
+            bool SkippedServerOnly,
+            string Error,
+            IReadOnlyList<string> ExtractedFiles)
+        {
+            public static PackInstallResult Ok(IReadOnlyList<string>? extracted = null) =>
+                new(true, false, "", extracted ?? Array.Empty<string>());
+
+            public static PackInstallResult Fail(string error) =>
+                new(false, false, error ?? "", Array.Empty<string>());
+
+            public static PackInstallResult SkipServer(string error) =>
+                new(false, true, error ?? "", Array.Empty<string>());
+        }
+
+        private async Task<PackInstallResult> InstallPackEntryAsync(
             RequiredModEntry entry,
             string sptRoot,
             IProgress<RequiredModsSyncProgress>? progress,
@@ -653,14 +709,14 @@ namespace SptLauncherWpf.Services
         {
             if (!string.IsNullOrWhiteSpace(entry.DownloadUrl))
             {
-                (bool Success, bool SkippedServerOnly, string Error) hosted;
+                PackInstallResult hosted;
                 try
                 {
                     hosted = await InstallHostedPackEntryAsync(entry, sptRoot, progress, cancellationToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    hosted = (false, false, ex.Message);
+                    hosted = PackInstallResult.Fail(ex.Message);
                 }
 
                 if (hosted.Success || hosted.SkippedServerOnly ||
@@ -679,13 +735,13 @@ namespace SptLauncherWpf.Services
                     return forge;
                 }
 
-                return (false, false, $"{hosted.Error} Forge fallback: {forge.Error}");
+                return PackInstallResult.Fail($"{hosted.Error} Forge fallback: {forge.Error}");
             }
 
             return await InstallForgePackEntryAsync(entry, sptRoot, progress, cancellationToken);
         }
 
-        private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallForgePackEntryAsync(
+        private async Task<PackInstallResult> InstallForgePackEntryAsync(
             RequiredModEntry entry,
             string sptRoot,
             IProgress<RequiredModsSyncProgress>? progress,
@@ -694,7 +750,7 @@ namespace SptLauncherWpf.Services
             var mod = await ResolveModAsync(entry, cancellationToken);
             if (mod == null)
             {
-                return (false, false,
+                return PackInstallResult.Fail(
                     entry.ForgeModId is int missingId && missingId > 0
                         ? $"Could not find Forge mod id {missingId} on sp-mod.com."
                         : $"Could not find \"{entry.DisplayName}\" on Forge. Install this client mod manually.");
@@ -717,7 +773,7 @@ namespace SptLauncherWpf.Services
             var toTry = ForgeVersionsToTry(versions, entry.Version, TryDetectSptVersion(sptRoot));
             if (toTry.Count == 0)
             {
-                return (false, false,
+                return PackInstallResult.Fail(
                     string.IsNullOrWhiteSpace(entry.Version)
                         ? "No downloadable version found on Forge."
                         : $"Version {entry.Version} not found on sp-mod.com for mod id {forgeId} " +
@@ -758,7 +814,7 @@ namespace SptLauncherWpf.Services
                     var classification = ModPathClassifier.Classify(tree.Files, hasRuntime);
                     if (classification.Kind == ModInstallKind.ServerOnly)
                     {
-                        return (false, true, "Server-only package");
+                        return PackInstallResult.SkipServer("Server-only package");
                     }
                 }
 
@@ -785,21 +841,22 @@ namespace SptLauncherWpf.Services
                     // local plugin(s) to the version we just installed so upgrades can't leave
                     // a stale "have 1.1.0, need 1.6.0" marker on an older DLL name.
                     StampMatchedClientMarkers(sptRoot, entry, mod, version.Version, version.Id);
-                    return (true, false, "");
+                    return PackInstallResult.Ok(report.ExtractedFiles);
                 }
 
                 if (!DownloadErrorLooksGone(report.Message))
                 {
-                    return (false, false, report.Message);
+                    return PackInstallResult.Fail(report.Message);
                 }
 
                 lastGone = report.Message;
             }
 
-            return (false, false, lastGone ?? $"Version {entry.Version} not found on sp-mod.com for mod id {forgeId}.");
+            return PackInstallResult.Fail(
+                lastGone ?? $"Version {entry.Version} not found on sp-mod.com for mod id {forgeId}.");
         }
 
-        private async Task<(bool Success, bool SkippedServerOnly, string Error)> InstallHostedPackEntryAsync(
+        private async Task<PackInstallResult> InstallHostedPackEntryAsync(
             RequiredModEntry entry,
             string sptRoot,
             IProgress<RequiredModsSyncProgress>? progress,
@@ -817,13 +874,13 @@ namespace SptLauncherWpf.Services
             }
             catch (Exception ex)
             {
-                return (false, false,
+                return PackInstallResult.Fail(
                     $"Hosted download failed for {entry.DisplayName}: {ex.Message}");
             }
 
             if (string.IsNullOrWhiteSpace(zipUrl))
             {
-                return (false, false, $"Hosted download URL resolved empty for {entry.DisplayName}.");
+                return PackInstallResult.Fail($"Hosted download URL resolved empty for {entry.DisplayName}.");
             }
 
             var mod = new ForgeModSummary
@@ -883,14 +940,14 @@ namespace SptLauncherWpf.Services
                 if (DownloadErrorLooksGone(report.Message) &&
                     KeepExistingHostedInstall(sptRoot, entry))
                 {
-                    return (true, false, "");
+                    return PackInstallResult.Ok();
                 }
 
-                return (false, false, report.Message);
+                return PackInstallResult.Fail(report.Message);
             }
 
             StampMatchedClientMarkers(sptRoot, entry, mod, version.Version, versionId: null);
-            return (true, false, "");
+            return PackInstallResult.Ok(report.ExtractedFiles);
         }
 
         private async Task<string> ResolveHostedDownloadUrlAsync(
@@ -1194,79 +1251,520 @@ namespace SptLauncherWpf.Services
         {
             try
             {
-                var scanned = InstalledModsService.ScanInstalledMods(sptRoot);
-                var clientMods = scanned.Where(m => m.Kind == InstalledModKind.Client).ToList();
-
-                // Remove every candidate path (stale duplicates), not just the "best" match.
-                var victims = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                void Consider(InstalledModInfo? m)
-                {
-                    if (m == null)
-                    {
-                        return;
-                    }
-
-                    foreach (var p in m.AllPaths)
-                    {
-                        victims.Add(p);
-                    }
-                }
-
-                Consider(FindLocalMatch(entry, clientMods));
-                if (entry.ForgeModId is int id and > 0)
-                {
-                    foreach (var m in clientMods.Where(x =>
-                                 x.ForgeModId == id && PathBelongsToPackEntry(x.Path, entry)))
-                    {
-                        Consider(m);
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(entry.Guid))
-                {
-                    foreach (var m in clientMods.Where(x =>
-                                 string.Equals(x.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase) &&
-                                 PathBelongsToPackEntry(x.Path, entry)))
-                    {
-                        Consider(m);
-                    }
-                }
-
-                foreach (var path in victims)
-                {
-                    try
-                    {
-                        if (Directory.Exists(path))
-                        {
-                            InstalledModsService.Uninstall(new InstalledModInfo
-                            {
-                                DisplayName = entry.DisplayName,
-                                Path = path,
-                                Kind = InstalledModKind.Client,
-                                IsDirectory = true
-                            });
-                        }
-                        else if (File.Exists(path))
-                        {
-                            InstalledModsService.Uninstall(new InstalledModInfo
-                            {
-                                DisplayName = entry.DisplayName,
-                                Path = path,
-                                Kind = InstalledModKind.Client,
-                                IsDirectory = false
-                            });
-                        }
-                    }
-                    catch
-                    {
-                        // continue removing other copies
-                    }
-                }
+                RemoveLocalCopies(sptRoot, entry, keepPaths: null);
             }
             catch
             {
                 // best-effort cleanup before retry install
             }
+        }
+
+        internal static bool IsLocalVersionSatisfied(RequiredModEntry entry, InstalledModInfo local)
+        {
+            var requiredVersion = (entry.Version ?? "").Trim();
+            var localVersion = (local.VersionHint ?? "").Trim();
+
+            // Re-download only when the install is known to be *older* than the pack.
+            // Missing sidecars and DLL FileVersion ahead of the Forge tag used to
+            // look like WrongVersion forever, so every launcher open re-synced.
+            if (string.IsNullOrWhiteSpace(requiredVersion) ||
+                LooksLikePlaceholderVersion(requiredVersion) ||
+                string.IsNullOrWhiteSpace(localVersion))
+            {
+                return true;
+            }
+
+            return VersionsEqual(requiredVersion, localVersion) ||
+                   CompareVersionRank(localVersion, requiredVersion) >= 0;
+        }
+
+        internal static IEnumerable<string> EntryGuids(RequiredModEntry entry)
+        {
+            if (!string.IsNullOrWhiteSpace(entry.Guid))
+            {
+                yield return entry.Guid.Trim();
+            }
+
+            if (entry.ExtraGuids == null)
+            {
+                yield break;
+            }
+
+            foreach (var guid in entry.ExtraGuids)
+            {
+                if (!string.IsNullOrWhiteSpace(guid))
+                {
+                    yield return guid.Trim();
+                }
+            }
+        }
+
+        internal static HashSet<string> KeepPaths(InstalledModInfo local)
+        {
+            var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var path in local.AllPaths)
+            {
+                if (!string.IsNullOrWhiteSpace(path))
+                {
+                    keep.Add(Path.GetFullPath(path));
+                }
+            }
+
+            return keep;
+        }
+
+        internal static List<InstalledModInfo> FindAllLocalMatches(
+            RequiredModEntry entry,
+            IReadOnlyList<InstalledModInfo> clientMods)
+        {
+            var guids = new HashSet<string>(EntryGuids(entry), StringComparer.OrdinalIgnoreCase);
+            var matches = new List<InstalledModInfo>();
+
+            foreach (var mod in clientMods)
+            {
+                if (mod.Kind != InstalledModKind.Client)
+                {
+                    continue;
+                }
+
+                if (!IsReplaceTarget(mod, entry, guids))
+                {
+                    continue;
+                }
+
+                matches.Add(mod);
+            }
+
+            return matches
+                .GroupBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+        }
+
+        internal static List<InstalledModInfo> StaleLocalCopies(
+            RequiredModEntry entry,
+            InstalledModInfo primary,
+            IReadOnlyList<InstalledModInfo> copies)
+        {
+            return copies
+                .Where(copy =>
+                    !string.Equals(copy.Path, primary.Path, StringComparison.OrdinalIgnoreCase) &&
+                    (!SameInstallFamily(copy, primary) || !IsLocalVersionSatisfied(entry, copy)))
+                .ToList();
+        }
+
+        /// <summary>
+        /// True when two installs are the same mod layout (folder + files inside, or
+        /// companion DLLs sitting together). False for an old folder next to a new one,
+        /// or a leftover loose DLL beside a replacement folder.
+        /// </summary>
+        internal static bool SameInstallFamily(InstalledModInfo a, InstalledModInfo b)
+        {
+            if (string.Equals(a.Path, b.Path, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (a.IsDirectory && b.AllPaths.Any(p => IsSameOrUnder(p, a.Path)))
+            {
+                return true;
+            }
+
+            if (b.IsDirectory && a.AllPaths.Any(p => IsSameOrUnder(p, b.Path)))
+            {
+                return true;
+            }
+
+            if (!a.IsDirectory && !b.IsDirectory)
+            {
+                var dirA = Path.GetDirectoryName(a.Path) ?? "";
+                var dirB = Path.GetDirectoryName(b.Path) ?? "";
+                return string.Equals(dirA, dirB, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Paths that should be deleted when replacing this pack mod.
+        /// Tighter than <see cref="FindLocalMatch"/>: core GUIDs like com.fika.core
+        /// must not delete Fika.Core when CommonLib was mis-tagged.
+        /// </summary>
+        internal static bool IsReplaceTarget(
+            InstalledModInfo mod,
+            RequiredModEntry entry,
+            HashSet<string>? guids = null)
+        {
+            guids ??= new HashSet<string>(EntryGuids(entry), StringComparer.OrdinalIgnoreCase);
+
+            bool PathOk(string path) =>
+                PathBelongsToPackEntry(path, entry) &&
+                !IsCoreGuidOnlyCollision(path, entry);
+
+            var anyPathOk = PathOk(mod.Path) || mod.AllPaths.Any(PathOk);
+            if (!anyPathOk)
+            {
+                return false;
+            }
+
+            if (mod.AllPaths.Any(p => PathStrictlyMatchesPackEntry(p, entry)) ||
+                PathStrictlyMatchesPackEntry(mod.Path, entry))
+            {
+                return !IsCoreGuidOnlyCollision(mod.Path, entry);
+            }
+
+            if (entry.ForgeModId is int id and > 0 && mod.ForgeModId == id)
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.Slug) &&
+                string.Equals(mod.ForgeSlug, entry.Slug, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(mod.ForgeGuid) && guids.Contains(mod.ForgeGuid) &&
+                entry.ForgeModId is > 0 && mod.ForgeModId == entry.ForgeModId)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        internal static bool IsCoreGuidOnlyCollision(string path, RequiredModEntry entry)
+        {
+            var guid = (entry.Guid ?? "").Trim();
+            if (!IsCorePluginGuid(guid))
+            {
+                return false;
+            }
+
+            var leaf = PathMatchLeaf(path);
+            if (InstalledModsService.IdentityOverlapsPath(leaf, entry.Slug, entry.Name))
+            {
+                return false;
+            }
+
+            if (entry.ClientFiles is { Count: > 0 })
+            {
+                foreach (var rel in entry.ClientFiles)
+                {
+                    if (string.IsNullOrWhiteSpace(rel))
+                    {
+                        continue;
+                    }
+
+                    var relLeaf = PathMatchLeaf(rel.Replace('\\', '/'));
+                    if (!string.IsNullOrWhiteSpace(relLeaf) &&
+                        (leaf == relLeaf || leaf.Contains(relLeaf) || relLeaf.Contains(leaf)))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return InstalledModsService.IdentityOverlapsPath(leaf, guid);
+        }
+
+        internal static bool IsCorePluginGuid(string? guid)
+        {
+            var g = (guid ?? "").Trim().ToLowerInvariant();
+            return g is "com.fika.core"
+                or "com.fika.dedicated"
+                or "com.spt.core"
+                or "com.spt.custom"
+                or "com.spt.singleplayer"
+                or "com.spt.reflection";
+        }
+
+        internal static int RemoveLocalCopies(
+            string sptRoot,
+            RequiredModEntry entry,
+            IReadOnlyCollection<string>? keepPaths)
+        {
+            var keep = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (keepPaths != null)
+            {
+                foreach (var path in keepPaths)
+                {
+                    if (string.IsNullOrWhiteSpace(path))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        keep.Add(Path.GetFullPath(path));
+                    }
+                    catch
+                    {
+                        keep.Add(path);
+                    }
+                }
+            }
+
+            var scanned = InstalledModsService.ScanInstalledMods(sptRoot);
+            var matches = FindAllLocalMatches(
+                entry,
+                scanned.Where(m => m.Kind == InstalledModKind.Client).ToList());
+
+            var removed = 0;
+            foreach (var match in matches)
+            {
+                if (ShouldKeepInstall(match, keep))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    InstalledModsService.Uninstall(match);
+                    removed++;
+                }
+                catch
+                {
+                    // continue removing other copies
+                }
+            }
+
+            return removed;
+        }
+
+        internal static void PruneAfterPackInstall(
+            string sptRoot,
+            RequiredModEntry entry,
+            IReadOnlyList<string>? extractedFiles)
+        {
+            try
+            {
+                if (extractedFiles is { Count: > 0 })
+                {
+                    PruneUnlistedPluginFiles(sptRoot, entry, extractedFiles);
+                    var keep = extractedFiles
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .Select(p =>
+                        {
+                            try
+                            {
+                                return Path.GetFullPath(p);
+                            }
+                            catch
+                            {
+                                return p;
+                            }
+                        })
+                        .ToList();
+                    foreach (var file in keep.ToList())
+                    {
+                        var dir = Path.GetDirectoryName(file);
+                        if (!string.IsNullOrWhiteSpace(dir) &&
+                            !IsPluginsRoot(sptRoot, dir))
+                        {
+                            keep.Add(dir);
+                        }
+                    }
+
+                    RemoveLocalCopies(sptRoot, entry, keep);
+                }
+                else
+                {
+                    var local = FindLocalMatch(
+                        entry,
+                        InstalledModsService.ScanInstalledMods(sptRoot)
+                            .Where(m => m.Kind == InstalledModKind.Client)
+                            .ToList());
+                    if (local != null)
+                    {
+                        RemoveLocalCopies(sptRoot, entry, KeepPaths(local));
+                    }
+                }
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+
+        internal static int PruneUnlistedPluginFiles(
+            string sptRoot,
+            RequiredModEntry entry,
+            IReadOnlyList<string> extractedFiles)
+        {
+            var extracted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in extractedFiles)
+            {
+                if (string.IsNullOrWhiteSpace(file))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    extracted.Add(Path.GetFullPath(file));
+                }
+                catch
+                {
+                    extracted.Add(file);
+                }
+            }
+
+            if (extracted.Count == 0)
+            {
+                return 0;
+            }
+
+            var removed = 0;
+            var dirs = extracted
+                .Select(f => Path.GetDirectoryName(f))
+                .Where(d => !string.IsNullOrWhiteSpace(d))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            foreach (var dir in dirs)
+            {
+                if (!Directory.Exists(dir))
+                {
+                    continue;
+                }
+
+                var pluginsRoot = IsPluginsRoot(sptRoot, dir!);
+                if (!pluginsRoot && !PathStrictlyMatchesPackEntry(dir!, entry))
+                {
+                    continue;
+                }
+
+                foreach (var dll in SafePluginFilesIn(dir!))
+                {
+                    string full;
+                    try
+                    {
+                        full = Path.GetFullPath(dll);
+                    }
+                    catch
+                    {
+                        full = dll;
+                    }
+
+                    if (extracted.Contains(full))
+                    {
+                        continue;
+                    }
+
+                    if (pluginsRoot && !PathStrictlyMatchesPackEntry(full, entry))
+                    {
+                        continue;
+                    }
+
+                    if (pluginsRoot && IsCoreGuidOnlyCollision(full, entry))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        InstalledModsService.Uninstall(new InstalledModInfo
+                        {
+                            DisplayName = entry.DisplayName,
+                            Path = full,
+                            Kind = InstalledModKind.Client,
+                            IsDirectory = false
+                        });
+                        removed++;
+                    }
+                    catch
+                    {
+                        // best-effort
+                    }
+                }
+            }
+
+            return removed;
+        }
+
+        private static bool IsPluginsRoot(string sptRoot, string directory)
+        {
+            try
+            {
+                var plugins = Path.GetFullPath(Path.Combine(sptRoot, "BepInEx", "plugins"));
+                return string.Equals(
+                    Path.GetFullPath(directory),
+                    plugins,
+                    StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static IEnumerable<string> SafePluginFilesIn(string directory)
+        {
+            try
+            {
+                return Directory.GetFiles(directory)
+                    .Where(f =>
+                    {
+                        var name = Path.GetFileName(f);
+                        return name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                               name.EndsWith(".dll.disabled", StringComparison.OrdinalIgnoreCase);
+                    });
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
+        }
+
+        private static bool ShouldKeepInstall(InstalledModInfo match, HashSet<string> keep)
+        {
+            if (keep.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var path in match.AllPaths)
+            {
+                string full;
+                try
+                {
+                    full = Path.GetFullPath(path);
+                }
+                catch
+                {
+                    full = path;
+                }
+
+                if (keep.Contains(full))
+                {
+                    return true;
+                }
+
+                foreach (var kept in keep)
+                {
+                    if (IsSameOrUnder(full, kept) || IsSameOrUnder(kept, full))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsSameOrUnder(string path, string root)
+        {
+            var trimmedRoot = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var trimmedPath = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(trimmedPath, trimmedRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var prefix = trimmedRoot + Path.DirectorySeparatorChar;
+            return (trimmedPath + Path.DirectorySeparatorChar)
+                .StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
         }
 
         private static async Task<ForgeModSummary?> ResolveModAsync(
@@ -1645,6 +2143,12 @@ namespace SptLauncherWpf.Services
                     string.Equals(m.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase)));
             }
 
+            foreach (var extra in EntryGuids(entry).Skip(string.IsNullOrWhiteSpace(entry.Guid) ? 0 : 1))
+            {
+                candidates.AddRange(clientMods.Where(m =>
+                    string.Equals(m.ForgeGuid, extra, StringComparison.OrdinalIgnoreCase)));
+            }
+
             if (entry.ForgeModId is int id and > 0)
             {
                 candidates.AddRange(clientMods.Where(m => m.ForgeModId == id));
@@ -1656,7 +2160,9 @@ namespace SptLauncherWpf.Services
                     string.Equals(m.ForgeSlug, entry.Slug, StringComparison.OrdinalIgnoreCase)));
             }
 
-            candidates.AddRange(clientMods.Where(m => PathStrictlyMatchesPackEntry(m.Path, entry)));
+            candidates.AddRange(clientMods.Where(m =>
+                PathStrictlyMatchesPackEntry(m.Path, entry) ||
+                m.AllPaths.Any(p => PathStrictlyMatchesPackEntry(p, entry))));
 
             // Name matching is a last resort only when the pack entry has no id/guid/slug.
             // Otherwise "LootNET" / "Use Loose Loot" style collisions can pick the wrong mod
@@ -1809,6 +2315,17 @@ namespace SptLauncherWpf.Services
             if (InstalledModsService.IdentityOverlapsPath(leaf, entry.Slug, entry.Name, entry.Guid))
             {
                 return true;
+            }
+
+            if (entry.ExtraGuids is { Count: > 0 })
+            {
+                foreach (var extra in entry.ExtraGuids)
+                {
+                    if (InstalledModsService.IdentityOverlapsPath(leaf, extra))
+                    {
+                        return true;
+                    }
+                }
             }
 
             if (entry.ClientFiles is { Count: > 0 })

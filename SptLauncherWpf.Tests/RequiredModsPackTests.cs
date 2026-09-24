@@ -1,3 +1,4 @@
+using System.IO;
 using SptLauncherWpf.Services;
 
 namespace SptLauncherWpf.Tests;
@@ -20,6 +21,7 @@ public class RequiredModsPackTests
                   "forgeModId": 902,
                   "version": "1.5.0",
                   "guid": "xyz.drakia.bigbrain",
+                  "extraGuids": ["xyz.drakia.bigbrain.extra"],
                   "clientFiles": ["BepInEx/plugins/DrakiaXYZ-BigBrain.dll"]
                 }
               ],
@@ -38,6 +40,7 @@ public class RequiredModsPackTests
         Assert.Single(pack.Mods);
         Assert.Equal(902, pack.Mods[0].ForgeModId);
         Assert.Equal("xyz.drakia.bigbrain", pack.Mods[0].Guid);
+        Assert.Contains("xyz.drakia.bigbrain.extra", pack.Mods[0].ExtraGuids!);
         Assert.Contains("BepInEx/plugins/DrakiaXYZ-BigBrain.dll", pack.Mods[0].ClientFiles!);
         Assert.True(pack.Mods[0].CanAutoInstall);
     }
@@ -673,6 +676,230 @@ public class RequiredModsPackTests
             "https://blairsworkshop.com/api/download/cmtxhkhe7000004jyebwpeia6",
             RequiredModsPackService.TryLatestDownloadUrlFromWorkshopModJson(
                 """{"slug":"tarkov-battlepass","latestVersion":{"id":"cmtxhkhe7000004jyebwpeia6","version":"0.2.4","downloadUrl":"https://blairsworkshop.com/api/download/cmtxhkhe7000004jyebwpeia6"}}"""));
+    }
+
+    private static RequiredModEntry LootNetPackEntry() => new()
+    {
+        Name = "LootNET",
+        Slug = "lootnet",
+        ForgeModId = 2679,
+        Guid = "com.20fpsguy.LootNet",
+        ExtraGuids = ["com.20fpsguy.LootNet.fika", "com.20fpsguy.LootNet.kills"],
+        Version = "1.1.2",
+        ClientFiles =
+        [
+            "BepInEx/plugins/LootNet/LootNet.dll",
+            "BepInEx/plugins/LootNet/LootNetFika.dll"
+        ]
+    };
+
+    [Fact]
+    public void FindAllLocalMatches_collects_old_lootnet_folder_and_loose_dll_not_uselooseloot()
+    {
+        var entry = LootNetPackEntry();
+        var current = new InstalledModInfo
+        {
+            DisplayName = "LootNET",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\LootNet",
+            IsDirectory = true,
+            ForgeModId = 2679,
+            ForgeGuid = "com.20fpsguy.LootNet",
+            ForgeSlug = "lootnet",
+            VersionHint = "1.1.2"
+        };
+        var leftover = new InstalledModInfo
+        {
+            DisplayName = "LootNet",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\LootNet.dll",
+            IsDirectory = false,
+            VersionHint = "1.0.9"
+        };
+        var looseLoot = new InstalledModInfo
+        {
+            DisplayName = "Use Loose Loot",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\Gaylatea-UseLooseLoot.dll",
+            IsDirectory = false,
+            ForgeModId = 2679,
+            ForgeGuid = "com.20fpsguy.LootNet",
+            ForgeSlug = "lootnet",
+            VersionHint = "1.6.0"
+        };
+
+        var matches = RequiredModsPackService.FindAllLocalMatches(entry, [current, leftover, looseLoot]);
+        Assert.Equal(2, matches.Count);
+        Assert.Contains(matches, m => m.Path.EndsWith(@"\LootNet", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(matches, m => m.Path.EndsWith(@"\LootNet.dll", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(matches, m => m.Path.Contains("UseLooseLoot", StringComparison.OrdinalIgnoreCase));
+        Assert.Single(RequiredModsPackService.StaleLocalCopies(entry, current, matches));
+    }
+
+    [Fact]
+    public void Diff_marks_leftover_lootnet_copy_as_wrong_version()
+    {
+        var pack = new RequiredModsPack { Mods = [LootNetPackEntry()] };
+        var installed = new List<InstalledModInfo>
+        {
+            new()
+            {
+                DisplayName = "LootNET",
+                Kind = InstalledModKind.Client,
+                Path = @"D:\SPT\BepInEx\plugins\LootNet",
+                IsDirectory = true,
+                ForgeModId = 2679,
+                ForgeGuid = "com.20fpsguy.LootNet",
+                ForgeSlug = "lootnet",
+                VersionHint = "1.1.2"
+            },
+            new()
+            {
+                DisplayName = "LootNet old",
+                Kind = InstalledModKind.Client,
+                Path = @"D:\SPT\BepInEx\plugins\LootNet.dll",
+                IsDirectory = false,
+                VersionHint = "1.0.9"
+            }
+        };
+
+        var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry?.Name == "LootNET"));
+        Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
+        Assert.Contains("leftover", item.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(diff.NeedsSync);
+        Assert.DoesNotContain(diff.Items, i => i.Status == RequiredModDiffStatus.Extra);
+    }
+
+    [Fact]
+    public void Diff_keeps_lootnet_companion_dlls_in_same_folder_as_ok()
+    {
+        var pack = new RequiredModsPack { Mods = [LootNetPackEntry()] };
+        var installed = new List<InstalledModInfo>
+        {
+            new()
+            {
+                DisplayName = "LootNet",
+                Kind = InstalledModKind.Client,
+                Path = @"D:\SPT\BepInEx\plugins\LootNet.dll",
+                IsDirectory = false,
+                ForgeModId = 2679,
+                ForgeGuid = "com.20fpsguy.LootNet",
+                VersionHint = "1.1.2"
+            },
+            new()
+            {
+                DisplayName = "LootNet.fika",
+                Kind = InstalledModKind.Client,
+                Path = @"D:\SPT\BepInEx\plugins\LootNetFika.dll",
+                IsDirectory = false,
+                ForgeGuid = "com.20fpsguy.LootNet.fika",
+                VersionHint = "1.1.2"
+            }
+        };
+
+        var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+        Assert.False(diff.NeedsSync);
+    }
+
+    [Fact]
+    public void CommonLib_does_not_replace_fika_core_folder()
+    {
+        var commonLib = new RequiredModEntry
+        {
+            Name = "WTT - CommonLib",
+            Slug = "wtt-commonlib",
+            ForgeModId = 2310,
+            Guid = "com.fika.core",
+            Version = "3.0.6",
+            ClientFiles =
+            [
+                "BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLib.dll"
+            ]
+        };
+        var fika = new InstalledModInfo
+        {
+            DisplayName = "Fika.Core",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\Fika.Core",
+            IsDirectory = true,
+            ForgeGuid = "com.fika.core",
+            VersionHint = "1.1.0"
+        };
+        var wtt = new InstalledModInfo
+        {
+            DisplayName = "WTT CommonLib",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\WTT-ClientCommonLib",
+            IsDirectory = true,
+            ForgeModId = 2310,
+            ForgeSlug = "wtt-commonlib",
+            VersionHint = "3.0.6"
+        };
+
+        Assert.True(RequiredModsPackService.IsCoreGuidOnlyCollision(fika.Path, commonLib));
+        var matches = RequiredModsPackService.FindAllLocalMatches(commonLib, [fika, wtt]);
+        Assert.Single(matches);
+        Assert.Equal(wtt.Path, matches[0].Path);
+    }
+
+    [Fact]
+    public void RemoveLocalCopies_deletes_old_lootnet_and_keeps_unrelated_plugin()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-pack-rm-" + Guid.NewGuid().ToString("N"));
+        var plugins = Path.Combine(root, "BepInEx", "plugins");
+        var lootNetDir = Path.Combine(plugins, "LootNet");
+        Directory.CreateDirectory(lootNetDir);
+        File.WriteAllText(Path.Combine(lootNetDir, "LootNet.dll"), "new");
+        File.WriteAllText(Path.Combine(plugins, "LootNet.dll"), "old");
+        Directory.CreateDirectory(Path.Combine(plugins, "UIFixes"));
+        File.WriteAllText(Path.Combine(plugins, "UIFixes", "UIFixes.dll"), "ui");
+
+        try
+        {
+            var keep = new[] { lootNetDir };
+            var removed = RequiredModsPackService.RemoveLocalCopies(root, LootNetPackEntry(), keep);
+            Assert.True(removed >= 1);
+            Assert.True(Directory.Exists(lootNetDir));
+            Assert.False(File.Exists(Path.Combine(plugins, "LootNet.dll")));
+            Assert.True(File.Exists(Path.Combine(plugins, "UIFixes", "UIFixes.dll")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PruneUnlistedPluginFiles_deletes_old_dll_inside_mod_folder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-pack-prune-" + Guid.NewGuid().ToString("N"));
+        var plugins = Path.Combine(root, "BepInEx", "plugins");
+        var lootNetDir = Path.Combine(plugins, "LootNet");
+        Directory.CreateDirectory(lootNetDir);
+        var current = Path.Combine(lootNetDir, "LootNet.dll");
+        var leftover = Path.Combine(lootNetDir, "LootNet.old.dll");
+        File.WriteAllText(current, "new");
+        File.WriteAllText(leftover, "old");
+        File.WriteAllText(Path.Combine(plugins, "Tyfon.UIFixes.dll"), "ui");
+
+        try
+        {
+            var removed = RequiredModsPackService.PruneUnlistedPluginFiles(
+                root,
+                LootNetPackEntry(),
+                [current]);
+            Assert.Equal(1, removed);
+            Assert.True(File.Exists(current));
+            Assert.False(File.Exists(leftover));
+            Assert.True(File.Exists(Path.Combine(plugins, "Tyfon.UIFixes.dll")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private static RequiredModDiffItem Find(RequiredModsDiffResult diff, string name) =>

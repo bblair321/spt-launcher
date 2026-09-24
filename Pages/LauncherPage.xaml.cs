@@ -3880,7 +3880,8 @@ namespace SptLauncherWpf.Pages
                 var msg =
                     "Install missing / wrong-version client mods from the pack into BepInEx?\n\n" +
                     $"Missing: {missing}\nWrong version: {wrong}\n\n" +
-                    "Server-only packages are skipped. Extra local mods are left alone.";
+                    "Older copies of those mods are deleted first so leftover DLLs are not left behind.\n" +
+                    "Server-only packages are skipped. Extra local mods that are not in the pack are left alone.";
                 var result = System.Windows.MessageBox.Show(
                     msg,
                     "Sync server mods",
