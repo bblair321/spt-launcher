@@ -565,6 +565,53 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Weekend_drops_forge_id_fills_github_release_url()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "Weekend Drops",
+            ForgeModId = 2747,
+            Version = "1.0.7"
+        };
+
+        Assert.True(RequiredModsPackService.IsWeekendDrops(entry));
+        Assert.True(RequiredModsPackService.TryFillKnownGitHubDownload(entry));
+        Assert.Equal(
+            "https://api.github.com/repos/diemitze/WeekendDrops/releases/tags/1.0.7",
+            entry.DownloadUrl);
+        Assert.Equal("githubRelease", entry.DownloadKind);
+        Assert.Equal("weekend-drops", entry.Slug);
+        Assert.False(RequiredModsPackService.TryFillKnownGitHubDownload(entry));
+        Assert.Equal(
+            "https://api.github.com/repos/diemitze/WeekendDrops/releases/latest",
+            RequiredModsPackService.GitHubLatestReleaseApiUrl(entry.DownloadUrl));
+    }
+
+    [Fact]
+    public void TryZipUrlFromGitHubReleaseJson_picks_mod_zip_not_source()
+    {
+        const string json = """
+            {
+              "tag_name": "1.0.7",
+              "assets": [
+                {
+                  "name": "source.zip",
+                  "browser_download_url": "https://github.com/diemitze/WeekendDrops/archive/refs/tags/1.0.7.zip"
+                },
+                {
+                  "name": "WeekendDrops-1.0.7.zip",
+                  "browser_download_url": "https://github.com/diemitze/WeekendDrops/releases/download/1.0.7/WeekendDrops-1.0.7.zip"
+                }
+              ]
+            }
+            """;
+
+        Assert.Equal(
+            "https://github.com/diemitze/WeekendDrops/releases/download/1.0.7/WeekendDrops-1.0.7.zip",
+            RequiredModsPackService.TryZipUrlFromGitHubReleaseJson(json));
+    }
+
+    [Fact]
     public void Parse_forge_mod_id_from_page_url_and_match_armory_name()
     {
         Assert.Equal(2246, RequiredModsPackService.TryParseForgeModIdFromPageUrl(

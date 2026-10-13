@@ -257,6 +257,7 @@ namespace SptLauncherWpf.Services
             foreach (var entry in pack.Mods)
             {
                 TryFillKnownWorkshopDownload(entry);
+                TryFillKnownGitHubDownload(entry);
             }
 
             return pack;
@@ -311,6 +312,161 @@ namespace SptLauncherWpf.Services
             return false;
         }
 
+        /// <summary>
+        /// Weekend Drops (Forge 2747) 404s on the Forge API; 1.0.7+ ships on GitHub.
+        /// </summary>
+        internal static bool TryFillKnownGitHubDownload(RequiredModEntry entry)
+        {
+            if (!string.IsNullOrWhiteSpace(entry.DownloadUrl) ||
+                !TryGetKnownGitHubRepo(entry, out var owner, out var repo))
+            {
+                return false;
+            }
+
+            entry.DownloadUrl = GitHubReleaseApiUrl(owner, repo, entry.Version);
+            entry.DownloadKind = "githubRelease";
+            if (string.IsNullOrWhiteSpace(entry.Slug))
+            {
+                entry.Slug = "weekend-drops";
+            }
+
+            if (string.IsNullOrWhiteSpace(entry.Guid))
+            {
+                entry.Guid = "com.20fpsguy.weekenddrops";
+            }
+
+            return true;
+        }
+
+        internal static bool IsWeekendDrops(RequiredModEntry entry)
+        {
+            if (entry.ForgeModId == 2747)
+            {
+                return true;
+            }
+
+            var guid = (entry.Guid ?? "").Trim();
+            if (guid.Equals("com.20fpsguy.weekenddrops", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var slug = (entry.Slug ?? "").Trim();
+            if (slug.Equals("weekend-drops", StringComparison.OrdinalIgnoreCase) ||
+                slug.Equals("weekenddrops", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var name = InstalledModsService.NormalizeModKey(entry.Name);
+            return name is "weekenddrops" or "weekenddrop";
+        }
+
+        internal static bool TryGetKnownGitHubRepo(RequiredModEntry entry, out string owner, out string repo)
+        {
+            if (IsWeekendDrops(entry))
+            {
+                owner = "diemitze";
+                repo = "WeekendDrops";
+                return true;
+            }
+
+            owner = "";
+            repo = "";
+            return false;
+        }
+
+        internal static string GitHubReleaseApiUrl(string owner, string repo, string? version)
+        {
+            var ver = (version ?? "").Trim();
+            if (!string.IsNullOrWhiteSpace(ver) && !LooksLikePlaceholderVersion(ver))
+            {
+                return $"https://api.github.com/repos/{owner}/{repo}/releases/tags/{Uri.EscapeDataString(ver)}";
+            }
+
+            return $"https://api.github.com/repos/{owner}/{repo}/releases/latest";
+        }
+
+        internal static bool LooksLikeGitHubReleaseApi(string? url)
+        {
+            if (!Uri.TryCreate(url?.Trim() ?? "", UriKind.Absolute, out var uri) ||
+                !uri.Host.Equals("api.github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return uri.AbsolutePath.Contains("/releases/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static string? GitHubLatestReleaseApiUrl(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url) || !LooksLikeGitHubReleaseApi(url))
+            {
+                return null;
+            }
+
+            const string marker = "/releases/";
+            var idx = url.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+            {
+                return null;
+            }
+
+            var latest = url[..(idx + marker.Length)] + "latest";
+            return string.Equals(latest, url.Trim(), StringComparison.OrdinalIgnoreCase)
+                ? null
+                : latest;
+        }
+
+        internal static string? TryZipUrlFromGitHubReleaseJson(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object ||
+                    !doc.RootElement.TryGetProperty("assets", out var assets) ||
+                    assets.ValueKind != JsonValueKind.Array)
+                {
+                    return null;
+                }
+
+                string? fallback = null;
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    var name = asset.TryGetProperty("name", out var nameEl)
+                        ? nameEl.GetString() ?? ""
+                        : "";
+                    var url = asset.TryGetProperty("browser_download_url", out var urlEl)
+                        ? urlEl.GetString()
+                        : null;
+                    if (string.IsNullOrWhiteSpace(url))
+                    {
+                        continue;
+                    }
+
+                    if (!name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
+                        !name.EndsWith(".7z", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (name.Contains("source", StringComparison.OrdinalIgnoreCase))
+                    {
+                        fallback ??= url;
+                        continue;
+                    }
+
+                    return url;
+                }
+
+                return fallback;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public RequiredModsDiffResult Diff(RequiredModsPack pack, IEnumerable<InstalledModInfo> installedMods)
         {
             var clientMods = installedMods
@@ -323,6 +479,7 @@ namespace SptLauncherWpf.Services
             foreach (var entry in pack.Mods ?? Enumerable.Empty<RequiredModEntry>())
             {
                 TryFillKnownWorkshopDownload(entry);
+                TryFillKnownGitHubDownload(entry);
 
                 var copies = FindAllLocalMatches(entry, clientMods);
                 foreach (var copy in copies)
@@ -754,6 +911,8 @@ namespace SptLauncherWpf.Services
             IProgress<RequiredModsSyncProgress>? progress,
             CancellationToken cancellationToken)
         {
+            TryFillKnownGitHubDownload(entry);
+
             if (!string.IsNullOrWhiteSpace(entry.DownloadUrl))
             {
                 PackInstallResult hosted;
@@ -766,26 +925,88 @@ namespace SptLauncherWpf.Services
                     hosted = PackInstallResult.Fail(ex.Message);
                 }
 
-                if (hosted.Success || hosted.SkippedServerOnly ||
-                    !ShouldFallbackHostedDownloadToForge(entry, hosted.Error))
+                if (hosted.Success || hosted.SkippedServerOnly)
                 {
                     return hosted;
                 }
 
-                progress?.Report(new RequiredModsSyncProgress
+                if (ShouldFallbackHostedDownloadToForge(entry, hosted.Error))
                 {
-                    Message = $"{entry.DisplayName}: hosted download is gone — trying Forge…"
-                });
-                var forge = await InstallForgePackEntryAsync(entry, sptRoot, progress, cancellationToken);
-                if (forge.Success || forge.SkippedServerOnly)
-                {
-                    return forge;
+                    progress?.Report(new RequiredModsSyncProgress
+                    {
+                        Message = $"{entry.DisplayName}: hosted download is gone — trying Forge…"
+                    });
+                    var forge = await InstallForgePackEntryAsync(entry, sptRoot, progress, cancellationToken);
+                    if (forge.Success || forge.SkippedServerOnly)
+                    {
+                        return forge;
+                    }
+
+                    var github = await TryInstallKnownGitHubAsync(
+                        entry, sptRoot, progress, cancellationToken);
+                    if (github.Success || github.SkippedServerOnly)
+                    {
+                        return github;
+                    }
+
+                    return PackInstallResult.Fail($"{hosted.Error} Forge fallback: {forge.Error}");
                 }
 
-                return PackInstallResult.Fail($"{hosted.Error} Forge fallback: {forge.Error}");
+                var githubOnly = await TryInstallKnownGitHubAsync(
+                    entry, sptRoot, progress, cancellationToken);
+                return githubOnly.Success || githubOnly.SkippedServerOnly
+                    ? githubOnly
+                    : hosted;
             }
 
-            return await InstallForgePackEntryAsync(entry, sptRoot, progress, cancellationToken);
+            var forgeOnly = await InstallForgePackEntryAsync(entry, sptRoot, progress, cancellationToken);
+            if (forgeOnly.Success || forgeOnly.SkippedServerOnly)
+            {
+                return forgeOnly;
+            }
+
+            var githubFallback = await TryInstallKnownGitHubAsync(
+                entry, sptRoot, progress, cancellationToken);
+            return githubFallback.Success || githubFallback.SkippedServerOnly
+                ? githubFallback
+                : forgeOnly;
+        }
+
+        private async Task<PackInstallResult> TryInstallKnownGitHubAsync(
+            RequiredModEntry entry,
+            string sptRoot,
+            IProgress<RequiredModsSyncProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            if (!TryGetKnownGitHubRepo(entry, out var owner, out var repo))
+            {
+                return PackInstallResult.Fail("");
+            }
+
+            var api = GitHubReleaseApiUrl(owner, repo, entry.Version);
+            if (string.Equals((entry.DownloadUrl ?? "").Trim(), api, StringComparison.OrdinalIgnoreCase))
+            {
+                return PackInstallResult.Fail("");
+            }
+
+            progress?.Report(new RequiredModsSyncProgress
+            {
+                Message = $"{entry.DisplayName}: Forge listing missing — trying GitHub…"
+            });
+
+            var previousUrl = entry.DownloadUrl;
+            var previousKind = entry.DownloadKind;
+            entry.DownloadUrl = api;
+            entry.DownloadKind = "githubRelease";
+            try
+            {
+                return await InstallHostedPackEntryAsync(entry, sptRoot, progress, cancellationToken);
+            }
+            finally
+            {
+                entry.DownloadUrl = previousUrl;
+                entry.DownloadKind = previousKind;
+            }
         }
 
         private async Task<PackInstallResult> InstallForgePackEntryAsync(
@@ -1055,6 +1276,12 @@ namespace SptLauncherWpf.Services
             }
 
             var kind = (entry.DownloadKind ?? "").Trim();
+            if (LooksLikeGitHubReleaseApi(url) ||
+                kind.Equals("githubRelease", StringComparison.OrdinalIgnoreCase))
+            {
+                return await ResolveGitHubReleaseZipUrlAsync(url, cancellationToken);
+            }
+
             var looksLikeWorkshopApi =
                 url.Contains("/api/download/", StringComparison.OrdinalIgnoreCase) ||
                 url.Contains("/api/mods/", StringComparison.OrdinalIgnoreCase) ||
@@ -1084,6 +1311,54 @@ namespace SptLauncherWpf.Services
             }
 
             return await HopWorkshopDownloadApiAsync(url, cancellationToken);
+        }
+
+        private async Task<string> ResolveGitHubReleaseZipUrlAsync(
+            string url,
+            CancellationToken cancellationToken)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+                (uri.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+                 uri.AbsolutePath.EndsWith(".7z", StringComparison.OrdinalIgnoreCase)))
+            {
+                return url;
+            }
+
+            var zip = await TryFetchGitHubReleaseZipAsync(url, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(zip))
+            {
+                return zip;
+            }
+
+            var latest = GitHubLatestReleaseApiUrl(url);
+            if (!string.IsNullOrWhiteSpace(latest))
+            {
+                zip = await TryFetchGitHubReleaseZipAsync(latest, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(zip))
+                {
+                    return zip;
+                }
+            }
+
+            throw new InvalidOperationException(
+                "GitHub release has no downloadable zip.");
+        }
+
+        private async Task<string?> TryFetchGitHubReleaseZipAsync(
+            string apiUrl,
+            CancellationToken cancellationToken)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+            request.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+            using var response = await _http.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            return TryZipUrlFromGitHubReleaseJson(json);
         }
 
         internal static bool LooksLikeWorkshopModPage(string url)
