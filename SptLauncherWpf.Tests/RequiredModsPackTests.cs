@@ -1050,6 +1050,60 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Diff_marks_same_version_when_plugin_file_size_differs()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-size-mismatch-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "BepInEx", "plugins", "com.bblai.battlepass");
+        Directory.CreateDirectory(folder);
+        var dll = Path.Combine(folder, "SptBattlePass.Client.dll");
+        File.WriteAllBytes(dll, new byte[137728]);
+        try
+        {
+            var pack = new RequiredModsPack
+            {
+                Mods =
+                [
+                    new RequiredModEntry
+                    {
+                        Name = "Tarkov Battlepass",
+                        Slug = "tarkov-battlepass",
+                        Guid = "com.bblai.battlepass",
+                        Version = "0.3.0",
+                        DownloadUrl = "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass",
+                        PluginFileSize = 137216,
+                        ClientFiles =
+                        [
+                            "BepInEx/plugins/com.bblai.battlepass/SptBattlePass.Client.dll"
+                        ]
+                    }
+                ]
+            };
+            var installed = new List<InstalledModInfo>
+            {
+                new()
+                {
+                    DisplayName = "BattlePass",
+                    Kind = InstalledModKind.Client,
+                    Path = folder,
+                    IsDirectory = true,
+                    ForgeGuid = "com.bblai.battlepass",
+                    VersionHint = "0.3.0"
+                }
+            };
+
+            var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+            var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+            Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
+            Assert.Contains("file size", item.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.True(diff.NeedsSync);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Diff_marks_asset_only_folder_missing_plugin_dll()
     {
         var root = Path.Combine(Path.GetTempPath(), "spt-dll-missing-" + Guid.NewGuid().ToString("N"));

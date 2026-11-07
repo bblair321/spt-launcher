@@ -75,6 +75,10 @@ namespace SptLauncherWpf.Services
         [JsonPropertyName("downloadKind")]
         public string? DownloadKind { get; set; }
 
+        /// <summary>Host primary plugin DLL size. Sync when local file length differs.</summary>
+        [JsonPropertyName("pluginFileSize")]
+        public long? PluginFileSize { get; set; }
+
         public string DisplayName =>
             !string.IsNullOrWhiteSpace(Name) ? Name! :
             !string.IsNullOrWhiteSpace(Slug) ? Slug! :

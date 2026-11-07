@@ -613,6 +613,20 @@ namespace SptLauncherWpf.Services
                     continue;
                 }
 
+                if (entry.PluginFileSize is long expectedSize and > 0 &&
+                    LocalPrimaryPluginDllLength(entry, copies) is long localSize &&
+                    localSize != expectedSize)
+                {
+                    items.Add(new RequiredModDiffItem
+                    {
+                        Status = RequiredModDiffStatus.WrongVersion,
+                        PackEntry = entry,
+                        Installed = local,
+                        Message = $"{entry.DisplayName}: plugin file size {localSize} does not match host {expectedSize} — Fika will hash-mismatch"
+                    });
+                    continue;
+                }
+
                 var localVersion = (local.VersionHint ?? "").Trim();
                 var staleCopies = StaleLocalCopies(entry, local, copies);
                 var leftover = staleCopies.Count > 0;
@@ -1809,6 +1823,56 @@ namespace SptLauncherWpf.Services
             return PackPluginDllFileNames(entry)
                 .Where(n => !present.Contains(n))
                 .ToList();
+        }
+
+        internal static long? LocalPrimaryPluginDllLength(
+            RequiredModEntry entry,
+            IReadOnlyList<InstalledModInfo> copies)
+        {
+            var names = PackPluginDllFileNames(entry);
+            if (names.Count == 0)
+            {
+                return null;
+            }
+
+            foreach (var copy in copies)
+            {
+                foreach (var path in copy.AllPaths)
+                {
+                    if (string.IsNullOrWhiteSpace(path))
+                    {
+                        continue;
+                    }
+
+                    if (File.Exists(path) &&
+                        names.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
+                    {
+                        return new FileInfo(path).Length;
+                    }
+
+                    if (!Directory.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        foreach (var name in names)
+                        {
+                            foreach (var dll in Directory.EnumerateFiles(path, name, SearchOption.AllDirectories))
+                            {
+                                return new FileInfo(dll).Length;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // best-effort
+                    }
+                }
+            }
+
+            return null;
         }
 
         internal static bool IsLocalVersionSatisfied(RequiredModEntry entry, InstalledModInfo local)
