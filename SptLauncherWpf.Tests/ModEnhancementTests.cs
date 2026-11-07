@@ -77,4 +77,29 @@ public class ModInstallProgressTests
         Assert.Contains("50%", progress.Message);
         Assert.Contains("Downloading…", progress.Message);
     }
+
+    [Fact]
+    public void ShouldReportDownloadProgress_throttles_same_percent()
+    {
+        Assert.True(ModInstallService.ShouldReportDownloadProgress(
+            lastPercent: -1, percent: 0, sinceLastReport: TimeSpan.Zero,
+            minInterval: TimeSpan.FromMilliseconds(250)));
+        Assert.False(ModInstallService.ShouldReportDownloadProgress(
+            lastPercent: 99, percent: 99, sinceLastReport: TimeSpan.FromMilliseconds(50),
+            minInterval: TimeSpan.FromMilliseconds(250)));
+        Assert.True(ModInstallService.ShouldReportDownloadProgress(
+            lastPercent: 99, percent: 99, sinceLastReport: TimeSpan.FromMilliseconds(300),
+            minInterval: TimeSpan.FromMilliseconds(250)));
+        Assert.True(ModInstallService.ShouldReportDownloadProgress(
+            lastPercent: 99, percent: 100, sinceLastReport: TimeSpan.Zero,
+            minInterval: TimeSpan.FromMilliseconds(250)));
+    }
+
+    [Fact]
+    public void DownloadLooksCompleteEnough_accepts_tiny_tail_gap()
+    {
+        Assert.True(ModInstallService.DownloadLooksCompleteEnough(5_862_400_000, 5_862_500_000));
+        Assert.False(ModInstallService.DownloadLooksCompleteEnough(1_000_000, 5_862_500_000));
+        Assert.False(ModInstallService.DownloadLooksCompleteEnough(0, 1000));
+    }
 }

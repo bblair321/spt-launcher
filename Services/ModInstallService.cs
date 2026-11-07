@@ -87,7 +87,8 @@ namespace SptLauncherWpf.Services
             };
             _http = new HttpClient(handler)
             {
-                Timeout = TimeSpan.FromMinutes(10)
+                // Headers only with ResponseHeadersRead; body uses an idle read timeout.
+                Timeout = TimeSpan.FromHours(4)
             };
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("SPTLauncher/3.0 (+https://github.com/bblair321/spt-launcher)");
         }
@@ -244,6 +245,8 @@ namespace SptLauncherWpf.Services
                         "This download isn't a supported .zip/.7z archive. Open the mod on Forge to install it manually.");
                 }
 
+                progress?.Report(new ModInstallProgress { Stage = "Reading archive…" });
+
                 // Antivirus often briefly locks the just-downloaded archive; wait it out.
                 try
                 {
@@ -347,7 +350,7 @@ namespace SptLauncherWpf.Services
 
                 progress?.Report(new ModInstallProgress
                 {
-                    Stage = $"Installing ({classification.Summary})…"
+                    Stage = $"Extracting ({classification.Summary})…"
                 });
 
                 List<string> extracted;
@@ -358,7 +361,8 @@ namespace SptLauncherWpf.Services
                         format,
                         sptRoot,
                         classification.InstallableRelativePaths,
-                        hasRuntime);
+                        hasRuntime,
+                        progress);
                 }
                 catch (Exception ex) when (IsFileLockException(ex))
                 {
@@ -432,6 +436,40 @@ namespace SptLauncherWpf.Services
             string.Equals(mod.Category?.Slug, "tools", StringComparison.OrdinalIgnoreCase)
             || mod.CategoryId == 1;
 
+        internal static readonly TimeSpan DownloadIdleTimeout = TimeSpan.FromSeconds(90);
+        internal static readonly TimeSpan DownloadProgressMinInterval = TimeSpan.FromMilliseconds(250);
+
+        internal static bool ShouldReportDownloadProgress(
+            int lastPercent,
+            int percent,
+            TimeSpan sinceLastReport,
+            TimeSpan minInterval)
+        {
+            if (percent >= 100 || lastPercent < 0)
+            {
+                return true;
+            }
+
+            return percent != lastPercent || sinceLastReport >= minInterval;
+        }
+
+        internal static bool DownloadLooksCompleteEnough(long received, long? total)
+        {
+            if (received <= 0)
+            {
+                return false;
+            }
+
+            if (total is not > 0)
+            {
+                return false;
+            }
+
+            var remaining = total.Value - received;
+            return remaining <= 0 ||
+                   (remaining <= 256 * 1024 && received * 100 >= total.Value * 98);
+        }
+
         private async Task<string> DownloadArchiveAsync(
             ForgeModVersion version,
             IProgress<ModInstallProgress>? progress,
@@ -453,23 +491,70 @@ namespace SptLauncherWpf.Services
                              tempFile,
                              FileMode.Create,
                              FileAccess.Write,
-                             FileShare.Read))
+                             FileShare.Read,
+                             bufferSize: 1_048_576,
+                             FileOptions.Asynchronous | FileOptions.SequentialScan))
             {
-                var buffer = new byte[81920];
+                var buffer = new byte[1_048_576];
                 long received = 0;
-                int read;
-                while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
+                var lastPercent = -1;
+                var lastReportAt = TimeSpan.Zero;
+                var clock = Stopwatch.StartNew();
+
+                while (true)
                 {
+                    int read;
+                    try
+                    {
+                        read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)
+                            .AsTask()
+                            .WaitAsync(DownloadIdleTimeout, cancellationToken);
+                    }
+                    catch (TimeoutException) when (DownloadLooksCompleteEnough(received, total))
+                    {
+                        break;
+                    }
+                    catch (TimeoutException)
+                    {
+                        throw new IOException(
+                            $"Download stalled at {ModInstallProgress.FormatBytes(received)}" +
+                            (total is > 0 ? $" / {ModInstallProgress.FormatBytes(total.Value)}" : "") +
+                            ". Check the network and sync again.");
+                    }
+
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
                     await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
                     received += read;
-                    progress?.Report(new ModInstallProgress
+                    var percent = total is > 0
+                        ? (int)Math.Clamp(received * 100d / total.Value, 0, 100)
+                        : 0;
+                    if (ShouldReportDownloadProgress(
+                            lastPercent,
+                            percent,
+                            clock.Elapsed - lastReportAt,
+                            DownloadProgressMinInterval))
                     {
-                        Stage = "Downloading…",
-                        BytesReceived = received,
-                        TotalBytes = total
-                    });
+                        lastPercent = percent;
+                        lastReportAt = clock.Elapsed;
+                        progress?.Report(new ModInstallProgress
+                        {
+                            Stage = "Downloading…",
+                            BytesReceived = received,
+                            TotalBytes = total
+                        });
+                    }
                 }
 
+                progress?.Report(new ModInstallProgress
+                {
+                    Stage = "Finalizing download…",
+                    BytesReceived = received,
+                    TotalBytes = total ?? received
+                });
                 await output.FlushAsync(cancellationToken);
             }
 
@@ -524,17 +609,17 @@ namespace SptLauncherWpf.Services
                     File.Delete(renamed);
                 }
 
-                // Copy+delete survives AV locks better than Move on the just-written download.
-                File.Copy(tempFile, renamed, overwrite: true);
-                TryDelete(tempFile);
-                return File.Exists(renamed) ? renamed : tempFile;
+                // Move only — copying a multi-GB pack zip looked like a freeze at 99%.
+                File.Move(tempFile, renamed);
+                return renamed;
             }
             catch (Exception ex) when (IsFileLockException(ex))
             {
-                throw new ModFileLockException(
-                    tempFile,
-                    $"Locked file: {tempFile}\n{ex.Message}",
-                    ex);
+                return tempFile;
+            }
+            catch
+            {
+                return tempFile;
             }
         }
 
@@ -819,22 +904,39 @@ namespace SptLauncherWpf.Services
             ArchiveFormat format,
             string sptRoot,
             IReadOnlyList<string> installRelativePaths,
-            bool installHasSptRuntime)
+            bool installHasSptRuntime,
+            IProgress<ModInstallProgress>? progress)
         {
             var wantedMapped = new HashSet<string>(
                 installRelativePaths.Select(ModPathClassifier.NormalizeArchivePath),
                 StringComparer.OrdinalIgnoreCase);
 
             return format == ArchiveFormat.Zip
-                ? ExtractZip(archivePath, sptRoot, wantedMapped, installHasSptRuntime)
-                : ExtractSevenZip(archivePath, sptRoot, wantedMapped, installHasSptRuntime);
+                ? ExtractZip(archivePath, sptRoot, wantedMapped, installHasSptRuntime, progress)
+                : ExtractSevenZip(archivePath, sptRoot, wantedMapped, installHasSptRuntime, progress);
+        }
+
+        private static void ReportExtractProgress(
+            IProgress<ModInstallProgress>? progress,
+            int extractedCount)
+        {
+            if (progress == null || extractedCount == 0 || extractedCount % 25 != 0)
+            {
+                return;
+            }
+
+            progress.Report(new ModInstallProgress
+            {
+                Stage = $"Extracting ({extractedCount} files)…"
+            });
         }
 
         private static List<string> ExtractZip(
             string zipPath,
             string sptRoot,
             HashSet<string> wantedMapped,
-            bool installHasSptRuntime)
+            bool installHasSptRuntime,
+            IProgress<ModInstallProgress>? progress)
         {
             var extracted = new List<string>();
             ZipArchive archive;
@@ -882,6 +984,7 @@ namespace SptLauncherWpf.Services
                         input.CopyTo(output);
                     });
                     extracted.Add(destination);
+                    ReportExtractProgress(progress, extracted.Count);
                 }
             }
 
@@ -892,7 +995,8 @@ namespace SptLauncherWpf.Services
             string archivePath,
             string sptRoot,
             HashSet<string> wantedMapped,
-            bool installHasSptRuntime)
+            bool installHasSptRuntime,
+            IProgress<ModInstallProgress>? progress)
         {
             var extracted = new List<string>();
             IArchive archive;
@@ -936,6 +1040,7 @@ namespace SptLauncherWpf.Services
 
                     WriteExtractedFile(destination, output => reader.WriteEntryTo(output));
                     extracted.Add(destination);
+                    ReportExtractProgress(progress, extracted.Count);
                 }
             }
 
