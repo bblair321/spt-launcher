@@ -323,8 +323,20 @@ namespace SptLauncherWpf.Services
                 return false;
             }
 
-            entry.DownloadUrl = GitHubReleaseApiUrl(owner, repo, entry.Version);
-            entry.DownloadKind = "githubRelease";
+            // Prefer the public asset URL. api.github.com is unauthenticated and
+            // often returns 403, which showed up as "GitHub release has no zip".
+            var zip = GitHubDirectZipUrl(owner, repo, entry.Version);
+            if (!string.IsNullOrWhiteSpace(zip))
+            {
+                entry.DownloadUrl = zip;
+                entry.DownloadKind = "direct";
+            }
+            else
+            {
+                entry.DownloadUrl = GitHubReleaseApiUrl(owner, repo, entry.Version);
+                entry.DownloadKind = "githubRelease";
+            }
+
             if (string.IsNullOrWhiteSpace(entry.Slug))
             {
                 entry.Slug = "weekend-drops";
@@ -385,6 +397,83 @@ namespace SptLauncherWpf.Services
             }
 
             return $"https://api.github.com/repos/{owner}/{repo}/releases/latest";
+        }
+
+        /// <summary>
+        /// WeekendDrops-1.0.7.zip on tag 1.0.7. Skips api.github.com.
+        /// </summary>
+        internal static string? GitHubDirectZipUrl(string owner, string repo, string? version)
+        {
+            var ver = (version ?? "").Trim().TrimStart('v', 'V');
+            if (string.IsNullOrWhiteSpace(ver) || LooksLikePlaceholderVersion(ver))
+            {
+                return null;
+            }
+
+            return $"https://github.com/{owner}/{repo}/releases/download/{ver}/{repo}-{ver}.zip";
+        }
+
+        internal static string? GitHubDirectZipUrlFromReleaseApi(string? apiUrl)
+        {
+            if (!TryParseGitHubReleaseApi(apiUrl, out var owner, out var repo, out var tag) ||
+                string.IsNullOrWhiteSpace(tag))
+            {
+                return null;
+            }
+
+            return GitHubDirectZipUrl(owner, repo, tag);
+        }
+
+        internal static bool TryParseGitHubReleaseApi(
+            string? url,
+            out string owner,
+            out string repo,
+            out string? tag)
+        {
+            owner = "";
+            repo = "";
+            tag = null;
+            if (!Uri.TryCreate(url?.Trim() ?? "", UriKind.Absolute, out var uri))
+            {
+                return false;
+            }
+
+            var segs = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            // api.github.com/repos/{owner}/{repo}/releases/tags/{tag}
+            // github.com/{owner}/{repo}/releases/download/{tag}/{file}
+            var reposIdx = Array.FindIndex(
+                segs,
+                s => s.Equals("repos", StringComparison.OrdinalIgnoreCase));
+            var ownerIdx = reposIdx >= 0 ? reposIdx + 1 : 0;
+            if (ownerIdx + 1 >= segs.Length)
+            {
+                return false;
+            }
+
+            owner = segs[ownerIdx];
+            repo = segs[ownerIdx + 1];
+            if (string.IsNullOrWhiteSpace(owner) || string.IsNullOrWhiteSpace(repo))
+            {
+                return false;
+            }
+
+            var tagsIdx = Array.FindIndex(
+                segs,
+                s => s.Equals("tags", StringComparison.OrdinalIgnoreCase));
+            if (tagsIdx >= 0 && tagsIdx + 1 < segs.Length)
+            {
+                tag = Uri.UnescapeDataString(segs[tagsIdx + 1]);
+            }
+
+            var downloadIdx = Array.FindIndex(
+                segs,
+                s => s.Equals("download", StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(tag) && downloadIdx >= 0 && downloadIdx + 1 < segs.Length)
+            {
+                tag = Uri.UnescapeDataString(segs[downloadIdx + 1]);
+            }
+
+            return true;
         }
 
         internal static bool LooksLikeGitHubReleaseApi(string? url)
@@ -507,6 +596,19 @@ namespace SptLauncherWpf.Services
                         Status = RequiredModDiffStatus.Missing,
                         PackEntry = entry,
                         Message = $"{entry.DisplayName} {entry.Version ?? ""}".Trim() + " — missing"
+                    });
+                    continue;
+                }
+
+                if (!PackPluginDllsPresent(entry, copies))
+                {
+                    var missing = MissingPackPluginDllNames(entry, copies);
+                    items.Add(new RequiredModDiffItem
+                    {
+                        Status = RequiredModDiffStatus.WrongVersion,
+                        PackEntry = entry,
+                        Installed = local,
+                        Message = $"{entry.DisplayName}: plugin DLL missing ({string.Join(", ", missing)}) — Fika will reject this client"
                     });
                     continue;
                 }
@@ -806,6 +908,7 @@ namespace SptLauncherWpf.Services
 
         internal static bool ShouldFallbackHostedDownloadToForge(RequiredModEntry entry, string? hostedError) =>
             !IsKnownWorkshopOnly(entry) &&
+            !IsWeekendDrops(entry) &&
             CanResolveForge(entry) &&
             DownloadErrorLooksGone(hostedError);
 
@@ -983,10 +1086,16 @@ namespace SptLauncherWpf.Services
                 return PackInstallResult.Fail("");
             }
 
-            var api = GitHubReleaseApiUrl(owner, repo, entry.Version);
-            if (string.Equals((entry.DownloadUrl ?? "").Trim(), api, StringComparison.OrdinalIgnoreCase))
+            var zip = GitHubDirectZipUrl(owner, repo, entry.Version);
+            var current = (entry.DownloadUrl ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(zip) ||
+                string.Equals(current, zip, StringComparison.OrdinalIgnoreCase))
             {
-                return PackInstallResult.Fail("");
+                zip = GitHubReleaseApiUrl(owner, repo, null);
+                if (string.Equals(current, zip, StringComparison.OrdinalIgnoreCase))
+                {
+                    return PackInstallResult.Fail("");
+                }
             }
 
             progress?.Report(new RequiredModsSyncProgress
@@ -996,8 +1105,8 @@ namespace SptLauncherWpf.Services
 
             var previousUrl = entry.DownloadUrl;
             var previousKind = entry.DownloadKind;
-            entry.DownloadUrl = api;
-            entry.DownloadKind = "githubRelease";
+            entry.DownloadUrl = zip;
+            entry.DownloadKind = LooksLikeGitHubReleaseApi(zip) ? "githubRelease" : "direct";
             try
             {
                 return await InstallHostedPackEntryAsync(entry, sptRoot, progress, cancellationToken);
@@ -1215,6 +1324,7 @@ namespace SptLauncherWpf.Services
             }
 
             if (CanResolveForge(entry) &&
+                !IsWeekendDrops(entry) &&
                 HostedInstallIsOlderThanPack(entry, report.ExtractedFiles))
             {
                 progress?.Report(new RequiredModsSyncProgress
@@ -1341,6 +1451,12 @@ namespace SptLauncherWpf.Services
                 }
             }
 
+            var direct = GitHubDirectZipUrlFromReleaseApi(url);
+            if (!string.IsNullOrWhiteSpace(direct))
+            {
+                return direct;
+            }
+
             throw new InvalidOperationException(
                 "GitHub release has no downloadable zip.");
         }
@@ -1351,6 +1467,7 @@ namespace SptLauncherWpf.Services
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
             request.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+            request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
             using var response = await _http.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
@@ -1601,6 +1718,97 @@ namespace SptLauncherWpf.Services
             {
                 // best-effort cleanup before retry install
             }
+        }
+
+        internal static IReadOnlyList<string> PackPluginDllFileNames(RequiredModEntry entry)
+        {
+            if (entry.ClientFiles is not { Count: > 0 })
+            {
+                return Array.Empty<string>();
+            }
+
+            return entry.ClientFiles
+                .Where(f => !string.IsNullOrWhiteSpace(f))
+                .Select(f => Path.GetFileName(f.Replace('/', Path.DirectorySeparatorChar)))
+                .Where(n => n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        internal static HashSet<string> PresentPluginDllFileNames(IReadOnlyList<InstalledModInfo> copies)
+        {
+            var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var copy in copies)
+            {
+                foreach (var path in copy.AllPaths)
+                {
+                    if (string.IsNullOrWhiteSpace(path))
+                    {
+                        continue;
+                    }
+
+                    if (File.Exists(path))
+                    {
+                        if (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                            path.EndsWith(".dll.disabled", StringComparison.OrdinalIgnoreCase))
+                        {
+                            present.Add(Path.GetFileName(path.Replace(".disabled", "", StringComparison.OrdinalIgnoreCase)));
+                        }
+
+                        continue;
+                    }
+
+                    if (!Directory.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        foreach (var dll in Directory.EnumerateFiles(path, "*.dll", SearchOption.AllDirectories))
+                        {
+                            present.Add(Path.GetFileName(dll));
+                        }
+                    }
+                    catch
+                    {
+                        // best-effort
+                    }
+                }
+            }
+
+            return present;
+        }
+
+        internal static bool PackPluginDllsPresent(
+            RequiredModEntry entry,
+            IReadOnlyList<InstalledModInfo> copies)
+        {
+            var required = PackPluginDllFileNames(entry);
+            if (required.Count == 0)
+            {
+                return true;
+            }
+
+            var anyOnDisk = copies.SelectMany(c => c.AllPaths)
+                .Any(p => !string.IsNullOrWhiteSpace(p) && (File.Exists(p) || Directory.Exists(p)));
+            if (!anyOnDisk)
+            {
+                return true;
+            }
+
+            var present = PresentPluginDllFileNames(copies);
+            return required.All(present.Contains);
+        }
+
+        internal static List<string> MissingPackPluginDllNames(
+            RequiredModEntry entry,
+            IReadOnlyList<InstalledModInfo> copies)
+        {
+            var present = PresentPluginDllFileNames(copies);
+            return PackPluginDllFileNames(entry)
+                .Where(n => !present.Contains(n))
+                .ToList();
         }
 
         internal static bool IsLocalVersionSatisfied(RequiredModEntry entry, InstalledModInfo local)

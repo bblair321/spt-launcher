@@ -577,14 +577,18 @@ public class RequiredModsPackTests
         Assert.True(RequiredModsPackService.IsWeekendDrops(entry));
         Assert.True(RequiredModsPackService.TryFillKnownGitHubDownload(entry));
         Assert.Equal(
-            "https://api.github.com/repos/diemitze/WeekendDrops/releases/tags/1.0.7",
+            "https://github.com/diemitze/WeekendDrops/releases/download/1.0.7/WeekendDrops-1.0.7.zip",
             entry.DownloadUrl);
-        Assert.Equal("githubRelease", entry.DownloadKind);
+        Assert.Equal("direct", entry.DownloadKind);
         Assert.Equal("weekend-drops", entry.Slug);
         Assert.False(RequiredModsPackService.TryFillKnownGitHubDownload(entry));
         Assert.Equal(
-            "https://api.github.com/repos/diemitze/WeekendDrops/releases/latest",
-            RequiredModsPackService.GitHubLatestReleaseApiUrl(entry.DownloadUrl));
+            "https://github.com/diemitze/WeekendDrops/releases/download/1.0.7/WeekendDrops-1.0.7.zip",
+            RequiredModsPackService.GitHubDirectZipUrlFromReleaseApi(
+                "https://api.github.com/repos/diemitze/WeekendDrops/releases/tags/1.0.7"));
+        Assert.False(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
+            entry,
+            "Response status code does not indicate success: 404 (Not Found)."));
     }
 
     [Fact]
@@ -1038,6 +1042,60 @@ public class RequiredModsPackTests
         {
             Assert.False(FikaDetection.FolderHasCompleteFikaServer(server));
             Assert.False(FikaDetection.FolderHasFikaClientDll(Path.Combine(root, "BepInEx", "plugins", "Fika")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Diff_marks_asset_only_folder_missing_plugin_dll()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-dll-missing-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "BepInEx", "plugins", "WTT-ContentBackportClient");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "endings.bundle"), "assets");
+        try
+        {
+            var pack = new RequiredModsPack
+            {
+                Mods =
+                [
+                    new RequiredModEntry
+                    {
+                        Name = "WTT - Content Backport",
+                        Slug = "wtt-content-backport",
+                        ForgeModId = 2512,
+                        Guid = "com.wtt.contentbackport",
+                        Version = "2.0.5",
+                        ClientFiles =
+                        [
+                            "BepInEx/plugins/WTT-ContentBackportClient/endings.bundle",
+                            "BepInEx/plugins/WTT-ContentBackportClient/WTT-ContentBackportClient.dll"
+                        ]
+                    }
+                ]
+            };
+            var installed = new List<InstalledModInfo>
+            {
+                new()
+                {
+                    DisplayName = "WTT-ContentBackportClient",
+                    Kind = InstalledModKind.Client,
+                    Path = folder,
+                    IsDirectory = true,
+                    ForgeModId = 2512,
+                    ForgeGuid = "com.wtt.contentbackport",
+                    VersionHint = "2.0.5"
+                }
+            };
+
+            var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+            var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+            Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
+            Assert.Contains("WTT-ContentBackportClient.dll", item.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.True(diff.NeedsSync);
         }
         finally
         {
