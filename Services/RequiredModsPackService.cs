@@ -271,6 +271,7 @@ namespace SptLauncherWpf.Services
         internal static bool TryFillKnownWorkshopDownload(RequiredModEntry entry)
         {
             TryFillKnownKeepMeAlive(entry);
+            TryFillKnownKmaBodyDrag(entry);
 
             if (entry.CanAutoInstall)
             {
@@ -325,6 +326,11 @@ namespace SptLauncherWpf.Services
             var slug = (entry.Slug ?? "").Trim();
             var name = (entry.Name ?? "").Trim();
             var key = $"{guid} {slug} {name}".ToLowerInvariant();
+            if (key.Contains("bodydrag") || key.Contains("solo"))
+            {
+                return false;
+            }
+
             var isKma = entry.ForgeModId == 3269
                 || guid.Equals("com.awnova.keepmealive.fika", StringComparison.OrdinalIgnoreCase)
                 || guid.Equals("com.awnova.keepmealive", StringComparison.OrdinalIgnoreCase)
@@ -343,6 +349,35 @@ namespace SptLauncherWpf.Services
             if (entry.ForgeModId is null or <= 0)
             {
                 entry.ForgeModId = 3269;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// K.M.A. - BodyDrag (Forge 3308). GUID shares the KeepMeAlive prefix, so
+        /// pack rows must not be rewritten to Fika 3269.
+        /// </summary>
+        internal static bool TryFillKnownKmaBodyDrag(RequiredModEntry entry)
+        {
+            var guid = (entry.Guid ?? "").Trim();
+            var slug = (entry.Slug ?? "").Trim();
+            var name = (entry.Name ?? "").Trim();
+            var key = $"{guid} {slug} {name}".ToLowerInvariant();
+            var isBodyDrag = entry.ForgeModId == 3308
+                || guid.Equals("com.keepmealive.bodydrag", StringComparison.OrdinalIgnoreCase)
+                || slug.Equals("kma-bodydrag", StringComparison.OrdinalIgnoreCase)
+                || slug.Equals("kmabodydrag", StringComparison.OrdinalIgnoreCase)
+                || key.Contains("bodydrag");
+            if (!isBodyDrag)
+            {
+                return false;
+            }
+
+            entry.Guid = "com.keepmealive.bodydrag";
+            if (entry.ForgeModId is null or <= 0)
+            {
+                entry.ForgeModId = 3308;
             }
 
             return true;
@@ -3231,12 +3266,16 @@ namespace SptLauncherWpf.Services
                 return false;
             }
 
-            if (InstalledModsService.IdentityOverlapsPath(leaf, entry.Slug, entry.Name, entry.Guid))
+            var namesAgree = InstalledModsService.FolderAgreesWithDistinctiveTokens(
+                leaf, entry.Name, entry.Slug);
+
+            if (namesAgree &&
+                InstalledModsService.IdentityOverlapsPath(leaf, entry.Slug, entry.Name, entry.Guid))
             {
                 return true;
             }
 
-            if (entry.ExtraGuids is { Count: > 0 })
+            if (namesAgree && entry.ExtraGuids is { Count: > 0 })
             {
                 foreach (var extra in entry.ExtraGuids)
                 {

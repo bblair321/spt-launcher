@@ -611,6 +611,24 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void KeepMeAlive_fill_does_not_rewrite_bodydrag()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "K.M.A. - BodyDrag",
+            Slug = "kma-bodydrag",
+            Guid = "com.keepmealive.bodydrag"
+        };
+        Assert.False(RequiredModsPackService.TryFillKnownKeepMeAlive(entry));
+        Assert.Null(entry.ForgeModId);
+        Assert.Equal("com.keepmealive.bodydrag", entry.Guid);
+        Assert.True(RequiredModsPackService.TryFillKnownKmaBodyDrag(entry));
+        Assert.Equal(3308, entry.ForgeModId);
+        Assert.Equal("com.keepmealive.bodydrag", entry.Guid);
+        Assert.True(entry.CanAutoInstall);
+    }
+
+    [Fact]
     public void TryZipUrlFromGitHubReleaseJson_picks_mod_zip_not_source()
     {
         const string json = """
@@ -1101,6 +1119,8 @@ public class RequiredModsPackTests
         };
 
         Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(fikaFolder.Path, entry));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\KeepMeAlive", entry));
         Assert.False(RequiredModsPackService.IsReplaceTarget(fikaFolder, entry));
         Assert.Null(RequiredModsPackService.FindLocalMatch(entry, [fikaFolder]));
         Assert.Empty(RequiredModsPackService.FindAllLocalMatches(entry, [fikaFolder]));
@@ -1111,6 +1131,61 @@ public class RequiredModsPackTests
         var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
         Assert.Equal(RequiredModDiffStatus.Missing, item.Status);
         Assert.DoesNotContain("host bytes differ", item.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BodyDrag_does_not_match_keepmealive_folder()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "K.M.A. - BodyDrag",
+            Slug = "kma-bodydrag",
+            Guid = "com.keepmealive.bodydrag",
+            Version = "1.0.1",
+            ClientFiles = ["BepInEx/plugins/KMABodyDrag.dll"],
+            PluginFiles =
+            [
+                new PluginFileIdentity
+                {
+                    Path = "BepInEx/plugins/KMABodyDrag.dll",
+                    Size = 10,
+                    Sha256 = "abc"
+                }
+            ]
+        };
+        var kma = new InstalledModInfo
+        {
+            DisplayName = "KeepMeAlive",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\KeepMeAlive",
+            IsDirectory = true,
+            ForgeGuid = "com.keepmealive.fika",
+            VersionHint = "1.1.0"
+        };
+
+        Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(kma.Path, entry));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\KMABodyDrag.dll", entry));
+        Assert.False(RequiredModsPackService.IsReplaceTarget(kma, entry));
+        Assert.Null(RequiredModsPackService.FindLocalMatch(entry, [kma]));
+        Assert.Empty(RequiredModsPackService.FindAllLocalMatches(entry, [kma]));
+        Assert.False(InstalledModsService.MarkerBelongsToInstall(
+            new ForgeModMarker
+            {
+                Name = entry.Name,
+                Slug = entry.Slug,
+                Guid = entry.Guid,
+                Version = entry.Version
+            },
+            kma.Path));
+
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            [kma]);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.Missing, item.Status);
+        Assert.Equal(3308, entry.ForgeModId);
+        Assert.DoesNotContain("plugin DLL missing", item.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

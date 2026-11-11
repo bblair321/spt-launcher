@@ -375,6 +375,12 @@ namespace SptLauncherWpf.Services
 
             // MoreBotsPlugin vs slug morebotsapi, UNTARGHPlugin vs guid com.untargh.* —
             // BepInEx folders often add "Plugin" and never contain the Forge slug.
+            // K.M.A. BodyDrag's GUID shares keepmealive and must not claim that folder.
+            if (!FolderAgreesWithDistinctiveTokens(leaf, marker.Name, marker.Slug))
+            {
+                return false;
+            }
+
             if (IdentityOverlapsPath(leaf, marker.Slug, marker.Name, marker.Guid))
             {
                 return true;
@@ -434,6 +440,76 @@ namespace SptLauncherWpf.Services
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Name/slug words like "BodyDrag" must appear on the folder when present.
+        /// Empty (K.M.A. - Fika) means GUID matching is still allowed.
+        /// </summary>
+        internal static bool FolderAgreesWithDistinctiveTokens(
+            string pathLeaf,
+            string? name,
+            string? slug)
+        {
+            var leaf = NormalizeModKey(pathLeaf);
+            var cores = FolderIdentityCores(leaf).ToArray();
+            var tokens = DistinctiveIdentityTokens(name, slug);
+            if (tokens.Count == 0)
+            {
+                return true;
+            }
+
+            return tokens.Any(token =>
+                cores.Any(core =>
+                    core == token ||
+                    (!IsGenericIdentityToken(core) &&
+                     !IsGenericIdentityToken(token) &&
+                     (core.Contains(token) || token.Contains(core)))));
+        }
+
+        internal static List<string> DistinctiveIdentityTokens(params string?[] identities)
+        {
+            var tokens = new List<string>();
+            foreach (var raw in identities)
+            {
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    continue;
+                }
+
+                var piece = new List<char>();
+                void Flush()
+                {
+                    if (piece.Count < 4)
+                    {
+                        piece.Clear();
+                        return;
+                    }
+
+                    var token = new string(piece.ToArray()).ToLowerInvariant();
+                    piece.Clear();
+                    if (!IsGenericIdentityToken(token) && !tokens.Contains(token))
+                    {
+                        tokens.Add(token);
+                    }
+                }
+
+                foreach (var ch in raw)
+                {
+                    if (char.IsLetterOrDigit(ch))
+                    {
+                        piece.Add(ch);
+                    }
+                    else
+                    {
+                        Flush();
+                    }
+                }
+
+                Flush();
+            }
+
+            return tokens;
         }
 
         internal static bool IsGenericIdentityToken(string token) =>
