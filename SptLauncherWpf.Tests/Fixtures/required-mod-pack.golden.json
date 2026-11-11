@@ -1,0 +1,61 @@
+{
+  "sptVersion": "4.1.6",
+  "fikaVersion": "2.4.6",
+  "updatedAt": "2026-11-11T00:00:00Z",
+  "instanceId": "golden",
+  "mods": [
+    {
+      "name": "Tarkov Battlepass",
+      "slug": "tarkov-battlepass",
+      "version": "0.3.0",
+      "guid": "com.bblai.battlepass",
+      "clientFiles": [
+        "BepInEx/plugins/com.bblai.battlepass/SptBattlePass.Client.dll"
+      ],
+      "downloadUrl": "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass",
+      "downloadKind": "direct",
+      "pluginFileSize": 137216,
+      "pluginFiles": [
+        {
+          "path": "BepInEx/plugins/com.bblai.battlepass/SptBattlePass.Client.dll",
+          "size": 137216,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    },
+    {
+      "name": "WTT - Content Backport",
+      "slug": "wtt-content-backport",
+      "forgeModId": 2512,
+      "version": "2.0.5",
+      "guid": "com.wtt.contentbackport",
+      "extraGuids": [
+        "com.wtt.contentbackport.fika"
+      ],
+      "clientFiles": [
+        "BepInEx/plugins/WTT-ContentBackportClient/WTT-ContentBackportClient.dll",
+        "BepInEx/plugins/WTT-ContentBackportClient/WTT-ContentBackportFika.dll"
+      ],
+      "pluginFileSize": 40960,
+      "pluginFiles": [
+        {
+          "path": "BepInEx/plugins/WTT-ContentBackportClient/WTT-ContentBackportClient.dll",
+          "size": 40960,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "path": "BepInEx/plugins/WTT-ContentBackportClient/WTT-ContentBackportFika.dll",
+          "size": 8192,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ]
+    }
+  ],
+  "fikaConfigPath": "user/mods/fika-server/assets/configs/fika.jsonc",
+  "fikaSynced": true,
+  "fikaMessage": "Updated Fika mods",
+  "packPath": ".spt-manager/required-mod-pack.json",
+  "sptPackUrlPath": "/mod-pack",
+  "sptHttpModInstalled": true,
+  "sptHttpModMessage": "ready"
+}

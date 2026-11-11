@@ -79,6 +79,10 @@ namespace SptLauncherWpf.Services
         [JsonPropertyName("pluginFileSize")]
         public long? PluginFileSize { get; set; }
 
+        /// <summary>Host plugin DLL identities (path/size/sha256). Prefer over pluginFileSize.</summary>
+        [JsonPropertyName("pluginFiles")]
+        public List<PluginFileIdentity>? PluginFiles { get; set; }
+
         public string DisplayName =>
             !string.IsNullOrWhiteSpace(Name) ? Name! :
             !string.IsNullOrWhiteSpace(Slug) ? Slug! :
@@ -90,6 +94,18 @@ namespace SptLauncherWpf.Services
         public bool CanAutoInstall =>
             ForgeModId is > 0 ||
             !string.IsNullOrWhiteSpace(DownloadUrl);
+    }
+
+    public sealed class PluginFileIdentity
+    {
+        [JsonPropertyName("path")]
+        public string? Path { get; set; }
+
+        [JsonPropertyName("size")]
+        public long Size { get; set; }
+
+        [JsonPropertyName("sha256")]
+        public string? Sha256 { get; set; }
     }
 
     public enum RequiredModDiffStatus

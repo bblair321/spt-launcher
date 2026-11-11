@@ -270,6 +270,8 @@ namespace SptLauncherWpf.Services
         /// </summary>
         internal static bool TryFillKnownWorkshopDownload(RequiredModEntry entry)
         {
+            TryFillKnownKeepMeAlive(entry);
+
             if (entry.CanAutoInstall)
             {
                 return false;
@@ -310,6 +312,42 @@ namespace SptLauncherWpf.Services
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// K.M.A. - Fika (Forge 3269). Host packs often omit forgeModId, so Diff
+        /// treated it as manual-install and Fika blocked join on
+        /// <c>com.awnova.keepmealive.fika</c>.
+        /// </summary>
+        internal static bool TryFillKnownKeepMeAlive(RequiredModEntry entry)
+        {
+            var guid = (entry.Guid ?? "").Trim();
+            var slug = (entry.Slug ?? "").Trim();
+            var name = (entry.Name ?? "").Trim();
+            var key = $"{guid} {slug} {name}".ToLowerInvariant();
+            var isKma = entry.ForgeModId == 3269
+                || guid.Equals("com.awnova.keepmealive.fika", StringComparison.OrdinalIgnoreCase)
+                || guid.Equals("com.awnova.keepmealive", StringComparison.OrdinalIgnoreCase)
+                || guid.Equals("com.keepmealive.fika", StringComparison.OrdinalIgnoreCase)
+                || slug.Equals("kma-fika", StringComparison.OrdinalIgnoreCase)
+                || slug.Equals("keepmealive", StringComparison.OrdinalIgnoreCase)
+                || key.Contains("keepmealive")
+                || key.Contains("keep me alive")
+                || (key.Contains("k.m.a") && key.Contains("fika"));
+            if (!isKma)
+            {
+                return false;
+            }
+
+            entry.Guid = string.IsNullOrWhiteSpace(entry.Guid)
+                ? "com.awnova.keepmealive.fika"
+                : entry.Guid;
+            if (entry.ForgeModId is null or <= 0)
+            {
+                entry.ForgeModId = 3269;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -623,6 +661,18 @@ namespace SptLauncherWpf.Services
                         PackEntry = entry,
                         Installed = local,
                         Message = $"{entry.DisplayName}: plugin file size {localSize} does not match host {expectedSize} — Fika will hash-mismatch"
+                    });
+                    continue;
+                }
+
+                if (PluginFilesMismatch(entry, copies) is string mismatch)
+                {
+                    items.Add(new RequiredModDiffItem
+                    {
+                        Status = RequiredModDiffStatus.WrongVersion,
+                        PackEntry = entry,
+                        Installed = local,
+                        Message = $"{entry.DisplayName}: {mismatch} — host bytes differ"
                     });
                     continue;
                 }
@@ -1873,6 +1923,111 @@ namespace SptLauncherWpf.Services
             }
 
             return null;
+        }
+
+        internal static string? PluginFilesMismatch(
+            RequiredModEntry entry,
+            IReadOnlyList<InstalledModInfo> copies)
+        {
+            foreach (var file in entry.PluginFiles ?? Enumerable.Empty<PluginFileIdentity>())
+            {
+                var rel = (file.Path ?? "").Replace('\\', '/');
+                if (string.IsNullOrWhiteSpace(rel) ||
+                    !rel.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var localPath = FindLocalPluginFile(copies, rel);
+                if (string.IsNullOrWhiteSpace(localPath) || !File.Exists(localPath))
+                {
+                    return $"plugin DLL missing ({Path.GetFileName(rel)})";
+                }
+
+                var localLen = new FileInfo(localPath).Length;
+                if (file.Size > 0 && localLen != file.Size)
+                {
+                    return $"plugin file size {localLen} does not match host {file.Size}";
+                }
+
+                var expected = (file.Sha256 ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(expected))
+                {
+                    continue;
+                }
+
+                var actual = Sha256Hex(localPath);
+                if (actual == null)
+                {
+                    continue;
+                }
+
+                if (!actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
+                {
+                    return "plugin SHA256 does not match host";
+                }
+            }
+
+            return null;
+        }
+
+        internal static string? FindLocalPluginFile(IReadOnlyList<InstalledModInfo> copies, string relativePath)
+        {
+            var name = Path.GetFileName(relativePath.Replace('/', Path.DirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return null;
+            }
+
+            foreach (var copy in copies)
+            {
+                foreach (var path in copy.AllPaths)
+                {
+                    if (string.IsNullOrWhiteSpace(path))
+                    {
+                        continue;
+                    }
+
+                    if (File.Exists(path) &&
+                        Path.GetFileName(path).Equals(name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return path;
+                    }
+
+                    if (!Directory.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        foreach (var dll in Directory.EnumerateFiles(path, name, SearchOption.AllDirectories))
+                        {
+                            return dll;
+                        }
+                    }
+                    catch
+                    {
+                        // best-effort
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        internal static string? Sha256Hex(string path)
+        {
+            try
+            {
+                using var stream = File.OpenRead(path);
+                var hash = System.Security.Cryptography.SHA256.HashData(stream);
+                return Convert.ToHexString(hash).ToLowerInvariant();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         internal static bool IsLocalVersionSatisfied(RequiredModEntry entry, InstalledModInfo local)

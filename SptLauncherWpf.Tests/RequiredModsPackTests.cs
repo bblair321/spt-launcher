@@ -592,6 +592,23 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void KeepMeAlive_pack_entry_gets_forge_id_for_auto_install()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "KeepMeAlive",
+            Slug = "keepmealive",
+            Guid = "com.awnova.keepmealive.fika"
+        };
+        Assert.True(RequiredModsPackService.TryFillKnownKeepMeAlive(entry));
+        Assert.Equal(3269, entry.ForgeModId);
+        Assert.True(entry.CanAutoInstall);
+        var renamed = new RequiredModEntry { Name = "K.M.A. - Fika", Guid = "com.keepmealive.fika" };
+        Assert.True(RequiredModsPackService.TryFillKnownKeepMeAlive(renamed));
+        Assert.Equal(3269, renamed.ForgeModId);
+    }
+
+    [Fact]
     public void TryZipUrlFromGitHubReleaseJson_picks_mod_zip_not_source()
     {
         const string json = """
@@ -1149,6 +1166,93 @@ public class RequiredModsPackTests
             var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
             Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
             Assert.Contains("WTT-ContentBackportClient.dll", item.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.True(diff.NeedsSync);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Parse_golden_pack_fixture_reads_plugin_files()
+    {
+        var json = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "required-mod-pack.golden.json"));
+        var pack = RequiredModsPackService.Instance.Parse(json);
+
+        Assert.Equal("4.1.6", pack.SptVersion);
+        Assert.Equal(2, pack.Mods.Count);
+        var battlePass = pack.Mods.Single(m => m.Guid == "com.bblai.battlepass");
+        Assert.Equal(137216, battlePass.PluginFileSize);
+        Assert.Equal("direct", battlePass.DownloadKind);
+        var identity = Assert.Single(battlePass.PluginFiles!);
+        Assert.Equal("BepInEx/plugins/com.bblai.battlepass/SptBattlePass.Client.dll", identity.Path);
+        Assert.Equal(137216, identity.Size);
+        Assert.Equal(64, identity.Sha256!.Length);
+        var backport = pack.Mods.Single(m => m.Guid == "com.wtt.contentbackport");
+        Assert.Contains("com.wtt.contentbackport.fika", backport.ExtraGuids!);
+        Assert.Equal(2, backport.PluginFiles!.Count);
+        Assert.True(backport.CanAutoInstall);
+    }
+
+    [Fact]
+    public void Diff_marks_same_version_when_plugin_hash_differs()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-hash-mismatch-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "BepInEx", "plugins", "com.bblai.battlepass");
+        Directory.CreateDirectory(folder);
+        var dll = Path.Combine(folder, "SptBattlePass.Client.dll");
+        File.WriteAllBytes(dll, Enumerable.Repeat((byte)1, 256).ToArray());
+        var hostHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(Enumerable.Repeat((byte)0, 256).ToArray())
+        ).ToLowerInvariant();
+        try
+        {
+            var pack = new RequiredModsPack
+            {
+                Mods =
+                [
+                    new RequiredModEntry
+                    {
+                        Name = "Tarkov Battlepass",
+                        Slug = "tarkov-battlepass",
+                        Guid = "com.bblai.battlepass",
+                        Version = "0.3.0",
+                        DownloadUrl = "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass",
+                        PluginFileSize = 256,
+                        ClientFiles =
+                        [
+                            "BepInEx/plugins/com.bblai.battlepass/SptBattlePass.Client.dll"
+                        ],
+                        PluginFiles =
+                        [
+                            new PluginFileIdentity
+                            {
+                                Path = "BepInEx/plugins/com.bblai.battlepass/SptBattlePass.Client.dll",
+                                Size = 256,
+                                Sha256 = hostHash
+                            }
+                        ]
+                    }
+                ]
+            };
+            var installed = new List<InstalledModInfo>
+            {
+                new()
+                {
+                    DisplayName = "BattlePass",
+                    Kind = InstalledModKind.Client,
+                    Path = folder,
+                    IsDirectory = true,
+                    ForgeGuid = "com.bblai.battlepass",
+                    VersionHint = "0.3.0"
+                }
+            };
+
+            var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+            var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+            Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
+            Assert.Contains("host bytes differ", item.Message, StringComparison.OrdinalIgnoreCase);
             Assert.True(diff.NeedsSync);
         }
         finally

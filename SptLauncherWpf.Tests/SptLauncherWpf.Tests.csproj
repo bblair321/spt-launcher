@@ -24,4 +24,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\required-mod-pack.golden.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
