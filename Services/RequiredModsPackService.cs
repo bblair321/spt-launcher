@@ -605,6 +605,11 @@ namespace SptLauncherWpf.Services
 
             foreach (var entry in pack.Mods ?? Enumerable.Empty<RequiredModEntry>())
             {
+                if (IsSptFikaCorePackEntry(entry))
+                {
+                    continue;
+                }
+
                 TryFillKnownWorkshopDownload(entry);
                 TryFillKnownGitHubDownload(entry);
 
@@ -2249,11 +2254,60 @@ namespace SptLauncherWpf.Services
         {
             var g = (guid ?? "").Trim().ToLowerInvariant();
             return g is "com.fika.core"
+                or "fika.core"
                 or "com.fika.dedicated"
+                or "com.fika.headless"
                 or "com.spt.core"
                 or "com.spt.custom"
                 or "com.spt.singleplayer"
+                or "com.spt.debugging"
                 or "com.spt.reflection";
+        }
+
+        /// <summary>
+        /// Fika/SPT cores must never be pack-sync targets. A host pack row named
+        /// "Project Fika" with Fika.Core.dll made launchers reinstall and then
+        /// report the DLL missing.
+        /// </summary>
+        internal static bool IsSptFikaCorePackEntry(RequiredModEntry entry)
+        {
+            if (IsCorePluginGuid(entry.Guid))
+            {
+                return true;
+            }
+
+            var name = (entry.Name ?? "").Trim().ToLowerInvariant();
+            var slug = (entry.Slug ?? "").Trim().ToLowerInvariant();
+            static string Compact(string s) =>
+                new string(s.Where(char.IsLetterOrDigit).ToArray());
+            var nameC = Compact(name);
+            var slugC = Compact(slug);
+            if (name is "fika" or "project fika"
+                || name.StartsWith("project fika", StringComparison.Ordinal)
+                || nameC is "projectfika" or "fikacore"
+                || slug is "fika" or "project-fika" or "fika-core"
+                || slugC is "projectfika" or "fikacore")
+            {
+                return true;
+            }
+
+            foreach (var rel in entry.ClientFiles ?? Enumerable.Empty<string>())
+            {
+                if (IsFikaOrSptCoreFileName(rel))
+                {
+                    return true;
+                }
+            }
+
+            foreach (var file in entry.PluginFiles ?? Enumerable.Empty<PluginFileIdentity>())
+            {
+                if (IsFikaOrSptCoreFileName(file.Path))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

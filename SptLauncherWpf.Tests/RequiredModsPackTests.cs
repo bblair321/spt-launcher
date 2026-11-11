@@ -1032,6 +1032,28 @@ public class RequiredModsPackTests
         Assert.Equal("lootnet", RequiredModsPackService.IdentifyingGuidToken("com.20fpsguy.LootNet.fika"));
         Assert.True(RequiredModsPackService.IsProtectedCorePluginPath(fikaFolder.Path));
         Assert.True(RequiredModsPackService.IsProtectedCorePluginPath(@"D:\SPT\BepInEx\plugins\Fika.Core.dll"));
+        Assert.True(RequiredModsPackService.IsSptFikaCorePackEntry(new RequiredModEntry
+        {
+            Name = "Project Fika",
+            Slug = "project-fika",
+            Guid = "com.fika.core",
+            ClientFiles = ["BepInEx/plugins/Fika/Fika.Core.dll"],
+            PluginFiles =
+            [
+                new PluginFileIdentity
+                {
+                    Path = "BepInEx/plugins/Fika/Fika.Core.dll",
+                    Size = 10,
+                    Sha256 = "abc"
+                }
+            ]
+        }));
+        Assert.False(RequiredModsPackService.IsSptFikaCorePackEntry(new RequiredModEntry
+        {
+            Name = "KeepMeAlive",
+            Slug = "keepmealive",
+            Guid = "com.awnova.keepmealive.fika"
+        }));
         Assert.False(RequiredModsPackService.IsProtectedCorePluginPath(lootNetFika.Path));
         Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(fikaFolder.Path, entry));
         Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(fikaCore.Path, entry));
@@ -1064,6 +1086,49 @@ public class RequiredModsPackTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Diff_skips_project_fika_pack_row()
+    {
+        var pack = new RequiredModsPack
+        {
+            Mods =
+            [
+                new RequiredModEntry
+                {
+                    Name = "Project Fika",
+                    Slug = "project-fika",
+                    Guid = "com.fika.core",
+                    Version = "2.4.6",
+                    ForgeModId = 1,
+                    ClientFiles = ["BepInEx/plugins/Fika/Fika.Core.dll"],
+                    PluginFiles =
+                    [
+                        new PluginFileIdentity
+                        {
+                            Path = "BepInEx/plugins/Fika/Fika.Core.dll",
+                            Size = 99,
+                            Sha256 = "deadbeef"
+                        }
+                    ]
+                }
+            ]
+        };
+        var installed = new List<InstalledModInfo>
+        {
+            new()
+            {
+                DisplayName = "Fika",
+                Kind = InstalledModKind.Client,
+                Path = @"D:\SPT\BepInEx\plugins\Fika",
+                IsDirectory = true,
+                ForgeGuid = "com.fika.core"
+            }
+        };
+        var diff = RequiredModsPackService.Instance.Diff(pack, installed);
+        Assert.DoesNotContain(diff.Items, i => i.PackEntry != null);
+        Assert.False(diff.NeedsSync);
     }
 
     [Fact]
