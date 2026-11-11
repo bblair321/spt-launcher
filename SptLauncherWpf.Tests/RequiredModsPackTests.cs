@@ -602,10 +602,12 @@ public class RequiredModsPackTests
         };
         Assert.True(RequiredModsPackService.TryFillKnownKeepMeAlive(entry));
         Assert.Equal(3269, entry.ForgeModId);
+        Assert.Equal("com.keepmealive.fika", entry.Guid);
         Assert.True(entry.CanAutoInstall);
         var renamed = new RequiredModEntry { Name = "K.M.A. - Fika", Guid = "com.keepmealive.fika" };
         Assert.True(RequiredModsPackService.TryFillKnownKeepMeAlive(renamed));
         Assert.Equal(3269, renamed.ForgeModId);
+        Assert.Equal("com.keepmealive.fika", renamed.Guid);
     }
 
     [Fact]
@@ -1065,6 +1067,50 @@ public class RequiredModsPackTests
         var matches = RequiredModsPackService.FindAllLocalMatches(entry, [fikaFolder, fikaCore, lootNetFika]);
         Assert.Single(matches);
         Assert.Equal(lootNetFika.Path, matches[0].Path);
+    }
+
+    [Fact]
+    public void KeepMeAlive_fika_name_does_not_match_fika_core_folder()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "K.M.A. - Fika",
+            Slug = "keepmealive",
+            Guid = "com.keepmealive.fika",
+            ForgeModId = 3269,
+            Version = "1.1.0",
+            ClientFiles = ["BepInEx/plugins/KeepMeAlive/KeepMeAlive.dll"],
+            PluginFiles =
+            [
+                new PluginFileIdentity
+                {
+                    Path = "BepInEx/plugins/KeepMeAlive/KeepMeAlive.dll",
+                    Size = 10,
+                    Sha256 = "abc"
+                }
+            ]
+        };
+        var fikaFolder = new InstalledModInfo
+        {
+            DisplayName = "Fika",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\Fika",
+            IsDirectory = true,
+            ForgeGuid = "com.fika.core",
+            VersionHint = "2.4.6"
+        };
+
+        Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(fikaFolder.Path, entry));
+        Assert.False(RequiredModsPackService.IsReplaceTarget(fikaFolder, entry));
+        Assert.Null(RequiredModsPackService.FindLocalMatch(entry, [fikaFolder]));
+        Assert.Empty(RequiredModsPackService.FindAllLocalMatches(entry, [fikaFolder]));
+
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            [fikaFolder]);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.Missing, item.Status);
+        Assert.DoesNotContain("host bytes differ", item.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

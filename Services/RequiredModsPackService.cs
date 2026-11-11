@@ -315,8 +315,8 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
-        /// K.M.A. - Fika (Forge 3269). Host packs often omit forgeModId, so Diff
-        /// treated it as manual-install and Fika blocked join on
+        /// K.M.A. - Fika (Forge 3269). Live BepInPlugin is
+        /// <c>com.keepmealive.fika</c>; Forge still lists
         /// <c>com.awnova.keepmealive.fika</c>.
         /// </summary>
         internal static bool TryFillKnownKeepMeAlive(RequiredModEntry entry)
@@ -339,9 +339,7 @@ namespace SptLauncherWpf.Services
                 return false;
             }
 
-            entry.Guid = string.IsNullOrWhiteSpace(entry.Guid)
-                ? "com.awnova.keepmealive.fika"
-                : entry.Guid;
+            entry.Guid = "com.keepmealive.fika";
             if (entry.ForgeModId is null or <= 0)
             {
                 entry.ForgeModId = 3269;
@@ -3105,6 +3103,9 @@ namespace SptLauncherWpf.Services
             var unique = candidates
                 .GroupBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
                 .Select(g => g.First())
+                .Where(m => IsSptFikaCorePackEntry(entry) ||
+                            (!IsProtectedCorePluginPath(m.Path) &&
+                             !m.AllPaths.Any(IsProtectedCorePluginPath)))
                 .ToList();
             if (unique.Count == 0)
             {
@@ -3218,6 +3219,11 @@ namespace SptLauncherWpf.Services
         /// </summary>
         internal static bool PathStrictlyMatchesPackEntry(string path, RequiredModEntry entry)
         {
+            if (IsProtectedCorePluginPath(path) && !IsSptFikaCorePackEntry(entry))
+            {
+                return false;
+            }
+
             var normalizedPath = path.Replace('\\', '/');
             var leaf = PathMatchLeaf(path);
             if (string.IsNullOrWhiteSpace(leaf))

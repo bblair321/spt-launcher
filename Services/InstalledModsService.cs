@@ -415,7 +415,18 @@ namespace SptLauncherWpf.Services
                         continue;
                     }
 
-                    if (core == token || core.Contains(token) || token.Contains(core))
+                    if (core == token)
+                    {
+                        return true;
+                    }
+
+                    // "K.M.A. - Fika" (kmafika) must not match BepInEx/plugins/Fika.
+                    if (IsGenericIdentityToken(core) || IsGenericIdentityToken(token))
+                    {
+                        continue;
+                    }
+
+                    if (core.Contains(token) || token.Contains(core))
                     {
                         return true;
                     }
@@ -424,6 +435,10 @@ namespace SptLauncherWpf.Services
 
             return false;
         }
+
+        internal static bool IsGenericIdentityToken(string token) =>
+            token is "fika" or "core" or "plugin" or "plugins" or "client" or "server"
+                or "mod" or "mods" or "main" or "spt" or "eft";
 
         internal static IEnumerable<string> FolderIdentityCores(string normalizedLeaf)
         {
