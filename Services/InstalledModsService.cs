@@ -149,6 +149,21 @@ namespace SptLauncherWpf.Services
                         ForgeSlug = marker?.Slug,
                         ForgeName = marker?.Name
                     });
+
+                    // BodyDrag ships as KeepMeAlive/KMABodyDrag.dll. That nested DLL
+                    // must be its own install row or pack Diff stays Missing after Sync.
+                    foreach (var nested in SafeEnumerateFiles(dir))
+                    {
+                        var nestedName = Path.GetFileName(nested);
+                        if (string.IsNullOrWhiteSpace(nestedName) ||
+                            !IsPluginFile(nestedName) ||
+                            !IsForeignPluginDllInFolder(dir, nested))
+                        {
+                            continue;
+                        }
+
+                        results.Add(ClientPluginFileInfo(nested));
+                    }
                 }
 
                 foreach (var file in SafeEnumerateFiles(pluginsDir))
@@ -159,27 +174,7 @@ namespace SptLauncherWpf.Services
                         continue;
                     }
 
-                    var marker = ForgeModMarker.TryRead(file, isDirectory: false);
-                    var display = marker?.Name;
-                    if (string.IsNullOrWhiteSpace(display))
-                    {
-                        var baseName = IsDisabledName(name) ? StripDisabledSuffix(name) : name;
-                        display = Path.GetFileNameWithoutExtension(baseName);
-                    }
-
-                    results.Add(new InstalledModInfo
-                    {
-                        DisplayName = display!,
-                        Path = file,
-                        Kind = InstalledModKind.Client,
-                        IsEnabled = !IsDisabledName(name),
-                        IsDirectory = false,
-                        VersionHint = marker?.Version,
-                        ForgeModId = marker is { ForgeModId: > 0 } ? marker.ForgeModId : null,
-                        ForgeGuid = marker?.Guid,
-                        ForgeSlug = marker?.Slug,
-                        ForgeName = marker?.Name
-                    });
+                    results.Add(ClientPluginFileInfo(file));
                 }
             }
 
@@ -510,6 +505,62 @@ namespace SptLauncherWpf.Services
             }
 
             return tokens;
+        }
+
+        /// <summary>
+        /// True when a DLL inside a plugin folder is a different mod (KMABodyDrag.dll
+        /// in KeepMeAlive) rather than the folder's own plugin or companion.
+        /// </summary>
+        internal static bool IsForeignPluginDllInFolder(string folderPath, string dllPath)
+        {
+            var folderName = StripDisabledSuffix(Path.GetFileName(
+                folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+            var dllName = Path.GetFileName(dllPath);
+            if (IsDisabledName(dllName))
+            {
+                dllName = StripDisabledSuffix(dllName);
+            }
+
+            var dllLeaf = NormalizeModKey(Path.GetFileNameWithoutExtension(dllName));
+            if (dllLeaf.Length < 4)
+            {
+                return false;
+            }
+
+            if (FolderAgreesWithDistinctiveTokens(dllLeaf, folderName, null) ||
+                IdentityOverlapsPath(dllLeaf, folderName) ||
+                IdentityOverlapsPath(NormalizeModKey(folderName), dllLeaf))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static InstalledModInfo ClientPluginFileInfo(string file)
+        {
+            var name = Path.GetFileName(file);
+            var marker = ForgeModMarker.TryRead(file, isDirectory: false);
+            var display = marker?.Name;
+            if (string.IsNullOrWhiteSpace(display))
+            {
+                var baseName = IsDisabledName(name) ? StripDisabledSuffix(name) : name;
+                display = Path.GetFileNameWithoutExtension(baseName);
+            }
+
+            return new InstalledModInfo
+            {
+                DisplayName = display!,
+                Path = file,
+                Kind = InstalledModKind.Client,
+                IsEnabled = !IsDisabledName(name),
+                IsDirectory = false,
+                VersionHint = marker?.Version,
+                ForgeModId = marker is { ForgeModId: > 0 } ? marker.ForgeModId : null,
+                ForgeGuid = marker?.Guid,
+                ForgeSlug = marker?.Slug,
+                ForgeName = marker?.Name
+            };
         }
 
         internal static bool IsGenericIdentityToken(string token) =>

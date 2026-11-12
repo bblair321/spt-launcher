@@ -1200,6 +1200,44 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void BodyDrag_nested_in_keepmealive_folder_syncs_as_ok()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-bodydrag-nested-" + Guid.NewGuid().ToString("N"));
+        var kmaDir = Path.Combine(root, "BepInEx", "plugins", "KeepMeAlive");
+        Directory.CreateDirectory(kmaDir);
+        var kmaDll = Path.Combine(kmaDir, "KeepMeAlive.dll");
+        var dragDll = Path.Combine(kmaDir, "KMABodyDrag.dll");
+        File.WriteAllText(kmaDll, "kma");
+        File.WriteAllBytes(dragDll, "drag"u8.ToArray());
+
+        try
+        {
+            var entry = new RequiredModEntry
+            {
+                Name = "K.M.A. - BodyDrag",
+                Slug = "kma-bodydrag",
+                Guid = "com.keepmealive.bodydrag",
+                Version = "1.0.1",
+                ClientFiles = ["BepInEx/plugins/KeepMeAlive/KMABodyDrag.dll"]
+            };
+            var scanned = InstalledModsService.ScanInstalledMods(root);
+            Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(dragDll, entry));
+            Assert.NotNull(RequiredModsPackService.FindLocalMatch(entry, scanned));
+
+            var diff = RequiredModsPackService.Instance.Diff(
+                new RequiredModsPack { Mods = [entry] },
+                scanned);
+            var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+            Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+            Assert.False(diff.NeedsSync);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void FikaDetection_ignores_lootnet_fika_dll_and_empty_server_folder()
     {
         Assert.False(FikaDetection.IsFikaCoreOrServerDll("LootNetFika.dll"));

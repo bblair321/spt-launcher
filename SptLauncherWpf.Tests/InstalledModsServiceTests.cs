@@ -227,4 +227,42 @@ public class InstalledModsServiceTests
             }
         }
     }
+
+    [Fact]
+    public void ScanInstalledMods_lists_bodydrag_dll_inside_keepmealive_folder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-kma-nested-" + Guid.NewGuid().ToString("N"));
+        var kma = Path.Combine(root, "BepInEx", "plugins", "KeepMeAlive");
+        var fika = Path.Combine(root, "BepInEx", "plugins", "Fika");
+        Directory.CreateDirectory(kma);
+        Directory.CreateDirectory(fika);
+        File.WriteAllText(Path.Combine(kma, "KeepMeAlive.dll"), "kma");
+        File.WriteAllText(Path.Combine(kma, "KMABodyDrag.dll"), "drag");
+        File.WriteAllText(Path.Combine(fika, "Fika.Core.dll"), "fika");
+
+        try
+        {
+            var mods = InstalledModsService.ScanInstalledMods(root)
+                .Where(m => m.Kind == InstalledModKind.Client)
+                .ToList();
+            Assert.Contains(mods, m => m.IsDirectory && m.Path == kma);
+            Assert.Contains(mods, m =>
+                !m.IsDirectory &&
+                m.Path.EndsWith("KMABodyDrag.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(mods, m =>
+                !m.IsDirectory &&
+                m.Path.EndsWith("KeepMeAlive.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(mods, m =>
+                !m.IsDirectory &&
+                m.Path.EndsWith("Fika.Core.dll", StringComparison.OrdinalIgnoreCase));
+            Assert.True(InstalledModsService.IsForeignPluginDllInFolder(
+                kma, Path.Combine(kma, "KMABodyDrag.dll")));
+            Assert.False(InstalledModsService.IsForeignPluginDllInFolder(
+                kma, Path.Combine(kma, "KeepMeAlive.dll")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }
