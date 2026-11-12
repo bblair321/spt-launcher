@@ -96,6 +96,20 @@ public class ModPathClassifierTests
     }
 
     [Fact]
+    public void Classify_root_plugin_dll_installs_into_bepinex_plugins()
+    {
+        var result = ModPathClassifier.Classify(
+            ["KMABodyDrag.dll", "readme.txt"],
+            installHasSptRuntime: true);
+
+        Assert.Equal(ModInstallKind.ClientOnly, result.Kind);
+        Assert.True(result.CanAutoInstall);
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals("BepInEx/plugins/KMABodyDrag.dll", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Classify_unwraps_single_zip_folder_prefix()
     {
         var files = new[]

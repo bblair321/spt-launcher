@@ -3200,6 +3200,29 @@ namespace SptLauncherWpf.Services
             return InstalledModsService.NormalizeModKey(name);
         }
 
+        internal static bool ClientFileLeafMatches(RequiredModEntry entry, string leaf)
+        {
+            if (string.IsNullOrWhiteSpace(leaf) || entry.ClientFiles is not { Count: > 0 })
+            {
+                return false;
+            }
+
+            foreach (var rel in entry.ClientFiles)
+            {
+                if (string.IsNullOrWhiteSpace(rel))
+                {
+                    continue;
+                }
+
+                if (PathMatchLeaf(rel.Replace('\\', '/')) == leaf)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// True when the install path is allowed to represent this pack entry.
         /// Rejects known cross-tagging (Use Loose Loot DLL stamped as LootNET), but still
@@ -3215,6 +3238,12 @@ namespace SptLauncherWpf.Services
 
             var slugCompact = InstalledModsService.NormalizeModKey(entry.Slug);
             var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
+
+            if (!InstalledModsService.FolderAgreesWithDistinctiveTokens(leaf, entry.Name, entry.Slug) &&
+                !ClientFileLeafMatches(entry, leaf))
+            {
+                return false;
+            }
 
             if (!string.IsNullOrWhiteSpace(slugCompact) && leaf.Contains(slugCompact))
             {
@@ -3317,15 +3346,26 @@ namespace SptLauncherWpf.Services
                     }
 
                     // BepInEx/plugins/<folder>/... matches that plugin folder only —
-                    // never a short prefix like BepInEx/plugins.
+                    // never a short prefix like BepInEx/plugins, and never another
+                    // mod's folder that happens to contain this file (KeepMeAlive /
+                    // KMABodyDrag.dll).
                     var parts = normRel.Split('/', StringSplitOptions.RemoveEmptyEntries);
                     var pluginsIdx = Array.FindIndex(
                         parts,
                         p => p.Equals("plugins", StringComparison.OrdinalIgnoreCase));
                     if (pluginsIdx >= 0 && pluginsIdx + 1 < parts.Length)
                     {
-                        var pluginFolder = InstalledModsService.NormalizeModKey(parts[pluginsIdx + 1]);
-                        if (!string.IsNullOrWhiteSpace(pluginFolder) && pluginFolder == leaf)
+                        var pluginFolderPart = parts[pluginsIdx + 1];
+                        var pluginFolder = PathMatchLeaf(pluginFolderPart);
+                        if (string.IsNullOrWhiteSpace(pluginFolder))
+                        {
+                            pluginFolder = InstalledModsService.NormalizeModKey(pluginFolderPart);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(pluginFolder) &&
+                            pluginFolder == leaf &&
+                            InstalledModsService.FolderAgreesWithDistinctiveTokens(
+                                leaf, entry.Name, entry.Slug))
                         {
                             return true;
                         }

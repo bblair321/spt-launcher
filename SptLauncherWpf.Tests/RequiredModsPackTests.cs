@@ -1164,8 +1164,19 @@ public class RequiredModsPackTests
         };
 
         Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(kma.Path, entry));
+        Assert.False(RequiredModsPackService.PathBelongsToPackEntry(kma.Path, entry));
         Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
             @"D:\SPT\BepInEx\plugins\KMABodyDrag.dll", entry));
+        var nested = new RequiredModEntry
+        {
+            Name = entry.Name,
+            Slug = entry.Slug,
+            Guid = entry.Guid,
+            Version = entry.Version,
+            ClientFiles = ["BepInEx/plugins/KeepMeAlive/KMABodyDrag.dll"]
+        };
+        Assert.False(RequiredModsPackService.PathStrictlyMatchesPackEntry(kma.Path, nested));
+        Assert.False(RequiredModsPackService.IsReplaceTarget(kma, nested));
         Assert.False(RequiredModsPackService.IsReplaceTarget(kma, entry));
         Assert.Null(RequiredModsPackService.FindLocalMatch(entry, [kma]));
         Assert.Empty(RequiredModsPackService.FindAllLocalMatches(entry, [kma]));

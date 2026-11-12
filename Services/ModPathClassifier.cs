@@ -190,6 +190,15 @@ namespace SptLauncherWpf.Services
                 return true;
             }
 
+            // Single-DLL Forge zips often ship `KMABodyDrag.dll` at the archive root.
+            if (IsRootLevelFile(path) &&
+                path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            {
+                installRelativePath = "BepInEx/plugins/" + path;
+                kind = ModInstallKind.ClientOnly;
+                return true;
+            }
+
             // Dynamic Maps (and similar) ship Unity.VectorGraphics into Managed.
             if (IsClientManagedPath(path))
             {
