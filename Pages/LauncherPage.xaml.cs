@@ -3854,6 +3854,7 @@ namespace SptLauncherWpf.Pages
                 title = "Need sync";
                 detail =
                     $"{diff.MissingCount} missing, {diff.WrongVersionCount} wrong version" +
+                    (diff.ShouldDisableCount > 0 ? $", {diff.ShouldDisableCount} disable" : "") +
                     (diff.ManualFixCount > 0 ? $", {diff.ManualFixCount} manual" : "");
                 color = "#F59E0B";
             }
@@ -3873,12 +3874,14 @@ namespace SptLauncherWpf.Pages
             var issues = diff.Items
                 .Where(i => i.Status is RequiredModDiffStatus.Missing
                     or RequiredModDiffStatus.WrongVersion
+                    or RequiredModDiffStatus.ShouldDisable
                     or RequiredModDiffStatus.ManualFix)
                 .Take(6)
                 .Select(i => "• " + i.Message)
                 .ToList();
             if (diff.Items.Count(i => i.Status is RequiredModDiffStatus.Missing
                     or RequiredModDiffStatus.WrongVersion
+                    or RequiredModDiffStatus.ShouldDisable
                     or RequiredModDiffStatus.ManualFix) > 6)
             {
                 issues.Add("• …");
@@ -3975,10 +3978,12 @@ namespace SptLauncherWpf.Pages
                 var preview = _requiredModsDiff;
                 var missing = preview?.MissingCount ?? 0;
                 var wrong = preview?.WrongVersionCount ?? 0;
+                var disable = preview?.ShouldDisableCount ?? 0;
                 var msg =
                     "Install missing / wrong-version client mods from the pack into BepInEx?\n\n" +
-                    $"Missing: {missing}\nWrong version: {wrong}\n\n" +
+                    $"Missing: {missing}\nWrong version: {wrong}\nDisable (off on server): {disable}\n\n" +
                     "Older copies of those mods are deleted first so leftover DLLs are not left behind.\n" +
+                    "Mods disabled on the server are renamed with .disabled on this PC.\n" +
                     "Server-only packages are skipped. Extra local mods that are not in the pack are left alone.";
                 var result = System.Windows.MessageBox.Show(
                     msg,

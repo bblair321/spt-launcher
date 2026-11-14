@@ -83,6 +83,15 @@ namespace SptLauncherWpf.Services
         [JsonPropertyName("pluginFiles")]
         public List<PluginFileIdentity>? PluginFiles { get; set; }
 
+        /// <summary>
+        /// Host enabled flag. Missing/null in older packs means enabled.
+        /// False = launcher should disable the local install, not download it.
+        /// </summary>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        public bool IsEnabledOnHost => Enabled != false;
+
         public string DisplayName =>
             !string.IsNullOrWhiteSpace(Name) ? Name! :
             !string.IsNullOrWhiteSpace(Slug) ? Slug! :
@@ -113,6 +122,7 @@ namespace SptLauncherWpf.Services
         Ok,
         Missing,
         WrongVersion,
+        ShouldDisable,
         ManualFix,
         Extra
     }
@@ -133,10 +143,11 @@ namespace SptLauncherWpf.Services
         public int OkCount => Items.Count(i => i.Status == RequiredModDiffStatus.Ok);
         public int MissingCount => Items.Count(i => i.Status == RequiredModDiffStatus.Missing);
         public int WrongVersionCount => Items.Count(i => i.Status == RequiredModDiffStatus.WrongVersion);
+        public int ShouldDisableCount => Items.Count(i => i.Status == RequiredModDiffStatus.ShouldDisable);
         public int ManualFixCount => Items.Count(i => i.Status == RequiredModDiffStatus.ManualFix);
         public int ExtraCount => Items.Count(i => i.Status == RequiredModDiffStatus.Extra);
 
-        public bool NeedsSync => MissingCount > 0 || WrongVersionCount > 0;
+        public bool NeedsSync => MissingCount > 0 || WrongVersionCount > 0 || ShouldDisableCount > 0;
         public bool IsReady => !NeedsSync && ManualFixCount == 0;
         public bool HasBlockingIssues => NeedsSync;
     }
@@ -153,6 +164,7 @@ namespace SptLauncherWpf.Services
         public bool Success { get; init; }
         public string Message { get; init; } = "";
         public int InstalledCount { get; init; }
+        public int DisabledCount { get; init; }
         public int SkippedServerOnlyCount { get; init; }
         public int FailedCount { get; init; }
         public IReadOnlyList<string> Errors { get; init; } = Array.Empty<string>();

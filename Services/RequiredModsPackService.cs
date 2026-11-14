@@ -727,6 +727,34 @@ namespace SptLauncherWpf.Services
                 }
 
                 var local = FindLocalMatch(entry, clientMods) ?? copies.FirstOrDefault();
+                if (!entry.IsEnabledOnHost)
+                {
+                    if (local == null || !local.IsEnabled)
+                    {
+                        items.Add(new RequiredModDiffItem
+                        {
+                            Status = RequiredModDiffStatus.Ok,
+                            PackEntry = entry,
+                            Installed = local,
+                            Message = local == null
+                                ? $"{entry.DisplayName} — disabled on server (not installed)"
+                                : $"{entry.DisplayName} — disabled on server"
+                        });
+                    }
+                    else
+                    {
+                        items.Add(new RequiredModDiffItem
+                        {
+                            Status = RequiredModDiffStatus.ShouldDisable,
+                            PackEntry = entry,
+                            Installed = local,
+                            Message = $"{entry.DisplayName} — disabled on server, disable locally"
+                        });
+                    }
+
+                    continue;
+                }
+
                 if (local == null && !entry.CanAutoInstall)
                 {
                     items.Add(new RequiredModDiffItem
@@ -854,13 +882,17 @@ namespace SptLauncherWpf.Services
         {
             var installed = InstalledModsService.ScanInstalledMods(sptRoot);
             var before = Diff(pack, installed);
+            var toDisable = before.Items
+                .Where(i => i.Status is RequiredModDiffStatus.ShouldDisable)
+                .Where(i => i.Installed != null)
+                .ToList();
             var toSync = before.Items
                 .Where(i => i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion)
                 .Where(i => i.PackEntry != null)
                 .Select(i => i.PackEntry!)
                 .ToList();
 
-            if (toSync.Count == 0)
+            if (toSync.Count == 0 && toDisable.Count == 0)
             {
                 return new RequiredModsSyncReport
                 {
@@ -874,9 +906,32 @@ namespace SptLauncherWpf.Services
 
             var errors = new List<string>();
             var installedCount = 0;
+            var disabledCount = 0;
             var prunedCount = 0;
             var skippedServerOnly = 0;
             var failed = 0;
+
+            for (var i = 0; i < toDisable.Count; i++)
+            {
+                var item = toDisable[i];
+                cancellationToken.ThrowIfCancellationRequested();
+                progress?.Report(new RequiredModsSyncProgress
+                {
+                    Current = i + 1,
+                    Total = toDisable.Count + toSync.Count,
+                    Message = $"Disabling {item.PackEntry?.DisplayName ?? item.Installed!.DisplayName}…"
+                });
+                try
+                {
+                    InstalledModsService.SetEnabled(item.Installed!, enabled: false);
+                    disabledCount++;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    errors.Add($"{item.PackEntry?.DisplayName ?? item.Installed!.DisplayName}: {ex.Message}");
+                }
+            }
 
             for (var i = 0; i < toSync.Count; i++)
             {
@@ -884,9 +939,9 @@ namespace SptLauncherWpf.Services
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.Report(new RequiredModsSyncProgress
                 {
-                    Current = i + 1,
-                    Total = toSync.Count,
-                    Message = $"Syncing {entry.DisplayName} ({i + 1}/{toSync.Count})…"
+                    Current = toDisable.Count + i + 1,
+                    Total = toDisable.Count + toSync.Count,
+                    Message = $"Syncing {entry.DisplayName} ({toDisable.Count + i + 1}/{toDisable.Count + toSync.Count})…"
                 });
 
                 try
@@ -998,6 +1053,11 @@ namespace SptLauncherWpf.Services
                 parts.Add($"Installed/updated {installedCount}");
             }
 
+            if (disabledCount > 0)
+            {
+                parts.Add($"disabled {disabledCount} on this PC");
+            }
+
             if (prunedCount > 0)
             {
                 parts.Add($"removed {prunedCount} leftover cop{(prunedCount == 1 ? "y" : "ies")}");
@@ -1015,9 +1075,13 @@ namespace SptLauncherWpf.Services
 
             if (after.NeedsSync)
             {
-                parts.Add($"still missing {after.MissingCount}, wrong version {after.WrongVersionCount}");
+                parts.Add(
+                    $"still missing {after.MissingCount}, wrong version {after.WrongVersionCount}" +
+                    (after.ShouldDisableCount > 0 ? $", disable {after.ShouldDisableCount}" : ""));
                 foreach (var item in after.Items
-                             .Where(i => i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion)
+                             .Where(i => i.Status is RequiredModDiffStatus.Missing
+                                 or RequiredModDiffStatus.WrongVersion
+                                 or RequiredModDiffStatus.ShouldDisable)
                              .Take(5))
                 {
                     errors.Add(item.Message);
@@ -1037,6 +1101,7 @@ namespace SptLauncherWpf.Services
                 Success = success,
                 Message = string.Join(" · ", parts),
                 InstalledCount = installedCount,
+                DisabledCount = disabledCount,
                 SkippedServerOnlyCount = skippedServerOnly,
                 FailedCount = failed,
                 Errors = errors,

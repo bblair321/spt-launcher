@@ -43,6 +43,27 @@ public class RequiredModsPackTests
         Assert.Contains("xyz.drakia.bigbrain.extra", pack.Mods[0].ExtraGuids!);
         Assert.Contains("BepInEx/plugins/DrakiaXYZ-BigBrain.dll", pack.Mods[0].ClientFiles!);
         Assert.True(pack.Mods[0].CanAutoInstall);
+        Assert.True(pack.Mods[0].IsEnabledOnHost);
+    }
+
+    [Fact]
+    public void Parse_enabled_false_means_host_disabled()
+    {
+        const string json = """
+            {
+              "mods": [
+                {
+                  "name": "All Quests Checkmarks",
+                  "slug": "all-quests-checkmarks",
+                  "guid": "com.zgfuedkx.allquestscheckmarks",
+                  "enabled": false
+                }
+              ]
+            }
+            """;
+
+        var pack = RequiredModsPackService.Instance.Parse(json);
+        Assert.False(pack.Mods[0].IsEnabledOnHost);
     }
 
     [Fact]
@@ -1554,6 +1575,93 @@ public class RequiredModsPackTests
                 PluginFiles = entry.PluginFiles
             };
             Assert.True(RequiredModsPackService.IsPlayersOnlyPackEntry(nameless));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Diff_host_disabled_mod_asks_launcher_to_disable_local_copy()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "All Quests Checkmarks",
+            Slug = "all-quests-checkmarks",
+            Guid = "com.zgfuedkx.allquestscheckmarks",
+            Enabled = false,
+            ForgeModId = 2025
+        };
+        var enabledLocal = new InstalledModInfo
+        {
+            DisplayName = "All Quests Checkmarks",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\AllQuestsCheckmarks",
+            IsDirectory = true,
+            IsEnabled = true,
+            ForgeGuid = "com.zgfuedkx.allquestscheckmarks"
+        };
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            [enabledLocal]);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.ShouldDisable, item.Status);
+        Assert.True(diff.NeedsSync);
+
+        var alreadyOff = new InstalledModInfo
+        {
+            DisplayName = enabledLocal.DisplayName,
+            Kind = InstalledModKind.Client,
+            Path = enabledLocal.Path + ".disabled",
+            IsDirectory = true,
+            IsEnabled = false,
+            ForgeGuid = enabledLocal.ForgeGuid
+        };
+        diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            [alreadyOff]);
+        item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+        Assert.False(diff.NeedsSync);
+
+        diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            []);
+        item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+        Assert.False(diff.NeedsSync);
+    }
+
+    [Fact]
+    public async Task Sync_disables_local_mod_when_host_disabled()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-sync-disable-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "BepInEx", "plugins", "AllQuestsCheckmarks");
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "AllQuestsCheckmarks-Client.dll"), [1, 2, 3]);
+        try
+        {
+            var pack = new RequiredModsPack
+            {
+                Mods =
+                [
+                    new RequiredModEntry
+                    {
+                        Name = "All Quests Checkmarks",
+                        Slug = "all-quests-checkmarks",
+                        Guid = "com.zgfuedkx.allquestscheckmarks",
+                        Enabled = false,
+                        ClientFiles = ["BepInEx/plugins/AllQuestsCheckmarks/AllQuestsCheckmarks-Client.dll"]
+                    }
+                ]
+            };
+            var report = await RequiredModsPackService.Instance.SyncMissingAsync(pack, root);
+            Assert.True(report.Success, report.Message);
+            Assert.Equal(1, report.DisabledCount);
+            Assert.False(Directory.Exists(folder));
+            Assert.True(Directory.Exists(folder + ".disabled"));
+            Assert.False(report.DiffAfter?.NeedsSync);
         }
         finally
         {
