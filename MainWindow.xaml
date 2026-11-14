@@ -1,6 +1,7 @@
 <Window x:Class="SptLauncherWpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="SPT Launcher" Height="880" Width="1360"
         MinHeight="640" MinWidth="960"
         WindowStartupLocation="CenterScreen"
@@ -15,6 +16,13 @@
         RenderOptions.BitmapScalingMode="HighQuality"
         RenderOptions.ClearTypeHint="Enabled"
         RenderOptions.EdgeMode="Unspecified">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            ResizeBorderThickness="6"
+                            UseAeroCaptionButtons="False"/>
+    </shell:WindowChrome.WindowChrome>
     
     <Border Background="{DynamicResource ChromeBackgroundColor}" Margin="0"
             BorderBrush="{DynamicResource BorderColor}" BorderThickness="1">
