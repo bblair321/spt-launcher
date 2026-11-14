@@ -82,6 +82,7 @@ namespace SptLauncherWpf.Pages
         private static int _launcherPid = 0;
         private static int _serverPid = 0;
         private static string _launcherPath = "";
+        private string? _officialLauncherStatusNote;
         private System.Windows.Threading.DispatcherTimer? _uiUpdateTimer;
         
         // Global process monitoring - independent of page lifecycle
@@ -620,6 +621,7 @@ namespace SptLauncherWpf.Pages
 
                     // Start monitoring for the server process
                     _ = Task.Run(() => MonitorForServerProcess());
+                _ = TryDockOfficialLauncherAsync(_launcherPid);
             }
             catch (System.ComponentModel.Win32Exception winEx)
             {
@@ -706,6 +708,7 @@ namespace SptLauncherWpf.Pages
                 }
 
                 _ = Task.Run(() => MonitorForServerProcess());
+                _ = TryDockOfficialLauncherAsync(pid);
                 return true;
             }
             catch
@@ -802,10 +805,99 @@ namespace SptLauncherWpf.Pages
             await StopSptProcessesAsync();
         }
 
+        public Task StopOfficialLauncherAsync() => StopSptProcessesAsync();
+
+        internal void SetOfficialLauncherStatus(string? note)
+        {
+            _officialLauncherStatusNote = note;
+            RefreshPlayHero();
+        }
+
+        internal void OnOfficialLauncherOverlayHidden()
+        {
+            SetOfficialLauncherStatus(
+                "Official SPT launcher is still running. Use Official launcher to open it again.");
+        }
+
+        private void OpenOfficialLauncherButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (System.Windows.Application.Current?.MainWindow is MainWindow main)
+            {
+                main.ShowOfficialLauncherOverlay();
+            }
+        }
+
+        private async Task TryDockOfficialLauncherAsync(int processId)
+        {
+            try
+            {
+                if (System.Windows.Application.Current?.MainWindow is not MainWindow main)
+                {
+                    SetOfficialLauncherStatus("Official SPT launcher opened in its own window.");
+                    return;
+                }
+
+                var docked = await main.TryEmbedOfficialLauncherAsync(processId);
+                SetOfficialLauncherStatus(docked
+                    ? "Official SPT launcher is docked in this tab."
+                    : "Official SPT launcher opened in its own window.");
+                HookOfficialLauncherProcessExit();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TryDockOfficialLauncherAsync] {ex.Message}");
+                SetOfficialLauncherStatus("Official SPT launcher opened in its own window.");
+            }
+        }
+
+        private void HookOfficialLauncherProcessExit()
+        {
+            var process = _launcherProcess;
+            if (process == null)
+            {
+                return;
+            }
+
+            try
+            {
+                process.EnableRaisingEvents = true;
+                process.Exited += (_, _) =>
+                {
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        var stillRunning = NativeWindowEmbed.ListSptLauncherProcessIds(
+                            Environment.ProcessId).Count > 0;
+                        if (stillRunning)
+                        {
+                            return;
+                        }
+
+                        if (System.Windows.Application.Current?.MainWindow is MainWindow host)
+                        {
+                            host.DetachOfficialLauncher(restoreAsStandalone: false);
+                        }
+
+                        _officialLauncherStatusNote = null;
+                        RefreshPlayHero();
+                    });
+                };
+            }
+            catch
+            {
+                // Access denied on some processes; overlay still detaches on Stop.
+            }
+        }
+
         private async Task StopSptProcessesAsync()
         {
             try
             {
+                if (System.Windows.Application.Current?.MainWindow is MainWindow main)
+                {
+                    main.DetachOfficialLauncher(restoreAsStandalone: false);
+                }
+
+                _officialLauncherStatusNote = null;
                 System.Diagnostics.Debug.WriteLine("[StopSptProcessesAsync] Starting stop process...");
                 int currentProcessId = Process.GetCurrentProcess().Id;
                 string currentProcessName = Process.GetCurrentProcess().ProcessName;
@@ -1297,11 +1389,21 @@ namespace SptLauncherWpf.Pages
 
         private void ResetLauncherState()
         {
+            if (System.Windows.Application.Current?.MainWindow is MainWindow main)
+            {
+                main.DetachOfficialLauncher(restoreAsStandalone: false);
+            }
+
+            _officialLauncherStatusNote = null;
             _isLauncherRunning = false;
             _launcherProcess = null;
             _serverProcess = null;
             _launcherPid = 0;
             LaunchButton.IsEnabled = true;
+            if (OpenOfficialLauncherButton != null)
+            {
+                OpenOfficialLauncherButton.Visibility = Visibility.Collapsed;
+            }
             if (StopButtonBorder != null)
             {
                 StopButtonBorder.Opacity = 0.6;
@@ -1456,7 +1558,9 @@ namespace SptLauncherWpf.Pages
             if (isLauncherRunning)
             {
                 PlayStatusHeadline.Text = "SPT is running";
-                PlayStatusDetail.Text = "Use Stop when you want to shut down the launcher and related processes.";
+                PlayStatusDetail.Text = string.IsNullOrWhiteSpace(_officialLauncherStatusNote)
+                    ? "Use Stop when you want to shut down the launcher and related processes."
+                    : _officialLauncherStatusNote;
                 heroState = PlayHeroState.Running;
             }
             else if (isAnySptRunning)
@@ -1499,6 +1603,22 @@ namespace SptLauncherWpf.Pages
 
             ApplyPlayHeroAccent(heroState);
             RefreshReadinessSummary();
+            UpdateOpenOfficialLauncherButton();
+        }
+
+        private void UpdateOpenOfficialLauncherButton()
+        {
+            if (OpenOfficialLauncherButton == null)
+            {
+                return;
+            }
+
+            var show = System.Windows.Application.Current?.MainWindow is MainWindow main
+                       && main.IsOfficialLauncherEmbedded
+                       && !main.IsOfficialLauncherOverlayShowing;
+            OpenOfficialLauncherButton.Visibility = show
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         private void ApplyPlayHeroAccent(PlayHeroState state)

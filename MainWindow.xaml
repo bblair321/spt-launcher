@@ -6,7 +6,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource ChromeBackgroundColor}"
         WindowStyle="None"
-        AllowsTransparency="True"
+        AllowsTransparency="False"
         ResizeMode="CanResize"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
@@ -225,15 +225,65 @@
                     <Button Name="SettingsTabButton" Content="Settings" Tag="settings"
                             Click="TabButton_Click"
                             Style="{StaticResource TabButtonStyle}"/>
-                    <Button Name="DevToolsTabButton" Content="Tools" Tag="devtools"
-                            Click="TabButton_Click"
-                            Style="{StaticResource TabButtonStyle}"/>
                 </StackPanel>
             </Border>
 
             <!-- Content Area -->
             <Grid Grid.Row="3" Background="{DynamicResource BackgroundColor}" Margin="0">
                 <Frame Name="ContentFrame" NavigationUIVisibility="Hidden" Background="{DynamicResource BackgroundColor}" Margin="12,8"/>
+                <Grid Name="OfficialLauncherOverlay"
+                      Margin="12,8"
+                      Visibility="Hidden"
+                      Panel.ZIndex="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0"
+                            Background="{DynamicResource ChromeBackgroundColor}"
+                            BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="0,0,0,1"
+                            Padding="12,8">
+                        <DockPanel>
+                            <Button Name="OfficialLauncherBackButton"
+                                    DockPanel.Dock="Left"
+                                    Content="Back"
+                                    Style="{StaticResource ModernButtonStyle}"
+                                    Background="#4B5563"
+                                    Padding="14,7"
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
+                                    Click="OfficialLauncherBackButton_Click"
+                                    Margin="0,0,12,0"/>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Name="OfficialLauncherPopOutButton"
+                                        Content="Pop out"
+                                        Style="{StaticResource ModernButtonStyle}"
+                                        Background="#4B5563"
+                                        Padding="12,7"
+                                        FontSize="12"
+                                        Click="OfficialLauncherPopOutButton_Click"
+                                        Margin="0,0,8,0"/>
+                                <Button Name="OfficialLauncherStopButton"
+                                        Content="Stop"
+                                        Style="{StaticResource ModernButtonStyle}"
+                                        Background="#6B7280"
+                                        Padding="14,7"
+                                        FontSize="12"
+                                        FontWeight="SemiBold"
+                                        Click="OfficialLauncherStopButton_Click"/>
+                            </StackPanel>
+                            <TextBlock Text="Official SPT launcher"
+                                       Foreground="{DynamicResource ChromeTextColor}"
+                                       FontWeight="SemiBold"
+                                       FontSize="13"
+                                       VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </Border>
+                    <Grid Name="OfficialLauncherHostSlot"
+                          Grid.Row="1"
+                          Background="{DynamicResource BackgroundColor}"/>
+                </Grid>
             </Grid>
         </Grid>
     </Border>

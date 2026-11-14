@@ -1,13 +1,14 @@
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using SptLauncherWpf.Controls;
 using SptLauncherWpf.Pages;
 using SptLauncherWpf.Services;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SptLauncherWpf
@@ -22,19 +23,11 @@ namespace SptLauncherWpf
         private ServersPage? _serversPage;
         private ModsPage? _modsPage;
         private SettingsPage? _settingsPage;
-        private DevToolsPage? _devToolsPage;
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct MARGINS
-        {
-            public int cxLeftWidth;
-            public int cxRightWidth;
-            public int cyTopHeight;
-            public int cyBottomHeight;
-        }
+        private OfficialSptLauncherHost? _officialLauncherHost;
+        private nint _embeddedOfficialHwnd;
+        private NativeWindowStyleSnapshot? _embeddedOfficialStyles;
+        private CancellationTokenSource? _embedCts;
+        private bool _officialLauncherOverlayMinimized;
 
         public MainWindow()
         {
@@ -74,15 +67,17 @@ namespace SptLauncherWpf
                 UpdateThemeIcon();
                 RefreshChromeTabStyles();
                 
-                // Extend window frame into client area to eliminate white border
-                Loaded += MainWindow_Loaded;
                 Closing += MainWindow_Closing;
                 StateChanged += MainWindow_StateChanged;
 
                 RestoreWindowBounds();
 
                 // Handle post-restart self-update confirmation / .old.exe cleanup
-                Loaded += (_, _) => TryShowSelfUpdateCompletion();
+                Loaded += (_, _) =>
+                {
+                    EnsureOfficialLauncherHost();
+                    TryShowSelfUpdateCompletion();
+                };
             }
             catch (Exception ex)
             {
@@ -143,21 +138,6 @@ namespace SptLauncherWpf
             }
         }
 
-        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var helper = new System.Windows.Interop.WindowInteropHelper(this);
-                helper.EnsureHandle();
-                var margins = new MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
-                DwmExtendFrameIntoClientArea(helper.Handle, ref margins);
-            }
-            catch
-            {
-                // Ignore if DWM extension fails
-            }
-        }
-
         private void MainWindow_StateChanged(object? sender, EventArgs e)
         {
             _isMaximized = WindowState == WindowState.Maximized;
@@ -169,6 +149,15 @@ namespace SptLauncherWpf
 
         private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
+            try
+            {
+                DetachOfficialLauncher(restoreAsStandalone: true);
+            }
+            catch
+            {
+                // Don't block close on detach failure
+            }
+
             try
             {
                 SaveWindowBounds();
@@ -243,7 +232,6 @@ namespace SptLauncherWpf
             ApplyTabButtonStyle(ServersTabButton);
             ApplyTabButtonStyle(ModsTabButton);
             ApplyTabButtonStyle(SettingsTabButton);
-            ApplyTabButtonStyle(DevToolsTabButton);
         }
 
         private void ApplyTabButtonStyle(System.Windows.Controls.Button button)
@@ -262,7 +250,6 @@ namespace SptLauncherWpf
             UpdateTabButtonStyle(ServersTabButton, _currentTab == "servers");
             UpdateTabButtonStyle(ModsTabButton, _currentTab == "mods");
             UpdateTabButtonStyle(SettingsTabButton, _currentTab == "settings");
-            UpdateTabButtonStyle(DevToolsTabButton, _currentTab == "devtools");
         }
 
         private void SetActiveTab(string tabId)
@@ -293,11 +280,9 @@ namespace SptLauncherWpf
                         _settingsPage ??= new SettingsPage();
                         ContentFrame.Navigate(_settingsPage);
                         break;
-                    case "devtools":
-                        _devToolsPage ??= new DevToolsPage();
-                        ContentFrame.Navigate(_devToolsPage);
-                        break;
                 }
+
+                SyncOfficialLauncherOverlay();
             }
             catch (Exception ex)
             {
@@ -553,6 +538,199 @@ namespace SptLauncherWpf
             _showingSelfUpdateResult = false;
             UpdateNotificationBanner.Visibility = Visibility.Collapsed;
             ResetUpdateBannerChrome();
+        }
+
+        public bool IsOfficialLauncherEmbedded => _embeddedOfficialHwnd != 0;
+
+        public bool IsOfficialLauncherOverlayShowing =>
+            IsOfficialLauncherEmbedded && !_officialLauncherOverlayMinimized;
+
+        public async Task<bool> TryEmbedOfficialLauncherAsync(int processId)
+        {
+            DetachOfficialLauncher(restoreAsStandalone: false);
+            _embedCts?.Dispose();
+            _embedCts = new CancellationTokenSource();
+            var token = _embedCts.Token;
+            var excludePid = Environment.ProcessId;
+
+            nint hwnd;
+            try
+            {
+                hwnd = await NativeWindowEmbed.WaitForMainWindowAsync(
+                    [processId],
+                    excludePid,
+                    TimeSpan.FromSeconds(20),
+                    token);
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+
+            if (hwnd == 0)
+            {
+                return false;
+            }
+
+            EnsureOfficialLauncherHost();
+            if (_officialLauncherHost == null || OfficialLauncherOverlay == null)
+            {
+                return false;
+            }
+
+            OfficialLauncherOverlay.Visibility = Visibility.Visible;
+            OfficialLauncherOverlay.UpdateLayout();
+            var hostHandle = await WaitForHostHandleAsync(token);
+            if (hostHandle == 0)
+            {
+                OfficialLauncherOverlay.Visibility = Visibility.Hidden;
+                return false;
+            }
+
+            _embeddedOfficialStyles = NativeWindowEmbed.CaptureStyles(hwnd);
+            if (!NativeWindowEmbed.EmbedAsChild(hwnd, hostHandle))
+            {
+                _embeddedOfficialStyles = null;
+                OfficialLauncherOverlay.Visibility = Visibility.Hidden;
+                return false;
+            }
+
+            _embeddedOfficialHwnd = hwnd;
+            _officialLauncherOverlayMinimized = false;
+            _officialLauncherHost.Attach(hwnd);
+            SyncOfficialLauncherOverlay();
+            _officialLauncherHost.FitChild();
+            return true;
+        }
+
+        public void HideOfficialLauncherOverlay()
+        {
+            if (!IsOfficialLauncherEmbedded)
+            {
+                return;
+            }
+
+            _officialLauncherOverlayMinimized = true;
+            SyncOfficialLauncherOverlay();
+            _launcherPage?.OnOfficialLauncherOverlayHidden();
+        }
+
+        public void ShowOfficialLauncherOverlay()
+        {
+            if (!IsOfficialLauncherEmbedded)
+            {
+                return;
+            }
+
+            _officialLauncherOverlayMinimized = false;
+            SyncOfficialLauncherOverlay();
+            _launcherPage?.SetOfficialLauncherStatus("Official SPT launcher is docked in this tab.");
+        }
+
+        public void DetachOfficialLauncher(bool restoreAsStandalone)
+        {
+            _embedCts?.Cancel();
+            _officialLauncherOverlayMinimized = false;
+
+            var hwnd = _embeddedOfficialHwnd;
+            var styles = _embeddedOfficialStyles;
+            _embeddedOfficialHwnd = 0;
+            _embeddedOfficialStyles = null;
+            _officialLauncherHost?.ClearChild();
+
+            if (hwnd != 0)
+            {
+                NativeWindowEmbed.Detach(hwnd, styles, restoreAsStandalone);
+            }
+
+            if (OfficialLauncherOverlay != null)
+            {
+                OfficialLauncherOverlay.Visibility = Visibility.Hidden;
+            }
+        }
+
+        internal void SyncOfficialLauncherOverlay()
+        {
+            if (OfficialLauncherOverlay == null)
+            {
+                return;
+            }
+
+            var show = IsOfficialLauncherEmbedded
+                       && _currentTab == "launcher"
+                       && !_officialLauncherOverlayMinimized;
+            OfficialLauncherOverlay.Visibility = show ? Visibility.Visible : Visibility.Hidden;
+            NativeWindowEmbed.SetVisible(_embeddedOfficialHwnd, show);
+            if (show)
+            {
+                _officialLauncherHost?.FitChild();
+            }
+        }
+
+        private async Task<nint> WaitForHostHandleAsync(CancellationToken token)
+        {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+            while (DateTime.UtcNow < deadline)
+            {
+                token.ThrowIfCancellationRequested();
+                try
+                {
+                    var handle = _officialLauncherHost?.Handle ?? 0;
+                    if (handle != 0)
+                    {
+                        return handle;
+                    }
+                }
+                catch
+                {
+                    // HwndHost is not created until it has been loaded.
+                }
+
+                OfficialLauncherOverlay?.UpdateLayout();
+                await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Loaded);
+                await Task.Delay(50, token);
+            }
+
+            return 0;
+        }
+
+        private void EnsureOfficialLauncherHost()
+        {
+            if (_officialLauncherHost != null || OfficialLauncherHostSlot == null)
+            {
+                return;
+            }
+
+            _officialLauncherHost = new OfficialSptLauncherHost
+            {
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                VerticalAlignment = System.Windows.VerticalAlignment.Stretch
+            };
+            OfficialLauncherHostSlot.Children.Add(_officialLauncherHost);
+            OfficialLauncherHostSlot.SizeChanged += (_, _) => _officialLauncherHost?.FitChild();
+        }
+
+        private async void OfficialLauncherBackButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_launcherPage != null)
+            {
+                await _launcherPage.StopOfficialLauncherAsync();
+            }
+        }
+
+        private void OfficialLauncherPopOutButton_Click(object sender, RoutedEventArgs e)
+        {
+            DetachOfficialLauncher(restoreAsStandalone: true);
+            _launcherPage?.SetOfficialLauncherStatus(
+                "Official SPT launcher opened in its own window.");
+        }
+
+        private async void OfficialLauncherStopButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_launcherPage != null)
+            {
+                await _launcherPage.StopOfficialLauncherAsync();
+            }
         }
     }
 }

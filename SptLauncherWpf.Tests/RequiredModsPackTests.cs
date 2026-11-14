@@ -1496,6 +1496,71 @@ public class RequiredModsPackTests
         }
     }
 
+    [Fact]
+    public void Diff_players_only_checkmarks_ignores_host_hash()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-checkmarks-hash-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "BepInEx", "plugins", "AllQuestsCheckmarks");
+        Directory.CreateDirectory(folder);
+        var dll = Path.Combine(folder, "AllQuestsCheckmarks-Client.dll");
+        File.WriteAllBytes(dll, Enumerable.Repeat((byte)1, 100).ToArray());
+        try
+        {
+            var entry = new RequiredModEntry
+            {
+                Name = "All Quests Checkmarks",
+                Slug = "all-quests-checkmarks",
+                Guid = "com.zgfuedkx.allquestscheckmarks",
+                Version = "1.4.0",
+                ForgeModId = 2025,
+                ClientFiles = ["BepInEx/plugins/AllQuestsCheckmarks/AllQuestsCheckmarks-Client.dll"],
+                PluginFiles =
+                [
+                    new PluginFileIdentity
+                    {
+                        Path = "BepInEx/plugins/AllQuestsCheckmarks/AllQuestsCheckmarks-Client.dll",
+                        Size = 100,
+                        Sha256 = Convert.ToHexString(
+                            System.Security.Cryptography.SHA256.HashData(
+                                Enumerable.Repeat((byte)0, 100).ToArray()))
+                    }
+                ]
+            };
+            Assert.True(RequiredModsPackService.IsPlayersOnlyPackEntry(entry));
+            var diff = RequiredModsPackService.Instance.Diff(
+                new RequiredModsPack { Mods = [entry] },
+                [
+                    new InstalledModInfo
+                    {
+                        DisplayName = "All Quests Checkmarks",
+                        Kind = InstalledModKind.Client,
+                        Path = folder,
+                        IsDirectory = true,
+                        ForgeGuid = "com.zgfuedkx.allquestscheckmarks",
+                        VersionHint = "1.4.0"
+                    }
+                ]);
+            var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+            Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+            Assert.False(diff.NeedsSync);
+
+            var nameless = new RequiredModEntry
+            {
+                Name = "All Quests Checkmarks",
+                Slug = "all-quests-checkmarks",
+                Version = "1.4.0",
+                ForgeModId = 2025,
+                ClientFiles = ["BepInEx/plugins/AllQuestsCheckmarks/AllQuestsCheckmarks-Client.dll"],
+                PluginFiles = entry.PluginFiles
+            };
+            Assert.True(RequiredModsPackService.IsPlayersOnlyPackEntry(nameless));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static RequiredModDiffItem Find(RequiredModsDiffResult diff, string name) =>
         diff.Items.First(i => i.PackEntry?.Name == name);
 }

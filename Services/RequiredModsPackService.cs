@@ -316,6 +316,80 @@ namespace SptLauncherWpf.Services
         }
 
         /// <summary>
+        /// HUD / menu / QoL plugins that Fika must not require, and that the
+        /// dedicated host disables when Headless is present. Pack file hashes from
+        /// that host must not force player clients to reinstall forever.
+        internal static bool IsPlayersOnlyPackEntry(RequiredModEntry entry)
+        {
+            if (EntryGuids(entry).Any(IsPlayersOnlyGuid))
+            {
+                return true;
+            }
+
+            // Host packs sometimes omit guid; name/slug/path still identify HUD mods
+            // whose hashes were taken from a headless (disabled) copy.
+            var key = $"{entry.Guid} {entry.Slug} {entry.Name}".ToLowerInvariant();
+            if (key.Contains("allquestscheckmarks") ||
+                key.Contains("all quests checkmarks") ||
+                key.Contains("skilldistribution") ||
+                key.Contains("skill distribution"))
+            {
+                return true;
+            }
+
+            if (entry.ForgeModId is 2025)
+            {
+                return true;
+            }
+
+            foreach (var path in (entry.ClientFiles ?? Enumerable.Empty<string>())
+                         .Concat((entry.PluginFiles ?? Enumerable.Empty<PluginFileIdentity>())
+                             .Select(f => f.Path ?? "")))
+            {
+                var p = path.Replace('\\', '/').ToLowerInvariant();
+                if (p.Contains("allquestscheckmarks") || p.Contains("skilldistribution"))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool IsPlayersOnlyGuid(string? guid)
+        {
+            var g = (guid ?? "").Trim().ToLowerInvariant();
+            if (g.Length == 0)
+            {
+                return false;
+            }
+
+            if (g.Contains("sptvr") || g.Contains("spt-vr") || g.Contains("spt_vr"))
+            {
+                return true;
+            }
+
+            return g is "com.amanda.graphics"
+                or "com.mpstark.dynamicmaps"
+                or "com.tyfon.uifixes"
+                or "com.fontaine.fovfix"
+                or "katrin0522.fastsellinflea"
+                or "com.tarkin.huir"
+                or "xyz.drakia.questtracker"
+                or "xyz.drakia.tasklistfixes"
+                or "xyz.drakia.quickmovetocontainer"
+                or "xyz.drakia.searchopencontainers"
+                or "mattexe.bossnotifier"
+                or "com.borkel.nvgmasks"
+                or "com.kaeno.traderscrolling"
+                or "com.terkoiz.flareeventnotifier"
+                or "com.zgfuedkx.allquestscheckmarks"
+                or "com.zgfuedkx.skilldistribution"
+                or "com.wtt.commonlib"
+                or "com.matsix.sptvr"
+                or "com.matsix.sptvr.fikasync";
+        }
+
         /// K.M.A. - Fika (Forge 3269). Live BepInPlugin is
         /// <c>com.keepmealive.fika</c>; Forge still lists
         /// <c>com.awnova.keepmealive.fika</c>.
@@ -689,30 +763,36 @@ namespace SptLauncherWpf.Services
                     continue;
                 }
 
-                if (entry.PluginFileSize is long expectedSize and > 0 &&
-                    LocalPrimaryPluginDllLength(entry, copies) is long localSize &&
-                    localSize != expectedSize)
+                // Player-only HUD/UI mods are disabled on the dedicated headless host,
+                // so pack SHA256 is the host's leftover/disabled bytes — not the Forge
+                // zip players should run. Reinstalling never converges.
+                if (!IsPlayersOnlyPackEntry(entry))
                 {
-                    items.Add(new RequiredModDiffItem
+                    if (entry.PluginFileSize is long expectedSize and > 0 &&
+                        LocalPrimaryPluginDllLength(entry, copies) is long localSize &&
+                        localSize != expectedSize)
                     {
-                        Status = RequiredModDiffStatus.WrongVersion,
-                        PackEntry = entry,
-                        Installed = local,
-                        Message = $"{entry.DisplayName}: plugin file size {localSize} does not match host {expectedSize} — Fika will hash-mismatch"
-                    });
-                    continue;
-                }
+                        items.Add(new RequiredModDiffItem
+                        {
+                            Status = RequiredModDiffStatus.WrongVersion,
+                            PackEntry = entry,
+                            Installed = local,
+                            Message = $"{entry.DisplayName}: plugin file size {localSize} does not match host {expectedSize} — Fika will hash-mismatch"
+                        });
+                        continue;
+                    }
 
-                if (PluginFilesMismatch(entry, copies) is string mismatch)
-                {
-                    items.Add(new RequiredModDiffItem
+                    if (PluginFilesMismatch(entry, copies) is string mismatch)
                     {
-                        Status = RequiredModDiffStatus.WrongVersion,
-                        PackEntry = entry,
-                        Installed = local,
-                        Message = $"{entry.DisplayName}: {mismatch} — host bytes differ"
-                    });
-                    continue;
+                        items.Add(new RequiredModDiffItem
+                        {
+                            Status = RequiredModDiffStatus.WrongVersion,
+                            PackEntry = entry,
+                            Installed = local,
+                            Message = $"{entry.DisplayName}: {mismatch} — host bytes differ"
+                        });
+                        continue;
+                    }
                 }
 
                 var localVersion = (local.VersionHint ?? "").Trim();
