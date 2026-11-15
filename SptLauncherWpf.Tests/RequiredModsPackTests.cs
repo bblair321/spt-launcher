@@ -1609,6 +1609,28 @@ public class RequiredModsPackTests
         Assert.Equal(RequiredModDiffStatus.ShouldDisable, item.Status);
         Assert.True(diff.NeedsSync);
 
+        var orbit = new RequiredModEntry
+        {
+            Name = "ORBIT 3.0",
+            Slug = "orbit-30",
+            Guid = "com.chazut.orbit",
+            Enabled = false
+        };
+        var orbitLocal = new InstalledModInfo
+        {
+            DisplayName = "ORBIT",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\ORBIT",
+            IsDirectory = true,
+            IsEnabled = true,
+            ForgeGuid = "com.chazut.orbit"
+        };
+        diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [orbit] },
+            [orbitLocal]);
+        item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.ShouldDisable, item.Status);
+
         var alreadyOff = new InstalledModInfo
         {
             DisplayName = enabledLocal.DisplayName,

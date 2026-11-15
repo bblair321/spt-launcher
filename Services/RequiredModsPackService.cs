@@ -729,6 +729,12 @@ namespace SptLauncherWpf.Services
                 var local = FindLocalMatch(entry, clientMods) ?? copies.FirstOrDefault();
                 if (!entry.IsEnabledOnHost)
                 {
+                    local ??= clientMods.FirstOrDefault(m => MatchesDisabledPackEntry(m, entry));
+                    foreach (var copy in clientMods.Where(m => MatchesDisabledPackEntry(m, entry)))
+                    {
+                        matchedLocal.Add(copy);
+                    }
+
                     if (local == null || !local.IsEnabled)
                     {
                         items.Add(new RequiredModDiffItem
@@ -3220,6 +3226,42 @@ namespace SptLauncherWpf.Services
 
             version.Link =
                 $"{ForgeApiService.WebsiteBaseUrl}/mod/download/{mod.Id}/{mod.Slug.Trim()}/{version.Version.Trim()}";
+        }
+
+        /// Host-disabled pack rows must still find the player's copy by GUID/name
+        /// even when clientFiles no longer exist on the dedicated host.
+        internal static bool MatchesDisabledPackEntry(InstalledModInfo mod, RequiredModEntry entry)
+        {
+            if (mod.Kind != InstalledModKind.Client)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.Guid) &&
+                string.Equals(mod.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (entry.ForgeModId is int id and > 0 && mod.ForgeModId == id)
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.Slug) &&
+                string.Equals(mod.ForgeSlug, entry.Slug, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return InstalledModsService.FolderAgreesWithDistinctiveTokens(
+                       Path.GetFileName(mod.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
+                       entry.Name,
+                       entry.Slug)
+                   || InstalledModsService.FolderAgreesWithDistinctiveTokens(
+                       mod.DisplayName,
+                       entry.Name,
+                       entry.Slug);
         }
 
         internal static InstalledModInfo? FindLocalMatch(
