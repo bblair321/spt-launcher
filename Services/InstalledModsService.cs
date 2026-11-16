@@ -136,6 +136,13 @@ namespace SptLauncherWpf.Services
                         marker = null;
                     }
 
+                    // BepInEx still loads Foo.disabled\Bar.dll. Suffix inner DLLs
+                    // so a folder rename actually unloads the plugin.
+                    if (IsDisabledName(name))
+                    {
+                        DisableLoadablePluginDlls(dir);
+                    }
+
                     results.Add(new InstalledModInfo
                     {
                         DisplayName = marker?.Name ?? StripDisabledSuffix(name),
@@ -703,6 +710,74 @@ namespace SptLauncherWpf.Services
             return name;
         }
 
+        /// BepInEx loads every `*.dll` under plugins/, including
+        /// `ORBIT.disabled\ORBIT.dll`. Folder `.disabled` is not enough.
+        internal static void DisableLoadablePluginDlls(string directory)
+        {
+            if (!Directory.Exists(directory))
+            {
+                return;
+            }
+
+            foreach (var file in SafeEnumerateFilesRecursive(directory))
+            {
+                var name = Path.GetFileName(file);
+                if (!name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var destination = GetDisabledPath(file);
+                if (string.Equals(file, destination, StringComparison.OrdinalIgnoreCase) ||
+                    File.Exists(destination))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Move(file, destination);
+                }
+                catch
+                {
+                    // locked by a running game — next Check heals it
+                }
+            }
+        }
+
+        internal static void RestoreLoadablePluginDlls(string directory)
+        {
+            if (!Directory.Exists(directory))
+            {
+                return;
+            }
+
+            foreach (var file in SafeEnumerateFilesRecursive(directory))
+            {
+                var name = Path.GetFileName(file);
+                if (!name.EndsWith(".dll" + DisabledSuffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var destination = GetEnabledPath(file);
+                if (string.Equals(file, destination, StringComparison.OrdinalIgnoreCase) ||
+                    File.Exists(destination))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Move(file, destination);
+                }
+                catch
+                {
+                    // locked by a running game
+                }
+            }
+        }
+
         public static string GetDisabledPath(string path)
         {
             var full = Path.GetFullPath(path);
@@ -740,7 +815,17 @@ namespace SptLauncherWpf.Services
             {
                 var source = mod.Path;
                 var destination = enabled ? GetEnabledPath(source) : GetDisabledPath(source);
+                if (mod.Kind == InstalledModKind.Client && enabled && Directory.Exists(source))
+                {
+                    RestoreLoadablePluginDlls(source);
+                }
+
                 MoveInstalledPath(mod.IsDirectory, source, destination, mod.DisplayName, enabled);
+                if (mod.Kind == InstalledModKind.Client && !enabled && Directory.Exists(destination))
+                {
+                    DisableLoadablePluginDlls(destination);
+                }
+
                 return CloneWithPath(mod, destination, enabled, new[] { destination });
             }
 
@@ -945,6 +1030,18 @@ namespace SptLauncherWpf.Services
             try
             {
                 return Directory.EnumerateFiles(path);
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
+        }
+
+        private static IEnumerable<string> SafeEnumerateFilesRecursive(string path)
+        {
+            try
+            {
+                return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
             }
             catch
             {

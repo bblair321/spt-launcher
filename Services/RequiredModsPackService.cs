@@ -1,5 +1,7 @@
 using System.IO;
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text.Json;
 
@@ -134,6 +136,26 @@ namespace SptLauncherWpf.Services
 
             return new UriBuilder(Uri.UriSchemeHttp, uri.Host, LanAgentHttpPort, uri.AbsolutePath)
                 .Uri.ToString();
+        }
+
+        /// <summary>
+        /// Dedicated-host packs stamp <c>http://192.168.x.x:17865/mod-pack/mirror/…</c>.
+        /// That address is only reachable on the host LAN — WAN clients time out.
+        /// </summary>
+        internal static bool IsPrivateLanDownloadHost(string? url)
+        {
+            if (!Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var uri) ||
+                !IPAddress.TryParse(uri.Host, out var ip) ||
+                ip.AddressFamily != AddressFamily.InterNetwork)
+            {
+                return false;
+            }
+
+            var b = ip.GetAddressBytes();
+            return b[0] == 10
+                || b[0] == 127
+                || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
+                || (b[0] == 192 && b[1] == 168);
         }
 
         /// <summary>
@@ -273,7 +295,7 @@ namespace SptLauncherWpf.Services
             TryFillKnownKeepMeAlive(entry);
             TryFillKnownKmaBodyDrag(entry);
 
-            if (entry.CanAutoInstall)
+            if (entry.CanAutoInstall && !IsPrivateLanDownloadHost(entry.DownloadUrl))
             {
                 return false;
             }
@@ -519,6 +541,19 @@ namespace SptLauncherWpf.Services
             return name is "weekenddrops" or "weekenddrop";
         }
 
+        /// Weekend Drops GitHub tags are 1.0.x. FileVersion / foreign Forge ids
+        /// (3.0.0, 3.1.0, 1.76) must not become release URLs.
+        internal static bool LooksLikeWeekendDropsReleaseTag(string? version)
+        {
+            var v = (version ?? "").Trim().TrimStart('v', 'V');
+            var parts = v.Split('.');
+            return parts.Length == 3 &&
+                   parts[0] == "1" &&
+                   parts[1] == "0" &&
+                   uint.TryParse(parts[2], out var n) &&
+                   n is > 0 and < 100;
+        }
+
         internal static bool TryGetKnownGitHubRepo(RequiredModEntry entry, out string owner, out string repo)
         {
             if (IsWeekendDrops(entry))
@@ -536,7 +571,10 @@ namespace SptLauncherWpf.Services
         internal static string GitHubReleaseApiUrl(string owner, string repo, string? version)
         {
             var ver = (version ?? "").Trim();
-            if (!string.IsNullOrWhiteSpace(ver) && !LooksLikePlaceholderVersion(ver))
+            if (!string.IsNullOrWhiteSpace(ver) &&
+                !LooksLikePlaceholderVersion(ver) &&
+                !(repo.Equals("WeekendDrops", StringComparison.OrdinalIgnoreCase) &&
+                  !LooksLikeWeekendDropsReleaseTag(ver)))
             {
                 return $"https://api.github.com/repos/{owner}/{repo}/releases/tags/{Uri.EscapeDataString(ver)}";
             }
@@ -551,6 +589,12 @@ namespace SptLauncherWpf.Services
         {
             var ver = (version ?? "").Trim().TrimStart('v', 'V');
             if (string.IsNullOrWhiteSpace(ver) || LooksLikePlaceholderVersion(ver))
+            {
+                return null;
+            }
+
+            if (repo.Equals("WeekendDrops", StringComparison.OrdinalIgnoreCase) &&
+                !LooksLikeWeekendDropsReleaseTag(ver))
             {
                 return null;
             }
@@ -2230,6 +2274,13 @@ namespace SptLauncherWpf.Services
             if (string.IsNullOrWhiteSpace(requiredVersion) ||
                 LooksLikePlaceholderVersion(requiredVersion) ||
                 string.IsNullOrWhiteSpace(localVersion))
+            {
+                return true;
+            }
+
+            // Weekend Drops tags are 1.0.x. A foreign Forge id stamped 3.1.0 on the
+            // pack while the client FileVersion reads 3.0.0 — that is not a real upgrade.
+            if (IsWeekendDrops(entry) && !LooksLikeWeekendDropsReleaseTag(requiredVersion))
             {
                 return true;
             }

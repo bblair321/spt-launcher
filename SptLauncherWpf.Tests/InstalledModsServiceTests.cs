@@ -130,6 +130,61 @@ public class InstalledModsServiceTests
     }
 
     [Fact]
+    public void SetEnabled_client_folder_disables_inner_dlls_for_bepinex()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-orbit-dll-" + Guid.NewGuid().ToString("N"));
+        var modDir = Path.Combine(root, "BepInEx", "plugins", "ORBIT");
+        Directory.CreateDirectory(modDir);
+        var dll = Path.Combine(modDir, "ORBIT.dll");
+        File.WriteAllBytes(dll, [1, 2, 3]);
+
+        try
+        {
+            var disabled = InstalledModsService.SetEnabled(
+                new InstalledModInfo
+                {
+                    DisplayName = "ORBIT",
+                    Path = modDir,
+                    Kind = InstalledModKind.Client,
+                    IsEnabled = true,
+                    IsDirectory = true
+                },
+                enabled: false);
+
+            Assert.False(File.Exists(Path.Combine(disabled.Path, "ORBIT.dll")));
+            Assert.True(File.Exists(Path.Combine(disabled.Path, "ORBIT.dll.disabled")));
+
+            var enabled = InstalledModsService.SetEnabled(disabled, enabled: true);
+            Assert.True(File.Exists(Path.Combine(enabled.Path, "ORBIT.dll")));
+            Assert.False(File.Exists(Path.Combine(enabled.Path, "ORBIT.dll.disabled")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ScanInstalledMods_heals_disabled_folder_that_still_has_live_dlls()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-heal-dll-" + Guid.NewGuid().ToString("N"));
+        var modDir = Path.Combine(root, "BepInEx", "plugins", "ORBIT.disabled");
+        Directory.CreateDirectory(modDir);
+        File.WriteAllBytes(Path.Combine(modDir, "ORBIT.dll"), [1, 2, 3]);
+
+        try
+        {
+            InstalledModsService.ScanInstalledMods(root);
+            Assert.False(File.Exists(Path.Combine(modDir, "ORBIT.dll")));
+            Assert.True(File.Exists(Path.Combine(modDir, "ORBIT.dll.disabled")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ScanInstalledMods_collapses_multi_dll_forge_package()
     {
         var root = Path.Combine(Path.GetTempPath(), "spt-mods-group-" + Guid.NewGuid().ToString("N"));

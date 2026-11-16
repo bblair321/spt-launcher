@@ -4081,9 +4081,12 @@ namespace SptLauncherWpf.Pages
 
             if (diff.NeedsSync)
             {
+                var disableBit = diff.ShouldDisableCount > 0
+                    ? $" · {diff.ShouldDisableCount} to disable"
+                    : "";
                 var choice = System.Windows.MessageBox.Show(
-                    "Required client mods are missing or the wrong version.\n\n" +
-                    $"{diff.MissingCount} missing · {diff.WrongVersionCount} wrong version\n\n" +
+                    "Required client mods are missing, the wrong version, or disabled on the server.\n\n" +
+                    $"{diff.MissingCount} missing · {diff.WrongVersionCount} wrong version{disableBit}\n\n" +
                     "Yes = Sync now\nNo = Launch anyway\nCancel = stay here",
                     "Required mods",
                     MessageBoxButton.YesNoCancel,

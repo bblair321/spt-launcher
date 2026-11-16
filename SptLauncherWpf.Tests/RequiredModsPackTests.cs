@@ -122,6 +122,21 @@ public class RequiredModsPackTests
                 "https://192.168.0.20:6969/mod-pack/mirror/tarkov-battlepass"));
         Assert.Null(RequiredModsPackService.AgentMirrorFallbackUrl(
             "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass"));
+        Assert.True(RequiredModsPackService.IsPrivateLanDownloadHost(
+            "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass"));
+        Assert.False(RequiredModsPackService.IsPrivateLanDownloadHost(
+            "https://blairsworkshop.com/api/mods/tarkov-battlepass"));
+        var lanBattlepass = new RequiredModEntry
+        {
+            Name = "Tarkov Battlepass",
+            Guid = "com.bblai.battlepass",
+            Slug = "tarkov-battlepass",
+            DownloadUrl = "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass"
+        };
+        Assert.True(RequiredModsPackService.TryFillKnownWorkshopDownload(lanBattlepass));
+        Assert.Equal(
+            "https://blairsworkshop.com/api/mods/tarkov-battlepass",
+            lanBattlepass.DownloadUrl);
     }
 
     [Fact]
@@ -610,6 +625,41 @@ public class RequiredModsPackTests
         Assert.False(RequiredModsPackService.ShouldFallbackHostedDownloadToForge(
             entry,
             "Response status code does not indicate success: 404 (Not Found)."));
+    }
+
+    [Fact]
+    public void Weekend_drops_forge_3_1_pack_tag_is_not_wrong_version()
+    {
+        Assert.True(RequiredModsPackService.LooksLikeWeekendDropsReleaseTag("1.0.7"));
+        Assert.False(RequiredModsPackService.LooksLikeWeekendDropsReleaseTag("3.1.0"));
+        Assert.False(RequiredModsPackService.LooksLikeWeekendDropsReleaseTag("3.0.0"));
+        Assert.Null(RequiredModsPackService.GitHubDirectZipUrl("diemitze", "WeekendDrops", "3.1.0"));
+        Assert.Contains(
+            "/releases/latest",
+            RequiredModsPackService.GitHubReleaseApiUrl("diemitze", "WeekendDrops", "3.1.0"));
+
+        var entry = new RequiredModEntry
+        {
+            Name = "Weekend Drops",
+            Slug = "weekend-drops",
+            Guid = "com.20fpsguy.WeekendDrops",
+            Version = "3.1.0"
+        };
+        var local = new InstalledModInfo
+        {
+            DisplayName = "Weekend Drops",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\WeekendDrops",
+            IsDirectory = true,
+            IsEnabled = true,
+            VersionHint = "3.0.0",
+            ForgeGuid = "com.20fpsguy.WeekendDrops"
+        };
+        Assert.True(RequiredModsPackService.IsLocalVersionSatisfied(entry, local));
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            [local]);
+        Assert.Equal(0, diff.WrongVersionCount);
     }
 
     [Fact]
@@ -1440,7 +1490,10 @@ public class RequiredModsPackTests
         Assert.Equal(2, pack.Mods.Count);
         var battlePass = pack.Mods.Single(m => m.Guid == "com.bblai.battlepass");
         Assert.Equal(137216, battlePass.PluginFileSize);
-        Assert.Equal("direct", battlePass.DownloadKind);
+        Assert.Equal("blairsWorkshopJson", battlePass.DownloadKind);
+        Assert.Equal(
+            "https://blairsworkshop.com/api/mods/tarkov-battlepass",
+            battlePass.DownloadUrl);
         var identity = Assert.Single(battlePass.PluginFiles!);
         Assert.Equal("BepInEx/plugins/com.bblai.battlepass/SptBattlePass.Client.dll", identity.Path);
         Assert.Equal(137216, identity.Size);
@@ -1683,6 +1736,7 @@ public class RequiredModsPackTests
             Assert.Equal(1, report.DisabledCount);
             Assert.False(Directory.Exists(folder));
             Assert.True(Directory.Exists(folder + ".disabled"));
+            Assert.True(File.Exists(Path.Combine(folder + ".disabled", "AllQuestsCheckmarks-Client.dll.disabled")));
             Assert.False(report.DiffAfter?.NeedsSync);
         }
         finally
