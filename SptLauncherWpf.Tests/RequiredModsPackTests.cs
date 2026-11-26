@@ -1670,7 +1670,7 @@ public class RequiredModsPackTests
             new RequiredModsPack { Mods = [entry] },
             [local]);
         var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
-        Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+        Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
     }
 
     [Fact]
@@ -1868,6 +1868,87 @@ public class RequiredModsPackTests
         Assert.Equal(RequiredModDiffStatus.Missing, item.Status);
         Assert.True(diff.NeedsSync);
         Assert.Contains("missing", item.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Diff_fov_5_without_realism_common_lib_is_wrong_version()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "Fontaine's FOV Fix",
+            Slug = "fontaines-fov-fix",
+            Guid = "com.fontaine.fovfix",
+            Enabled = true,
+            ForgeModId = 701,
+            Version = "5.0.1"
+        };
+        var local = new InstalledModInfo
+        {
+            DisplayName = "FOVFix",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\FOVFix.dll",
+            IsDirectory = false,
+            IsEnabled = true,
+            ForgeGuid = "com.fontaine.fovfix",
+            VersionHint = "5.0.1"
+        };
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            [local]);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
+        Assert.Contains("4.1.0", item.Message);
+    }
+
+    [Fact]
+    public void Diff_fov_410_without_realism_common_lib_is_ok()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "Fontaine's FOV Fix",
+            Slug = "fontaines-fov-fix",
+            Guid = "com.fontaine.fovfix",
+            Enabled = true,
+            ForgeModId = 701,
+            Version = "5.0.1"
+        };
+        var local = new InstalledModInfo
+        {
+            DisplayName = "FOVFix",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\FOVFix.dll",
+            IsDirectory = false,
+            IsEnabled = true,
+            ForgeGuid = "com.fontaine.fovfix",
+            VersionHint = "4.1.0"
+        };
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            [local]);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+    }
+
+    [Fact]
+    public void Diff_headless_disabled_realism_common_lib_is_still_missing_for_players()
+    {
+        Assert.True(RequiredModsPackService.IsPlayersOnlyGuid(
+            "com.fontaine.spt-realism-common-lib"));
+        var entry = new RequiredModEntry
+        {
+            Name = "SPT Realism Common Lib",
+            Slug = "spt-realism-common-lib",
+            Guid = "com.fontaine.spt-realism-common-lib",
+            Enabled = false,
+            ClientFiles = ["BepInEx/plugins/Fontaine-SPTRealismCommon-Lib/RealismCommonLib.dll"],
+            DownloadUrl = "/mod-pack/mirror/spt-realism-common-lib"
+        };
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            Array.Empty<InstalledModInfo>());
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.Missing, item.Status);
+        Assert.True(diff.NeedsSync);
     }
 
     [Fact]

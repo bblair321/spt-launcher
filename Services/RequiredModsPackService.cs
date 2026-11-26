@@ -434,7 +434,12 @@ namespace SptLauncherWpf.Services
             if (key.Contains("allquestscheckmarks") ||
                 key.Contains("all quests checkmarks") ||
                 key.Contains("skilldistribution") ||
-                key.Contains("skill distribution"))
+                key.Contains("skill distribution") ||
+                key.Contains("realismcommon") ||
+                key.Contains("realism-common") ||
+                key.Contains("fovfix") ||
+                key.Contains("fov-fix") ||
+                key.Contains("bodydrag"))
             {
                 return true;
             }
@@ -449,7 +454,12 @@ namespace SptLauncherWpf.Services
                              .Select(f => f.Path ?? "")))
             {
                 var p = path.Replace('\\', '/').ToLowerInvariant();
-                if (p.Contains("allquestscheckmarks") || p.Contains("skilldistribution"))
+                if (p.Contains("allquestscheckmarks") ||
+                    p.Contains("skilldistribution") ||
+                    p.Contains("realismcommonlib") ||
+                    p.Contains("fovfix") ||
+                    p.Contains("kmabodydrag") ||
+                    p.Contains("bodydrag"))
                 {
                     return true;
                 }
@@ -475,6 +485,9 @@ namespace SptLauncherWpf.Services
                 or "com.mpstark.dynamicmaps"
                 or "com.tyfon.uifixes"
                 or "com.fontaine.fovfix"
+                or "com.fontaine.spt-realism-common-lib"
+                or "com.keepmealive.bodydrag"
+                or "com.gaylatea.uselooseloot"
                 or "katrin0522.fastsellinflea"
                 or "com.tarkin.huir"
                 or "xyz.drakia.questtracker"
@@ -491,6 +504,114 @@ namespace SptLauncherWpf.Services
                 or "com.wtt.commonlib"
                 or "com.matsix.sptvr"
                 or "com.matsix.sptvr.fikasync";
+        }
+
+        internal const string FovStandaloneVersion = "4.1.0";
+
+        internal static bool IsFovPackEntry(RequiredModEntry entry)
+        {
+            if (entry.ForgeModId is 701)
+            {
+                return true;
+            }
+
+            if (EntryGuids(entry).Any(g =>
+                    g.Equals("com.fontaine.fovfix", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            var key = $"{entry.Slug} {entry.Name}".ToLowerInvariant();
+            return key.Contains("fov-fix") || key.Contains("fovfix");
+        }
+
+        internal static bool FovVersionNeedsRealismCommonLib(string? version)
+        {
+            var v = (version ?? "").Trim();
+            return v.Length > 0 && CompareVersionRank(v, "5.0.0") >= 0;
+        }
+
+        internal static bool HasEnabledRealismCommonLib(IEnumerable<InstalledModInfo> installed)
+        {
+            foreach (var m in installed)
+            {
+                if (!m.IsEnabled)
+                {
+                    continue;
+                }
+
+                if ((m.ForgeGuid ?? "").Equals(
+                        "com.fontaine.spt-realism-common-lib",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                var path = (m.Path ?? "").Replace('\\', '/').ToLowerInvariant();
+                if (path.Contains("realismcommonlib") && !path.Contains(".disabled"))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool HasEnabledRealismCommonLib(string sptRoot)
+        {
+            if (string.IsNullOrWhiteSpace(sptRoot))
+            {
+                return false;
+            }
+
+            var plugins = Path.Combine(sptRoot, "BepInEx", "plugins");
+            if (!Directory.Exists(plugins))
+            {
+                return false;
+            }
+
+            foreach (var file in Directory.EnumerateFiles(
+                         plugins,
+                         "RealismCommonLib.dll",
+                         SearchOption.AllDirectories))
+            {
+                if (file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) &&
+                    !file.Contains(".disabled", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// FOV 5.x is installed but RealismCommonLib is not — BepInEx will refuse to load it.
+        internal static bool FovNeedsStandaloneFallback(
+            RequiredModEntry entry,
+            InstalledModInfo local,
+            IEnumerable<InstalledModInfo> installed)
+        {
+            if (!IsFovPackEntry(entry) || HasEnabledRealismCommonLib(installed))
+            {
+                return false;
+            }
+
+            return FovVersionNeedsRealismCommonLib(local.VersionHint);
+        }
+
+        /// Pack may still say 5.0.1 while this client correctly runs standalone 4.1.0.
+        internal static bool FovStandaloneVersionSatisfied(
+            RequiredModEntry entry,
+            InstalledModInfo local,
+            IEnumerable<InstalledModInfo> installed)
+        {
+            if (!IsFovPackEntry(entry) || HasEnabledRealismCommonLib(installed))
+            {
+                return false;
+            }
+
+            var localVersion = (local.VersionHint ?? "").Trim();
+            return localVersion.Length > 0 && !FovVersionNeedsRealismCommonLib(localVersion);
         }
 
         /// K.M.A. - Fika (Forge 3269). Live BepInPlugin is
@@ -957,9 +1078,23 @@ namespace SptLauncherWpf.Services
                 }
 
                 var localVersion = (local.VersionHint ?? "").Trim();
+                if (FovNeedsStandaloneFallback(entry, local, clientMods))
+                {
+                    items.Add(new RequiredModDiffItem
+                    {
+                        Status = RequiredModDiffStatus.WrongVersion,
+                        PackEntry = entry,
+                        Installed = local,
+                        Message =
+                            $"{entry.DisplayName}: 5.x needs RealismCommonLib (not on this pack). Sync will install 4.1.0"
+                    });
+                    continue;
+                }
+
                 var staleCopies = StaleLocalCopies(entry, local, copies);
                 var leftover = staleCopies.Count > 0;
-                if (!IsLocalVersionSatisfied(entry, local) || leftover)
+                if ((!IsLocalVersionSatisfied(entry, local) &&
+                     !FovStandaloneVersionSatisfied(entry, local, clientMods)) || leftover)
                 {
                     var requiredVersion = (entry.Version ?? "").Trim();
                     var message = leftover && IsLocalVersionSatisfied(entry, local)
@@ -1550,6 +1685,12 @@ namespace SptLauncherWpf.Services
             }
 
             var toTry = ForgeVersionsToTry(versions, entry.Version, TryDetectSptVersion(sptRoot));
+            if (IsFovPackEntry(entry) && !HasEnabledRealismCommonLib(sptRoot))
+            {
+                toTry = toTry
+                    .Where(v => !FovVersionNeedsRealismCommonLib(v.Version))
+                    .ToList();
+            }
             if (toTry.Count == 0)
             {
                 return PackInstallResult.Fail(
