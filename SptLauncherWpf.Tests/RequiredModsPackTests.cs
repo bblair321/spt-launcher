@@ -1571,7 +1571,7 @@ public class RequiredModsPackTests
     }
 
     [Fact]
-    public void Diff_players_only_checkmarks_ignores_host_hash()
+    public void Diff_players_only_checkmarks_flags_host_hash_mismatch()
     {
         var root = Path.Combine(Path.GetTempPath(), "spt-checkmarks-hash-" + Guid.NewGuid().ToString("N"));
         var folder = Path.Combine(root, "BepInEx", "plugins", "AllQuestsCheckmarks");
@@ -1615,8 +1615,9 @@ public class RequiredModsPackTests
                     }
                 ]);
             var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
-            Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
-            Assert.False(diff.NeedsSync);
+            Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
+            Assert.True(diff.NeedsSync);
+            Assert.Contains("host bytes differ", item.Message, StringComparison.OrdinalIgnoreCase);
 
             var nameless = new RequiredModEntry
             {
@@ -1636,32 +1637,29 @@ public class RequiredModsPackTests
     }
 
     [Fact]
-    public void Diff_host_disabled_mod_asks_launcher_to_disable_local_copy()
+    public void Diff_headless_disabled_fov_fix_is_still_missing_for_players()
     {
         var entry = new RequiredModEntry
         {
-            Name = "All Quests Checkmarks",
-            Slug = "all-quests-checkmarks",
-            Guid = "com.zgfuedkx.allquestscheckmarks",
+            Name = "Fontaine's FOV Fix",
+            Slug = "fontaines-fov-fix",
+            Guid = "com.fontaine.fovfix",
             Enabled = false,
-            ForgeModId = 2025
-        };
-        var enabledLocal = new InstalledModInfo
-        {
-            DisplayName = "All Quests Checkmarks",
-            Kind = InstalledModKind.Client,
-            Path = @"D:\SPT\BepInEx\plugins\AllQuestsCheckmarks",
-            IsDirectory = true,
-            IsEnabled = true,
-            ForgeGuid = "com.zgfuedkx.allquestscheckmarks"
+            ForgeModId = 701,
+            Version = "5.0.0"
         };
         var diff = RequiredModsPackService.Instance.Diff(
             new RequiredModsPack { Mods = [entry] },
-            [enabledLocal]);
+            Array.Empty<InstalledModInfo>());
         var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
-        Assert.Equal(RequiredModDiffStatus.ShouldDisable, item.Status);
+        Assert.Equal(RequiredModDiffStatus.Missing, item.Status);
         Assert.True(diff.NeedsSync);
+        Assert.Contains("missing", item.Message, StringComparison.OrdinalIgnoreCase);
+    }
 
+    [Fact]
+    public void Diff_host_disabled_mod_asks_launcher_to_disable_local_copy()
+    {
         var orbit = new RequiredModEntry
         {
             Name = "ORBIT 3.0",
@@ -1678,30 +1676,30 @@ public class RequiredModsPackTests
             IsEnabled = true,
             ForgeGuid = "com.chazut.orbit"
         };
-        diff = RequiredModsPackService.Instance.Diff(
+        var diff = RequiredModsPackService.Instance.Diff(
             new RequiredModsPack { Mods = [orbit] },
             [orbitLocal]);
-        item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
         Assert.Equal(RequiredModDiffStatus.ShouldDisable, item.Status);
 
         var alreadyOff = new InstalledModInfo
         {
-            DisplayName = enabledLocal.DisplayName,
+            DisplayName = orbitLocal.DisplayName,
             Kind = InstalledModKind.Client,
-            Path = enabledLocal.Path + ".disabled",
+            Path = orbitLocal.Path + ".disabled",
             IsDirectory = true,
             IsEnabled = false,
-            ForgeGuid = enabledLocal.ForgeGuid
+            ForgeGuid = orbitLocal.ForgeGuid
         };
         diff = RequiredModsPackService.Instance.Diff(
-            new RequiredModsPack { Mods = [entry] },
+            new RequiredModsPack { Mods = [orbit] },
             [alreadyOff]);
         item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
         Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
         Assert.False(diff.NeedsSync);
 
         diff = RequiredModsPackService.Instance.Diff(
-            new RequiredModsPack { Mods = [entry] },
+            new RequiredModsPack { Mods = [orbit] },
             []);
         item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
         Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
@@ -1712,9 +1710,9 @@ public class RequiredModsPackTests
     public async Task Sync_disables_local_mod_when_host_disabled()
     {
         var root = Path.Combine(Path.GetTempPath(), "spt-sync-disable-" + Guid.NewGuid().ToString("N"));
-        var folder = Path.Combine(root, "BepInEx", "plugins", "AllQuestsCheckmarks");
+        var folder = Path.Combine(root, "BepInEx", "plugins", "ORBIT");
         Directory.CreateDirectory(folder);
-        File.WriteAllBytes(Path.Combine(folder, "AllQuestsCheckmarks-Client.dll"), [1, 2, 3]);
+        File.WriteAllBytes(Path.Combine(folder, "ORBIT.dll"), [1, 2, 3]);
         try
         {
             var pack = new RequiredModsPack
@@ -1723,11 +1721,11 @@ public class RequiredModsPackTests
                 [
                     new RequiredModEntry
                     {
-                        Name = "All Quests Checkmarks",
-                        Slug = "all-quests-checkmarks",
-                        Guid = "com.zgfuedkx.allquestscheckmarks",
+                        Name = "ORBIT 3.0",
+                        Slug = "orbit-30",
+                        Guid = "com.chazut.orbit",
                         Enabled = false,
-                        ClientFiles = ["BepInEx/plugins/AllQuestsCheckmarks/AllQuestsCheckmarks-Client.dll"]
+                        ClientFiles = ["BepInEx/plugins/ORBIT/ORBIT.dll"]
                     }
                 ]
             };
@@ -1736,7 +1734,7 @@ public class RequiredModsPackTests
             Assert.Equal(1, report.DisabledCount);
             Assert.False(Directory.Exists(folder));
             Assert.True(Directory.Exists(folder + ".disabled"));
-            Assert.True(File.Exists(Path.Combine(folder + ".disabled", "AllQuestsCheckmarks-Client.dll.disabled")));
+            Assert.True(File.Exists(Path.Combine(folder + ".disabled", "ORBIT.dll.disabled")));
             Assert.False(report.DiffAfter?.NeedsSync);
         }
         finally

@@ -404,6 +404,7 @@ namespace SptLauncherWpf.Services
                 or "mattexe.bossnotifier"
                 or "com.borkel.nvgmasks"
                 or "com.kaeno.traderscrolling"
+                or "com.ruafcomehome.tacticaltoaster"
                 or "com.terkoiz.flareeventnotifier"
                 or "com.zgfuedkx.allquestscheckmarks"
                 or "com.zgfuedkx.skilldistribution"
@@ -771,7 +772,10 @@ namespace SptLauncherWpf.Services
                 }
 
                 var local = FindLocalMatch(entry, clientMods) ?? copies.FirstOrDefault();
-                if (!entry.IsEnabledOnHost)
+                // HUD / player-only plugins are `.disabled` on dedicated headless
+                // so Fika CRC does not require them of the host client. Player
+                // PCs still need those zips (FOV Fix, NVGs, Dynamic Maps, …).
+                if (!entry.IsEnabledOnHost && !IsPlayersOnlyPackEntry(entry))
                 {
                     local ??= clientMods.FirstOrDefault(m => MatchesDisabledPackEntry(m, entry));
                     foreach (var copy in clientMods.Where(m => MatchesDisabledPackEntry(m, entry)))
@@ -841,36 +845,34 @@ namespace SptLauncherWpf.Services
                     continue;
                 }
 
-                // Player-only HUD/UI mods are disabled on the dedicated headless host,
-                // so pack SHA256 is the host's leftover/disabled bytes — not the Forge
-                // zip players should run. Reinstalling never converges.
-                if (!IsPlayersOnlyPackEntry(entry))
+                // Host pack SHA256 is the dedicated install (live or post-strip
+                // `.dll.disabled`). Fika CRC-checks optional HUD if two clients
+                // load it, so players must match those bytes — version strings
+                // are not enough (Dynamic Maps 2.0.0 vs 1.3.0 BepInPlugin).
+                if (entry.PluginFileSize is long expectedSize and > 0 &&
+                    LocalPrimaryPluginDllLength(entry, copies) is long localSize &&
+                    localSize != expectedSize)
                 {
-                    if (entry.PluginFileSize is long expectedSize and > 0 &&
-                        LocalPrimaryPluginDllLength(entry, copies) is long localSize &&
-                        localSize != expectedSize)
+                    items.Add(new RequiredModDiffItem
                     {
-                        items.Add(new RequiredModDiffItem
-                        {
-                            Status = RequiredModDiffStatus.WrongVersion,
-                            PackEntry = entry,
-                            Installed = local,
-                            Message = $"{entry.DisplayName}: plugin file size {localSize} does not match host {expectedSize} — Fika will hash-mismatch"
-                        });
-                        continue;
-                    }
+                        Status = RequiredModDiffStatus.WrongVersion,
+                        PackEntry = entry,
+                        Installed = local,
+                        Message = $"{entry.DisplayName}: plugin file size {localSize} does not match host {expectedSize} — Fika will hash-mismatch"
+                    });
+                    continue;
+                }
 
-                    if (PluginFilesMismatch(entry, copies) is string mismatch)
+                if (PluginFilesMismatch(entry, copies) is string mismatch)
+                {
+                    items.Add(new RequiredModDiffItem
                     {
-                        items.Add(new RequiredModDiffItem
-                        {
-                            Status = RequiredModDiffStatus.WrongVersion,
-                            PackEntry = entry,
-                            Installed = local,
-                            Message = $"{entry.DisplayName}: {mismatch} — host bytes differ"
-                        });
-                        continue;
-                    }
+                        Status = RequiredModDiffStatus.WrongVersion,
+                        PackEntry = entry,
+                        Installed = local,
+                        Message = $"{entry.DisplayName}: {mismatch} — host bytes differ"
+                    });
+                    continue;
                 }
 
                 var localVersion = (local.VersionHint ?? "").Trim();
