@@ -755,7 +755,7 @@ namespace SptLauncherWpf.Services
             var items = new List<RequiredModDiffItem>();
             var matchedLocal = new HashSet<InstalledModInfo>();
 
-            foreach (var entry in pack.Mods ?? Enumerable.Empty<RequiredModEntry>())
+            foreach (var entry in CanonicalPackEntries(pack.Mods))
             {
                 if (IsSptFikaCorePackEntry(entry))
                 {
@@ -940,7 +940,7 @@ namespace SptLauncherWpf.Services
                 .ToList();
             var toSync = before.Items
                 .Where(i => i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion)
-                .Where(i => i.PackEntry != null)
+                .Where(i => i.PackEntry != null && !LooksLikeDisabledLeftoverPackEntry(i.PackEntry))
                 .Select(i => i.PackEntry!)
                 .ToList();
 
@@ -1956,7 +1956,8 @@ namespace SptLauncherWpf.Services
             {
                 foreach (var path in local.AllPaths)
                 {
-                    if (PathStrictlyMatchesPackEntry(path, entry))
+                    if (PathStrictlyMatchesPackEntry(path, entry) ||
+                        PathBelongsToPackEntry(path, entry))
                     {
                         targets.Add(path);
                     }
@@ -3331,6 +3332,11 @@ namespace SptLauncherWpf.Services
 
             foreach (var extra in EntryGuids(entry).Skip(string.IsNullOrWhiteSpace(entry.Guid) ? 0 : 1))
             {
+                if (IsCorePluginGuid(extra))
+                {
+                    continue;
+                }
+
                 candidates.AddRange(clientMods.Where(m =>
                     string.Equals(m.ForgeGuid, extra, StringComparison.OrdinalIgnoreCase)));
             }
@@ -3371,9 +3377,27 @@ namespace SptLauncherWpf.Services
             // Drop path mismatches (e.g. Gaylatea-UseLooseLoot.dll wrongly tagged as LootNET).
             // Hosted pack entries (no Forge id) must match strictly — otherwise a bad sidecar
             // GUID on every DLL would make one hosted mod "match" the whole plugins folder.
+            var beforePathFilter = candidates
+                .GroupBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
             candidates = entry.ForgeModId is > 0
-                ? candidates.Where(m => PathBelongsToPackEntry(m.Path, entry)).ToList()
-                : candidates.Where(m => PathStrictlyMatchesPackEntry(m.Path, entry)).ToList();
+                ? beforePathFilter.Where(m => PathBelongsToPackEntry(m.Path, entry)).ToList()
+                : beforePathFilter.Where(m => PathStrictlyMatchesPackEntry(m.Path, entry)).ToList();
+
+            // FOV Fix zips as FOVFix.dll; pack slug is fontaines-fov-fix. Trust the
+            // BepInPlugin GUID when the path filter would drop a real install.
+            if (candidates.Count == 0 &&
+                !string.IsNullOrWhiteSpace(entry.Guid) &&
+                !IsCorePluginGuid(entry.Guid))
+            {
+                candidates = beforePathFilter
+                    .Where(m =>
+                        string.Equals(m.ForgeGuid, entry.Guid, StringComparison.OrdinalIgnoreCase) &&
+                        !IsProtectedCorePluginPath(m.Path) &&
+                        !m.AllPaths.Any(IsProtectedCorePluginPath))
+                    .ToList();
+            }
 
             var unique = candidates
                 .GroupBy(m => m.Path, StringComparer.OrdinalIgnoreCase)
@@ -3440,6 +3464,101 @@ namespace SptLauncherWpf.Services
             return InstalledModsService.NormalizeModKey(name);
         }
 
+        internal static bool LooksLikeDisabledLeftoverPackEntry(RequiredModEntry entry)
+        {
+            var slug = entry.Slug ?? "";
+            var name = entry.Name ?? "";
+            if (slug.Contains("disabled", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains(".disabled", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (entry.ClientFiles == null)
+            {
+                return false;
+            }
+
+            foreach (var rel in entry.ClientFiles)
+            {
+                if (string.IsNullOrWhiteSpace(rel))
+                {
+                    continue;
+                }
+
+                foreach (var part in rel.Replace('\\', '/').Split('/'))
+                {
+                    if (part.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) &&
+                        !part.EndsWith(".dll.disabled", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        internal static List<RequiredModEntry> CanonicalPackEntries(IEnumerable<RequiredModEntry>? mods)
+        {
+            var list = mods?.Where(e => e != null).ToList() ?? [];
+            var liveGuids = new HashSet<string>(
+                list.Where(e => !LooksLikeDisabledLeftoverPackEntry(e) && !string.IsNullOrWhiteSpace(e.Guid))
+                    .Select(e => e.Guid!.Trim()),
+                StringComparer.OrdinalIgnoreCase);
+            var liveForge = new HashSet<int>(
+                list.Where(e => !LooksLikeDisabledLeftoverPackEntry(e) && e.ForgeModId is > 0)
+                    .Select(e => e.ForgeModId!.Value));
+
+            var kept = new List<RequiredModEntry>();
+            var seenGuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var seenForge = new HashSet<int>();
+            foreach (var entry in list.OrderBy(e => LooksLikeDisabledLeftoverPackEntry(e) ? 1 : 0))
+            {
+                if (LooksLikeDisabledLeftoverPackEntry(entry) &&
+                    ((entry.Guid is string g && liveGuids.Contains(g)) ||
+                     (entry.ForgeModId is int id && id > 0 && liveForge.Contains(id))))
+                {
+                    continue;
+                }
+
+                if (entry.Guid is string guid && !string.IsNullOrWhiteSpace(guid))
+                {
+                    if (!seenGuids.Add(guid))
+                    {
+                        continue;
+                    }
+                }
+                else if (entry.ForgeModId is int forgeId and > 0)
+                {
+                    if (!seenForge.Add(forgeId))
+                    {
+                        continue;
+                    }
+                }
+
+                if (entry.ForgeModId is int fid and > 0)
+                {
+                    seenForge.Add(fid);
+                }
+
+                kept.Add(entry);
+            }
+
+            return kept;
+        }
+
+        internal static bool GuidTokenAgrees(string leaf, RequiredModEntry entry)
+        {
+            var token = IdentifyingGuidToken(entry.Guid);
+            if (string.IsNullOrWhiteSpace(token) || token.Length < 4 || string.IsNullOrWhiteSpace(leaf))
+            {
+                return false;
+            }
+
+            return leaf == token || leaf.Contains(token) || token.Contains(leaf);
+        }
+
         internal static bool ClientFileLeafMatches(RequiredModEntry entry, string leaf)
         {
             if (string.IsNullOrWhiteSpace(leaf) || entry.ClientFiles is not { Count: > 0 })
@@ -3480,7 +3599,8 @@ namespace SptLauncherWpf.Services
             var nameKey = InstalledModsService.NormalizeModKey(entry.Name);
 
             if (!InstalledModsService.FolderAgreesWithDistinctiveTokens(leaf, entry.Name, entry.Slug) &&
-                !ClientFileLeafMatches(entry, leaf))
+                !ClientFileLeafMatches(entry, leaf) &&
+                !GuidTokenAgrees(leaf, entry))
             {
                 return false;
             }
@@ -3537,6 +3657,11 @@ namespace SptLauncherWpf.Services
 
             var namesAgree = InstalledModsService.FolderAgreesWithDistinctiveTokens(
                 leaf, entry.Name, entry.Slug);
+
+            if (!IsCorePluginGuid(entry.Guid) && GuidTokenAgrees(leaf, entry))
+            {
+                return true;
+            }
 
             if (namesAgree &&
                 InstalledModsService.IdentityOverlapsPath(leaf, entry.Slug, entry.Name, entry.Guid))

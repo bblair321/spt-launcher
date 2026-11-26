@@ -1637,6 +1637,91 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void PathBelongs_matches_fov_fix_loose_dll()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "Fontaine's FOV Fix",
+            Slug = "fontaines-fov-fix",
+            Guid = "com.fontaine.fovfix",
+            ForgeModId = 701,
+            Version = "5.0.1"
+        };
+        Assert.True(RequiredModsPackService.PathBelongsToPackEntry(
+            @"D:\SPT\BepInEx\plugins\FOVFix.dll", entry));
+        Assert.True(RequiredModsPackService.PathStrictlyMatchesPackEntry(
+            @"D:\SPT\BepInEx\plugins\FOVFix.dll", entry));
+        Assert.True(RequiredModsPackService.PathBelongsToPackEntry(
+            @"D:\SPT\BepInEx\plugins\Fontaine-FOV-Fix", entry));
+        var local = new InstalledModInfo
+        {
+            DisplayName = "FOV Fix",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\FOVFix.dll",
+            IsDirectory = false,
+            IsEnabled = true,
+            ForgeGuid = "com.fontaine.fovfix",
+            VersionHint = "5.0.1"
+        };
+        Assert.NotNull(RequiredModsPackService.FindLocalMatch(entry, [local]));
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [entry] },
+            [local]);
+        var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.Equal(RequiredModDiffStatus.Ok, item.Status);
+    }
+
+    [Fact]
+    public void Diff_drops_disabled_commonlib_leftover_when_live_row_exists()
+    {
+        var live = new RequiredModEntry
+        {
+            Name = "WTT - CommonLib",
+            Slug = "wtt-commonlib",
+            Guid = "com.wtt.commonlib",
+            ForgeModId = 2310,
+            Version = "3.0.0",
+            Enabled = true
+        };
+        var leftover = new RequiredModEntry
+        {
+            Name = "WTT-ClientCommonLib.2.disabled",
+            Slug = "wtt-clientcommonlib-2-disabled",
+            Guid = "com.wtt.commonlib",
+            ForgeModId = 2310,
+            Version = "3.0.8",
+            Enabled = true,
+            ClientFiles =
+            [
+                "BepInEx/plugins/WTT-ClientCommonLib.2.disabled/WTT-ClientCommonLib.dll"
+            ]
+        };
+        var canonical = RequiredModsPackService.CanonicalPackEntries([live, leftover]);
+        Assert.Single(canonical);
+        Assert.Equal("wtt-commonlib", canonical[0].Slug);
+
+        var local = new InstalledModInfo
+        {
+            DisplayName = "WTT - CommonLib",
+            Kind = InstalledModKind.Client,
+            Path = @"D:\SPT\BepInEx\plugins\WTT-ClientCommonLib",
+            IsDirectory = true,
+            IsEnabled = true,
+            ForgeGuid = "com.wtt.commonlib",
+            ForgeModId = 2310,
+            VersionHint = "3.0.0"
+        };
+        var diff = RequiredModsPackService.Instance.Diff(
+            new RequiredModsPack { Mods = [live, leftover] },
+            [local]);
+        Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+        Assert.DoesNotContain(
+            diff.Items,
+            i => i.PackEntry?.Slug == "wtt-clientcommonlib-2-disabled");
+        Assert.False(diff.NeedsSync);
+    }
+
+    [Fact]
     public void Diff_headless_disabled_fov_fix_is_still_missing_for_players()
     {
         var entry = new RequiredModEntry
