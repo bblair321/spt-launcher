@@ -161,11 +161,8 @@ namespace SptLauncherWpf.Services
                 return false;
             }
 
-            var slug = (entry.Slug ?? "").Trim();
-            if (string.IsNullOrEmpty(slug) ||
-                slug.Contains('/') ||
-                slug.Contains('\\') ||
-                slug.Contains(".."))
+            var slug = PackMirrorSlugCandidates(entry).FirstOrDefault();
+            if (string.IsNullOrEmpty(slug))
             {
                 return false;
             }
@@ -173,6 +170,51 @@ namespace SptLauncherWpf.Services
             entry.DownloadUrl = $"/mod-pack/mirror/{slug}";
             entry.DownloadKind = "direct";
             return true;
+        }
+
+        /// Host zips may use the Forge slug (<c>wtt-commonlib</c>) or the plugin
+        /// folder (<c>WTT-ClientCommonLib</c>).
+        internal static List<string> PackMirrorSlugCandidates(RequiredModEntry entry)
+        {
+            var slugs = new List<string>();
+            void Add(string? raw)
+            {
+                var slug = (raw ?? "").Trim();
+                if (string.IsNullOrEmpty(slug) ||
+                    slug.Contains('/') ||
+                    slug.Contains('\\') ||
+                    slug.Contains("..") ||
+                    slug.Contains('.') && slug.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                    LooksLikeDisabledLeftoverPackEntry(new RequiredModEntry { Slug = slug, Name = slug }))
+                {
+                    return;
+                }
+
+                if (!slugs.Contains(slug, StringComparer.OrdinalIgnoreCase))
+                {
+                    slugs.Add(slug);
+                }
+            }
+
+            Add(entry.Slug);
+            foreach (var rel in entry.ClientFiles ?? Enumerable.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(rel))
+                {
+                    continue;
+                }
+
+                var parts = rel.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+                var pluginsIdx = Array.FindIndex(
+                    parts,
+                    p => p.Equals("plugins", StringComparison.OrdinalIgnoreCase));
+                if (pluginsIdx >= 0 && pluginsIdx + 1 < parts.Length)
+                {
+                    Add(parts[pluginsIdx + 1]);
+                }
+            }
+
+            return slugs;
         }
 
         /// <summary>
@@ -1239,7 +1281,11 @@ namespace SptLauncherWpf.Services
                    || l.Contains("could not resolve latest hosted")
                    || l.Contains("isn't a supported")
                    || l.Contains("not a supported")
-                   || l.Contains(".zip/.7z");
+                   || l.Contains(".zip/.7z")
+                   || l.Contains("could not determine where to install")
+                   || l.Contains("no bepinex/managed client files")
+                   || l.Contains("no files were extracted")
+                   || l.Contains("archive layout mismatch");
         }
 
         internal static bool CanResolveForge(RequiredModEntry entry) =>
@@ -1665,6 +1711,61 @@ namespace SptLauncherWpf.Services
                         installProgress,
                         cancellationToken,
                         clientPathsOnly: true);
+                }
+            }
+
+            if (!report.Success && DownloadErrorLooksGone(report.Message))
+            {
+                foreach (var alt in PackMirrorSlugCandidates(entry))
+                {
+                    var current = entry.DownloadUrl ?? "";
+                    if (current.EndsWith("/" + alt, StringComparison.OrdinalIgnoreCase) ||
+                        current.Contains("/mirror/" + alt, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var previousUrl = entry.DownloadUrl;
+                    var previousKind = entry.DownloadKind;
+                    entry.DownloadUrl = $"/mod-pack/mirror/{alt}";
+                    entry.DownloadKind = "direct";
+                    try
+                    {
+                        progress?.Report(new RequiredModsSyncProgress
+                        {
+                            Message = $"{entry.DisplayName}: trying pack mirror {alt}…"
+                        });
+                        zipUrl = await ResolveHostedDownloadUrlAsync(entry, cancellationToken);
+                        version.Link = zipUrl;
+                        report = await ModInstallService.Instance.InstallAsync(
+                            mod,
+                            version,
+                            sptRoot,
+                            preferredFileTree: entry.ClientFiles,
+                            installProgress,
+                            cancellationToken,
+                            clientPathsOnly: true);
+                        if (report.Success)
+                        {
+                            break;
+                        }
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        report = new ModInstallReport
+                        {
+                            Success = false,
+                            Message = ex.Message
+                        };
+                    }
+                    finally
+                    {
+                        if (!report.Success)
+                        {
+                            entry.DownloadUrl = previousUrl;
+                            entry.DownloadKind = previousKind;
+                        }
+                    }
                 }
             }
 
@@ -2219,6 +2320,52 @@ namespace SptLauncherWpf.Services
             }
 
             return present;
+        }
+
+        internal static bool PluginDllNamesPresent(
+            InstalledModInfo mod,
+            IReadOnlyList<string> dllNames)
+        {
+            if (dllNames.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (var path in mod.AllPaths)
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    continue;
+                }
+
+                if (File.Exists(path) &&
+                    dllNames.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                if (!Directory.Exists(path))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    foreach (var name in dllNames)
+                    {
+                        if (File.Exists(Path.Combine(path, name)))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
+
+            return false;
         }
 
         internal static bool PackPluginDllsPresent(
@@ -3538,6 +3685,22 @@ namespace SptLauncherWpf.Services
                         !IsProtectedCorePluginPath(m.Path) &&
                         !m.AllPaths.Any(IsProtectedCorePluginPath))
                     .ToList();
+            }
+
+            // Host/Forge zips may land as a folder Scan sees but slug matching
+            // missed (WTT-ClientCommonLib vs wtt-commonlib). DLL names are unique.
+            if (candidates.Count == 0)
+            {
+                var dllNames = PackPluginDllFileNames(entry);
+                if (dllNames.Count > 0)
+                {
+                    candidates = clientMods
+                        .Where(m =>
+                            !IsProtectedCorePluginPath(m.Path) &&
+                            !m.AllPaths.Any(IsProtectedCorePluginPath) &&
+                            PluginDllNamesPresent(m, dllNames))
+                        .ToList();
+                }
             }
 
             var unique = candidates

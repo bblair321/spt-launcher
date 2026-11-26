@@ -191,6 +191,47 @@ public class ModPathClassifierTests
     }
 
     [Fact]
+    public void Classify_bare_plugin_folder_zip_installs_into_bepinex()
+    {
+        var result = ModPathClassifier.Classify(
+            [
+                "WTT-ClientCommonLib/WTT-ClientCommonLib.dll",
+                "WTT-ClientCommonLib/WTT-ClientCommonLibFika.dll"
+            ],
+            installHasSptRuntime: true);
+
+        Assert.Equal(ModInstallKind.ClientOnly, result.Kind);
+        Assert.True(result.CanAutoInstall);
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals(
+                "BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLib.dll",
+                StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals(
+                "BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLibFika.dll",
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Classify_spt_runtime_bepinex_is_client_not_skipped()
+    {
+        var result = ModPathClassifier.Classify(
+            [
+                "SPT_Runtime/BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLib.dll"
+            ],
+            installHasSptRuntime: true);
+
+        Assert.Equal(ModInstallKind.ClientOnly, result.Kind);
+        Assert.Contains(
+            result.InstallableRelativePaths,
+            p => p.Equals(
+                "BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLib.dll",
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Classify_lootnet_style_spt_prefixed_mixed_package()
     {
         var files = new[]

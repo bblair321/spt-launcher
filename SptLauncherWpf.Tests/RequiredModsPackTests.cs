@@ -1740,6 +1740,54 @@ public class RequiredModsPackTests
         Assert.False(RequiredModsPackService.TryFillPackMirrorDownload(entry));
         Assert.False(RequiredModsPackService.TryFillPackMirrorDownload(
             new RequiredModEntry { Name = "No slug" }));
+        Assert.Contains(
+            "WTT-ClientCommonLib",
+            RequiredModsPackService.PackMirrorSlugCandidates(new RequiredModEntry
+            {
+                Name = "WTT - CommonLib",
+                Slug = "wtt-commonlib",
+                ForgeModId = 2310,
+                ClientFiles = ["BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLib.dll"]
+            }));
+    }
+
+    [Fact]
+    public void Diff_finds_commonlib_by_plugin_dll_name()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "WTT - CommonLib",
+            Slug = "wtt-commonlib",
+            Guid = "com.wtt.commonlib",
+            ForgeModId = 2310,
+            Version = "3.0.0",
+            ClientFiles = ["BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLib.dll"]
+        };
+        var root = Path.Combine(Path.GetTempPath(), "spt-commonlib-dll-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "BepInEx", "plugins", "WTT-ClientCommonLib");
+        Directory.CreateDirectory(folder);
+        File.WriteAllBytes(Path.Combine(folder, "WTT-ClientCommonLib.dll"), new byte[8]);
+        var local = new InstalledModInfo
+        {
+            DisplayName = "WTT-ClientCommonLib",
+            Kind = InstalledModKind.Client,
+            Path = folder,
+            IsDirectory = true,
+            IsEnabled = true
+        };
+        try
+        {
+            Assert.NotNull(RequiredModsPackService.FindLocalMatch(entry, [local]));
+            var diff = RequiredModsPackService.Instance.Diff(
+                new RequiredModsPack { Mods = [entry] },
+                [local]);
+            var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+            Assert.NotEqual(RequiredModDiffStatus.Missing, item.Status);
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { /* temp */ }
+        }
     }
 
     [Fact]

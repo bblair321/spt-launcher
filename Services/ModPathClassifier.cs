@@ -101,6 +101,18 @@ namespace SptLauncherWpf.Services
                 _ => ModInstallKind.Unknown
             };
 
+            // Host Combined Start zips a plugins folder as
+            // WTT-ClientCommonLib/WTT-ClientCommonLib.dll — no BepInEx prefix.
+            if (kindResult == ModInstallKind.Unknown &&
+                TryMapBarePluginFolderArchive(normalized, out var pluginFolderPaths))
+            {
+                hasClient = true;
+                hasServer = false;
+                installable = pluginFolderPaths;
+                skipped = [];
+                kindResult = ModInstallKind.ClientOnly;
+            }
+
             var summary = kindResult switch
             {
                 ModInstallKind.ServerOnly => "Server mod (user/mods)",
@@ -210,6 +222,13 @@ namespace SptLauncherWpf.Services
             if (StartsWithSegment(path, "SPT_Runtime"))
             {
                 var afterRuntime = TrimPrefix(path, "SPT_Runtime/");
+                if (StartsWithSegment(afterRuntime, "BepInEx") || IsClientManagedPath(afterRuntime))
+                {
+                    installRelativePath = afterRuntime.Replace('\\', '/');
+                    kind = ModInstallKind.ClientOnly;
+                    return true;
+                }
+
                 if (StartsWithSegment(afterRuntime, "user/mods") ||
                     StartsWithSegment(afterRuntime, "user\\mods"))
                 {
@@ -280,6 +299,73 @@ namespace SptLauncherWpf.Services
             return p.StartsWith(pre, StringComparison.OrdinalIgnoreCase)
                 ? p[pre.Length..]
                 : p;
+        }
+
+        /// <summary>
+        /// Pack-mirror zips of a plugin folder: <c>WTT-ClientCommonLib/*.dll</c> with
+        /// no <c>BepInEx/plugins</c> prefix.
+        /// </summary>
+        internal static bool TryMapBarePluginFolderArchive(
+            IReadOnlyList<string> archivePaths,
+            out List<string> installRelativePaths)
+        {
+            installRelativePaths = [];
+            string? folder = null;
+            var files = new List<string>();
+            var hasDll = false;
+
+            foreach (var raw in archivePaths)
+            {
+                var path = MaybeUnwrapSingleRoot(NormalizeArchivePath(raw));
+                if (string.IsNullOrWhiteSpace(path) || IsDirectoryMarker(path))
+                {
+                    continue;
+                }
+
+                if (StartsWithSegment(path, "BepInEx") ||
+                    StartsWithSegment(path, "SPT_Runtime") ||
+                    StartsWithSegment(path, "user/mods") ||
+                    StartsWithSegment(path, "user\\mods") ||
+                    IsClientManagedPath(path) ||
+                    IsRootLevelFile(path))
+                {
+                    return false;
+                }
+
+                var slash = path.IndexOf('/');
+                if (slash <= 0)
+                {
+                    return false;
+                }
+
+                var top = path[..slash];
+                if (folder == null)
+                {
+                    folder = top;
+                }
+                else if (!folder.Equals(top, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                if (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasDll = true;
+                }
+
+                files.Add(path);
+            }
+
+            if (!hasDll || files.Count == 0 || string.IsNullOrWhiteSpace(folder))
+            {
+                return false;
+            }
+
+            installRelativePaths = files
+                .Select(p => "BepInEx/plugins/" + p)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            return installRelativePaths.Count > 0;
         }
 
         private static string MaybeUnwrapSingleRoot(string path)
