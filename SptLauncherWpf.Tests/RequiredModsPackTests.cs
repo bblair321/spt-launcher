@@ -1743,6 +1743,65 @@ public class RequiredModsPackTests
     }
 
     [Fact]
+    public void Extracted_plugins_do_not_satisfy_commonlib_size_mismatch()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "spt-commonlib-size-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "BepInEx", "plugins", "WTT-ClientCommonLib");
+        Directory.CreateDirectory(folder);
+        var dll = Path.Combine(folder, "WTT-ClientCommonLib.dll");
+        File.WriteAllBytes(dll, new byte[154112]);
+        try
+        {
+            var entry = new RequiredModEntry
+            {
+                Name = "WTT - CommonLib",
+                Slug = "wtt-commonlib",
+                Guid = "com.wtt.commonlib",
+                ForgeModId = 2310,
+                Version = "3.0.0",
+                PluginFileSize = 161792,
+                ClientFiles = ["BepInEx/plugins/WTT-ClientCommonLib/WTT-ClientCommonLib.dll"]
+            };
+            var local = new InstalledModInfo
+            {
+                DisplayName = "WTT - CommonLib",
+                Kind = InstalledModKind.Client,
+                Path = folder,
+                IsDirectory = true,
+                IsEnabled = true,
+                ForgeGuid = "com.wtt.commonlib",
+                ForgeModId = 2310,
+                VersionHint = "3.0.0"
+            };
+            var diff = RequiredModsPackService.Instance.Diff(
+                new RequiredModsPack { Mods = [entry] },
+                [local]);
+            var item = Assert.Single(diff.Items.Where(i => i.PackEntry != null));
+            Assert.Equal(RequiredModDiffStatus.WrongVersion, item.Status);
+            Assert.False(RequiredModsPackService.ExtractedPluginsSatisfyDiff(
+                diff, entry, [dll]));
+            Assert.True(RequiredModsPackService.ExtractedPluginsSatisfyDiff(
+                new RequiredModsDiffResult
+                {
+                    Items =
+                    [
+                        new RequiredModDiffItem
+                        {
+                            Status = RequiredModDiffStatus.Missing,
+                            PackEntry = entry
+                        }
+                    ]
+                },
+                entry,
+                [dll]));
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { /* temp */ }
+        }
+    }
+
+    [Fact]
     public void Diff_headless_disabled_fov_fix_is_still_missing_for_players()
     {
         var entry = new RequiredModEntry

@@ -1087,7 +1087,7 @@ namespace SptLauncherWpf.Services
                         var stillWrong = midDiff.Items.Any(item =>
                             ReferenceEquals(item.PackEntry, entry) &&
                             item.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
-                        if (stillWrong && ExtractedClientPluginsPresent(result.ExtractedFiles))
+                        if (ExtractedPluginsSatisfyDiff(midDiff, entry, result.ExtractedFiles))
                         {
                             stillWrong = false;
                         }
@@ -1113,7 +1113,7 @@ namespace SptLauncherWpf.Services
                             stillWrong = midDiff.Items.Any(item =>
                                 ReferenceEquals(item.PackEntry, entry) &&
                                 item.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
-                            if (stillWrong && ExtractedClientPluginsPresent(retry.ExtractedFiles))
+                            if (ExtractedPluginsSatisfyDiff(midDiff, entry, retry.ExtractedFiles))
                             {
                                 stillWrong = false;
                             }
@@ -1965,6 +1965,27 @@ namespace SptLauncherWpf.Services
             public string? Id { get; set; }
             public string? Version { get; set; }
             public string? DownloadUrl { get; set; }
+        }
+
+        /// <summary>
+        /// FOV-style path mismatches: extracted plugins exist but Diff is still
+        /// Missing. Do not treat WrongVersion (size/hash) as satisfied —
+        /// Forge 3.0.0 CommonLib is 154112 bytes, the host copy is 161792.
+        /// </summary>
+        internal static bool ExtractedPluginsSatisfyDiff(
+            RequiredModsDiffResult? midDiff,
+            RequiredModEntry entry,
+            IReadOnlyList<string>? extractedFiles)
+        {
+            if (!ExtractedClientPluginsPresent(extractedFiles) || midDiff == null)
+            {
+                return false;
+            }
+
+            var item = midDiff.Items.FirstOrDefault(i =>
+                ReferenceEquals(i.PackEntry, entry) &&
+                i.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+            return item?.Status == RequiredModDiffStatus.Missing;
         }
 
         internal static bool ExtractedClientPluginsPresent(IReadOnlyList<string>? extractedFiles)
