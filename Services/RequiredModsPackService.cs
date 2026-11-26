@@ -120,6 +120,7 @@ namespace SptLauncherWpf.Services
 
         /// <summary>
         /// SPT HTTPS (6969) may 404 pack mirrors while the LAN agent still has the zip.
+        /// WAN join is :6969 only — do not hang on un-forwarded :17865.
         /// </summary>
         internal static string? AgentMirrorFallbackUrl(string zipUrl)
         {
@@ -134,8 +135,44 @@ namespace SptLauncherWpf.Services
                 return null;
             }
 
+            if (!IsPrivateLanDownloadHost(zipUrl))
+            {
+                return null;
+            }
+
             return new UriBuilder(Uri.UriSchemeHttp, uri.Host, LanAgentHttpPort, uri.AbsolutePath)
                 .Uri.ToString();
+        }
+
+        /// <summary>
+        /// Host Combined Start zips plugins to <c>/mod-pack/mirror/{slug}</c>. Use that
+        /// when Forge/GitHub for the pack version 404s (WTT CommonLib 3.0.0).
+        /// </summary>
+        internal static bool TryFillPackMirrorDownload(RequiredModEntry entry)
+        {
+            if (!string.IsNullOrWhiteSpace(entry.DownloadUrl))
+            {
+                return false;
+            }
+
+            // Only Forge-backed rows: slug-only extras must stay ManualFix.
+            if (entry.ForgeModId is not > 0)
+            {
+                return false;
+            }
+
+            var slug = (entry.Slug ?? "").Trim();
+            if (string.IsNullOrEmpty(slug) ||
+                slug.Contains('/') ||
+                slug.Contains('\\') ||
+                slug.Contains(".."))
+            {
+                return false;
+            }
+
+            entry.DownloadUrl = $"/mod-pack/mirror/{slug}";
+            entry.DownloadKind = "direct";
+            return true;
         }
 
         /// <summary>
@@ -280,6 +317,7 @@ namespace SptLauncherWpf.Services
             {
                 TryFillKnownWorkshopDownload(entry);
                 TryFillKnownGitHubDownload(entry);
+                TryFillPackMirrorDownload(entry);
             }
 
             return pack;
@@ -764,6 +802,7 @@ namespace SptLauncherWpf.Services
 
                 TryFillKnownWorkshopDownload(entry);
                 TryFillKnownGitHubDownload(entry);
+                TryFillPackMirrorDownload(entry);
 
                 var copies = FindAllLocalMatches(entry, clientMods);
                 foreach (var copy in copies)
@@ -1039,13 +1078,19 @@ namespace SptLauncherWpf.Services
                             sptRoot,
                             entry,
                             forgeMod: null,
-                            versionLabel: entry.Version);
+                            versionLabel: entry.Version,
+                            versionId: null,
+                            extractedFiles: result.ExtractedFiles);
 
                         var midScan = InstalledModsService.ScanInstalledMods(sptRoot);
                         var midDiff = Diff(pack, midScan);
                         var stillWrong = midDiff.Items.Any(item =>
                             ReferenceEquals(item.PackEntry, entry) &&
                             item.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+                        if (stillWrong && ExtractedClientPluginsPresent(result.ExtractedFiles))
+                        {
+                            stillWrong = false;
+                        }
 
                         if (stillWrong)
                         {
@@ -1054,6 +1099,13 @@ namespace SptLauncherWpf.Services
                             if (retry.Success)
                             {
                                 PruneAfterPackInstall(sptRoot, entry, retry.ExtractedFiles);
+                                StampMatchedClientMarkers(
+                                    sptRoot,
+                                    entry,
+                                    forgeMod: null,
+                                    versionLabel: entry.Version,
+                                    versionId: null,
+                                    extractedFiles: retry.ExtractedFiles);
                             }
 
                             midScan = InstalledModsService.ScanInstalledMods(sptRoot);
@@ -1061,6 +1113,10 @@ namespace SptLauncherWpf.Services
                             stillWrong = midDiff.Items.Any(item =>
                                 ReferenceEquals(item.PackEntry, entry) &&
                                 item.Status is RequiredModDiffStatus.Missing or RequiredModDiffStatus.WrongVersion);
+                            if (stillWrong && ExtractedClientPluginsPresent(retry.ExtractedFiles))
+                            {
+                                stillWrong = false;
+                            }
 
                             if (!retry.Success || stillWrong)
                             {
@@ -1314,6 +1370,7 @@ namespace SptLauncherWpf.Services
             CancellationToken cancellationToken)
         {
             TryFillKnownGitHubDownload(entry);
+            TryFillPackMirrorDownload(entry);
 
             if (!string.IsNullOrWhiteSpace(entry.DownloadUrl))
             {
@@ -1666,16 +1723,10 @@ namespace SptLauncherWpf.Services
                         "Relative downloadUrl requires a configured pack URL (server host).");
                 }
 
-                if (url.StartsWith("/mod-pack/mirror/", StringComparison.OrdinalIgnoreCase))
-                {
-                    url = new UriBuilder(Uri.UriSchemeHttp, packUri.Host, LanAgentHttpPort, url)
-                        .Uri.ToString();
-                }
-                else
-                {
-                    var builder = new UriBuilder(packUri.Scheme, packUri.Host, packUri.Port, url);
-                    url = builder.Uri.ToString();
-                }
+                // Same host:port as /mod-pack (WAN 6969). 17865 is LAN-only and is
+                // a fallback in InstallHostedPackEntryAsync when this HTTPS hop 404s.
+                var builder = new UriBuilder(packUri.Scheme, packUri.Host, packUri.Port, url);
+                url = builder.Uri.ToString();
             }
 
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
@@ -1916,12 +1967,50 @@ namespace SptLauncherWpf.Services
             public string? DownloadUrl { get; set; }
         }
 
+        internal static bool ExtractedClientPluginsPresent(IReadOnlyList<string>? extractedFiles)
+        {
+            if (extractedFiles is not { Count: > 0 })
+            {
+                return false;
+            }
+
+            foreach (var path in extractedFiles)
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var full = Path.GetFullPath(path);
+                    if (!File.Exists(full) && !Directory.Exists(full))
+                    {
+                        continue;
+                    }
+
+                    if (full.Replace('\\', '/')
+                        .Contains("/BepInEx/plugins", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // skip
+                }
+            }
+
+            return false;
+        }
+
         private static void StampMatchedClientMarkers(
             string sptRoot,
             RequiredModEntry entry,
             ForgeModSummary? forgeMod,
             string? versionLabel,
-            int? versionId = null)
+            int? versionId = null,
+            IReadOnlyList<string>? extractedFiles = null)
         {
             var versionText = !string.IsNullOrWhiteSpace(versionLabel)
                 ? versionLabel!.Trim()
@@ -1960,6 +2049,37 @@ namespace SptLauncherWpf.Services
                         PathBelongsToPackEntry(path, entry))
                     {
                         targets.Add(path);
+                    }
+                }
+            }
+
+            if (extractedFiles is { Count: > 0 })
+            {
+                foreach (var file in extractedFiles)
+                {
+                    if (string.IsNullOrWhiteSpace(file))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var full = Path.GetFullPath(file);
+                        if (File.Exists(full) || Directory.Exists(full))
+                        {
+                            targets.Add(full);
+                            var dir = Path.GetDirectoryName(full);
+                            if (!string.IsNullOrWhiteSpace(dir) &&
+                                !IsPluginsRoot(sptRoot, dir) &&
+                                Directory.Exists(dir))
+                            {
+                                targets.Add(dir);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // skip
                     }
                 }
             }

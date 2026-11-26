@@ -122,6 +122,8 @@ public class RequiredModsPackTests
                 "https://192.168.0.20:6969/mod-pack/mirror/tarkov-battlepass"));
         Assert.Null(RequiredModsPackService.AgentMirrorFallbackUrl(
             "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass"));
+        Assert.Null(RequiredModsPackService.AgentMirrorFallbackUrl(
+            "https://50.39.145.123:6969/mod-pack/mirror/wtt-commonlib"));
         Assert.True(RequiredModsPackService.IsPrivateLanDownloadHost(
             "http://192.168.0.20:17865/mod-pack/mirror/tarkov-battlepass"));
         Assert.False(RequiredModsPackService.IsPrivateLanDownloadHost(
@@ -1719,6 +1721,25 @@ public class RequiredModsPackTests
             diff.Items,
             i => i.PackEntry?.Slug == "wtt-clientcommonlib-2-disabled");
         Assert.False(diff.NeedsSync);
+    }
+
+    [Fact]
+    public void Empty_commonlib_download_fills_pack_mirror_path()
+    {
+        var entry = new RequiredModEntry
+        {
+            Name = "WTT - CommonLib",
+            Slug = "wtt-commonlib",
+            Guid = "com.wtt.commonlib",
+            ForgeModId = 2310,
+            Version = "3.0.0"
+        };
+        Assert.True(RequiredModsPackService.TryFillPackMirrorDownload(entry));
+        Assert.Equal("/mod-pack/mirror/wtt-commonlib", entry.DownloadUrl);
+        Assert.Equal("direct", entry.DownloadKind);
+        Assert.False(RequiredModsPackService.TryFillPackMirrorDownload(entry));
+        Assert.False(RequiredModsPackService.TryFillPackMirrorDownload(
+            new RequiredModEntry { Name = "No slug" }));
     }
 
     [Fact]
